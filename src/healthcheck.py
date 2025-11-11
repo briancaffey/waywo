@@ -1,5 +1,6 @@
 # healthcheck.py
 import sys, urllib.request, contextlib
+
 URL = "http://localhost:8000/api/health"
 try:
     with contextlib.closing(urllib.request.urlopen(URL, timeout=5)) as r:

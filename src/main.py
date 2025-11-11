@@ -20,13 +20,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.on_event("startup")
 async def startup_event():
     print("✅ FastAPI application has started")
 
+
 @app.get("/", tags=["root"])
 async def read_root():
     return {"message": "Welcome to the Waywo backend!"}
+
 
 @app.get("/api/health", tags=["health"])
 async def healthcheck():
