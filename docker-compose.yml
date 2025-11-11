@@ -17,6 +17,27 @@ services:
       retries: 5
       start_period: 30s
 
+  backend:
+    build: .
+    container_name: waywo-backend
+    ports:
+      - "8008:8000"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./src:/app/src
+      - ./media:/app/media
+      - /app/.venv
+    command: /app/.venv/bin/python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - waywo-network
+
 networks:
   waywo-network:
     driver: bridge
