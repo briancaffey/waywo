@@ -1,3 +1,23 @@
+x-common-env: &common-env
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/0
+  REDIS_URL: redis://redis:6379/0
+  LOG_LEVEL: DEBUG
+
+x-common-volumes: &common-volumes
+  - ./src:/app/src
+  - ./media:/app/media
+  - /app/.venv
+
+x-common-depends: &common-depends
+  depends_on:
+    redis:
+      condition: service_healthy
+
+x-common-networks: &common-networks
+  networks:
+    - waywo-network
+
 services:
   redis:
     image: redis/redis-stack:latest
@@ -23,20 +43,57 @@ services:
     ports:
       - "8008:8000"
     environment:
+      <<: *common-env
+    volumes: *common-volumes
+    command: /app/.venv/bin/python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    <<: [*common-depends, *common-networks]
+
+  celery-worker:
+    build: .
+    container_name: waywo-celery-worker
+    environment:
+      <<: *common-env
+    volumes: *common-volumes
+    command: /app/.venv/bin/celery -A src.celery_app worker --loglevel=info --queues=waywo
+    <<: [*common-depends, *common-networks]
+
+  celery-beat:
+    build: .
+    container_name: waywo-celery-beat
+    environment:
+      <<: *common-env
+    volumes: *common-volumes
+    command: /app/.venv/bin/celery -A src.celery_app beat --loglevel=info
+    <<: [*common-depends, *common-networks]
+
+  # Flower monitoring
+  flower:
+    image: mher/flower:2.0.1
+    container_name: waywo-flower
+    ports:
+      - "5555:5555"
+    environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - REDIS_URL=redis://redis:6379/0
-      - LOG_LEVEL=DEBUG
-    volumes:
-      - ./src:/app/src
-      - ./media:/app/media
-      - /app/.venv
-    command: /app/.venv/bin/python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+      - FLOWER_PORT=5555
+      - FLOWER_BROKER_API=redis://redis:6379/0
+      - FLOWER_RESULT_BACKEND=redis://redis:6379/0
+      - FLOWER_BROKER_API_REDIS_HOST=redis
+      - FLOWER_BROKER_API_REDIS_PORT=6379
     depends_on:
       redis:
         condition: service_healthy
+      celery-worker:
+        condition: service_healthy
+    restart: unless-stopped
     networks:
       - waywo-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5555/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 networks:
   waywo-network:

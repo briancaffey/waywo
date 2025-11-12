@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.celery_app import debug_task
+
 app = FastAPI(
     title="Waywo Backend",
     version="0.1.0",
@@ -39,3 +41,21 @@ async def healthcheck():
     so this is the public HTTP health endpoint.
     """
     return JSONResponse(content={"status": "ok"})
+
+
+@app.post("/api/debug/celery-task", tags=["debug"])
+async def trigger_debug_task():
+    """
+    Trigger a simple debug Celery task for testing purposes.
+
+    This endpoint calls a Celery task that logs a success message.
+    Returns the task ID for tracking the task execution.
+    """
+    task = debug_task.apply_async()
+    return JSONResponse(
+        content={
+            "status": "task_queued",
+            "task_id": task.id,
+            "message": "Debug Celery task has been queued",
+        }
+    )
