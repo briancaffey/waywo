@@ -1,4 +1,4 @@
-.PHONY: black check
+.PHONY: black check up
 
 # Format code with black
 black:
@@ -7,4 +7,8 @@ black:
 # Check if code is formatted correctly (fails if not)
 check:
 	docker compose run --rm backend black --check src/
+
+# Start/restart Docker Compose services
+up:
+	docker compose up
 
