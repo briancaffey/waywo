@@ -1,0 +1,203 @@
+# List of "What are you working on?" posts to index.
+# Each item must include: id (HN item id), year, month (1-12)
+#
+# Example:
+# - id: 12345678
+#   year: 2025
+#   month: 12
+
+- id: 46264491
+  year: 2025
+  month: 12
+
+- id: 45869146
+  year: 2025
+  month: 11
+
+- id: 45561428
+  year: 2025
+  month: 10
+
+- id: 45376210
+  year: 2025
+  month: 9
+
+# duplicate
+- id: 45418675
+  year: 2025
+  month: 9
+
+# duplicate
+- id: 45113029
+  year: 2025
+  month: 8
+
+- id: 45027862
+  year: 2025
+  month: 8
+
+- id: 44702833
+  year: 2025
+  month: 7
+
+- id: 44416093
+  year: 2025
+  month: 6
+
+- id: 44090387
+  year: 2025
+  month: 5
+
+- id: 43815523
+  year: 2025
+  month: 4
+
+- id: 43527452
+  year: 2025
+  month: 3
+
+- id: 43154065
+  year: 2025
+  month: 2
+
+- id: 41966114
+  year: 2024
+  month: 10
+
+- id: 41690087
+  year: 2024
+  month: 9
+
+- id: 41342017
+  year: 2024
+  month: 8
+
+- id: 41131195
+  year: 2024
+  month: 8
+
+- id: 40846582
+  year: 2024
+  month: 7
+
+- id: 40616305
+  year: 2024
+  month: 6
+
+- id: 40237053
+  year: 2024
+  month: 5
+
+- id: 39899192
+  year: 2024
+  month: 4
+
+# no post for march 2024
+# - id:
+#   year: 2024
+#   month: 3
+
+- id: 39221855
+  year: 2024
+  month: 2
+
+- id: 38848030
+  year: 2024
+  month: 1
+
+- id: 38491720
+  year: 2023
+  month: 12
+
+- id: 38099264
+  year: 2023
+  month: 11
+
+# - id:
+#   year: 2023
+#   month: 10
+
+- id: 37353702
+  year: 2023
+  month: 9
+
+- id: 36957782
+  year: 2023
+  month: 8
+
+- id: 36575659
+  year: 2023
+  month: 7
+
+# - id:
+#   year: 2023
+#   month: 6
+
+# - id:
+#   year: 2023
+#   month: 5
+
+# - id:
+#   year: 2023
+#   month: 4
+
+- id: 34990814
+  year: 2023
+  month: 3
+
+- id: 34613562
+  year: 2023
+  month: 2
+
+# - id:
+#   year: 2023
+#   month: 1
+
+
+- id: 33820336
+  year: 2022
+  month: 12
+
+- id: 33424045
+  year: 2022
+  month: 11
+
+# - id:
+#   year: 2022
+#   month: 10
+
+- id: 32681062
+  year: 2022
+  month: 9
+
+- id: 32309210
+  year: 2022
+  month: 8
+
+- id: 31949485
+  year: 2022
+  month: 7
+
+# - id:
+#   year: 2022
+#   month: 6
+
+- id: 31236618
+  year: 2022
+  month: 5
+
+- id: 30883352
+  year: 2022
+  month: 4
+
+- id: 30516198
+  year: 2022
+  month: 3
+
+# - id:
+#   year: 2022
+#   month: 2
+
+# - id:
+#   year: 2022
+#   month: 1

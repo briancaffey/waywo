@@ -19,6 +19,8 @@ celery_app.conf.update(
     task_routes={
         "debug_task": {"queue": "waywo"},
     },
+    # Store beat schedule file in celery-data directory with proper permissions
+    beat_schedule_filename="/app/celery-data/celerybeat-schedule",
 )
 
 # Import beat schedule configuration

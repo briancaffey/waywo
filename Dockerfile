@@ -11,7 +11,7 @@ ENV PYTHONUNBUFFERED=1 \
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get clean && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     libffi-dev \

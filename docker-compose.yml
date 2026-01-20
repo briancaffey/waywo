@@ -68,7 +68,11 @@ services:
     container_name: waywo-celery-beat
     environment:
       <<: *common-env
-    volumes: *common-volumes
+    volumes:
+      - ./src:/app/src
+      - ./media:/app/media
+      - /app/.venv
+      - celery-beat-data:/app/celery-data
     command: /app/.venv/bin/celery -A src.celery_app beat --loglevel=info
     <<: [*common-depends, *common-networks]
     healthcheck:
@@ -113,3 +117,4 @@ networks:
 
 volumes:
   redis-data:
+  celery-beat-data:
