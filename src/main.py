@@ -3,7 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.celery_app import debug_task
-from src.models import ProcessWaywoPostsRequest, WaywoPostSummary
+from src.models import NatQueryRequest, ProcessWaywoPostsRequest, WaywoPostSummary
+from src.nat_client import generate as nat_generate
+from src.nat_client import health_check as nat_health_check
 from src.redis_client import (
     get_all_comments,
     get_all_post_ids,
@@ -140,20 +142,35 @@ async def get_posts_chart_data():
             continue
 
         comment_count = get_comment_count_for_post(post.id)
-        posts_data.append({
-            "id": post.id,
-            "year": post.year,
-            "month": post.month,
-            "title": post.title,
-            "comment_count": comment_count,
-            "total_comments": post.descendants or 0,
-        })
+        posts_data.append(
+            {
+                "id": post.id,
+                "year": post.year,
+                "month": post.month,
+                "title": post.title,
+                "comment_count": comment_count,
+                "total_comments": post.descendants or 0,
+            }
+        )
 
     # Sort by year and month
     posts_data.sort(key=lambda x: (x["year"] or 0, x["month"] or 0))
 
     # Create labels like "03/22" (MM/YY format) and tooltip titles
-    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    month_names = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ]
     for item in posts_data:
         if item["year"] and item["month"]:
             item["label"] = f"{item['month']:02d}/{str(item['year'])[-2:]}"
@@ -220,3 +237,35 @@ async def get_waywo_comment(comment_id: int):
         "comment": comment.model_dump(),
         "parent_post": parent_post.model_dump() if parent_post else None,
     }
+
+
+@app.get("/api/nat/health", tags=["nat"])
+async def nat_service_health():
+    """
+    Check if the NAT service is healthy.
+    """
+    is_healthy = await nat_health_check()
+    if not is_healthy:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "message": "NAT service is not reachable"},
+        )
+    return JSONResponse(content={"status": "healthy"})
+
+
+@app.post("/api/nat/query", tags=["nat"])
+async def query_nat_service(request: NatQueryRequest):
+    """
+    Send a query to the NAT service and get an LLM response.
+
+    This is a simple test endpoint to verify the NAT integration.
+    Default message is 'Hello, who are you?'
+    """
+    try:
+        response = await nat_generate(request.message)
+        return JSONResponse(content={"status": "success", "response": response})
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to get response from NAT service: {str(e)}",
+        )

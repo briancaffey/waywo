@@ -1,0 +1,17 @@
+general:
+  front_end:
+    _type: fastapi
+    host: "0.0.0.0"
+    port: 8080
+
+llms:
+  llm_nim:
+    _type: nim
+    base_url: "http://192.168.6.19:8002/v1"
+    api_key: "not-needed"
+    model_name: "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4"
+
+workflow:
+  _type: chat_completion
+  llm_name: llm_nim
+  system_prompt: "You are a helpful AI assistant."

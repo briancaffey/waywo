@@ -60,3 +60,9 @@ class WaywoPostSummary(BaseModel):
     score: Optional[int] = None
     comment_count: int = 0
     descendants: Optional[int] = None
+
+
+class NatQueryRequest(BaseModel):
+    """Request body for NAT query endpoint."""
+
+    message: str = "Hello, who are you?"

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Healthcheck script for Celery beat."""
+
 import sys
 import os
 
