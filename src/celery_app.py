@@ -18,9 +18,13 @@ celery_app.conf.update(
     task_default_queue="waywo",
     task_routes={
         "debug_task": {"queue": "waywo"},
+        "process_waywo_posts": {"queue": "waywo"},
+        "process_waywo_post": {"queue": "waywo"},
     },
     # Store beat schedule file in celery-data directory with proper permissions
     beat_schedule_filename="/app/celery-data/celerybeat-schedule",
+    # Import tasks module to register tasks with Celery
+    imports=["src.tasks"],
 )
 
 # Import beat schedule configuration

@@ -7,6 +7,7 @@ x-common-env: &common-env
 x-common-volumes: &common-volumes
   - ./src:/app/src
   - ./media:/app/media
+  - ./waywo.yml:/app/waywo.yml:ro
   - /app/.venv
 
 x-common-depends: &common-depends
@@ -71,6 +72,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./media:/app/media
+      - ./waywo.yml:/app/waywo.yml:ro
       - /app/.venv
       - celery-beat-data:/app/celery-data
     command: /app/.venv/bin/celery -A src.celery_app beat --loglevel=info
