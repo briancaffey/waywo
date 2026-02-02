@@ -1,0 +1,17 @@
+[project]
+name = "embedding-service"
+version = "0.1.0"
+description = "FastAPI microservice for document embeddings"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
+    "sentence-transformers>=3.0.0",
+    "transformers>=4.51.0",
+    "torch>=2.0.0",
+]
+
+[project.optional-dependencies]
+flash = [
+    "flash-attn>=2.6.3",
+]
