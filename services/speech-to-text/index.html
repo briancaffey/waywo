@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speech-to-Text Service Tester</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div id="app" class="container mx-auto px-4 py-8 max-w-4xl">
+    <h1 class="text-3xl font-bold text-gray-800 mb-2">Speech-to-Text Service Tester</h1>
+    <p class="text-gray-600 mb-8">Test all API endpoints for the nvidia/nemotron-speech-streaming-en-0.6b model</p>
+
+    <!-- Health Check Section -->
+    <section class="bg-white rounded-lg shadow-md p-6 mb-6">
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">1. Health Check</h2>
+      <p class="text-sm text-gray-500 mb-4">Endpoint: <code class="bg-gray-100 px-2 py-1 rounded">GET /health</code></p>
+
+      <button
+        @click="checkHealth"
+        :disabled="healthLoading"
+        class="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-medium py-2 px-4 rounded transition-colors"
+      >
+        {{ healthLoading ? 'Checking...' : 'Check Health' }}
+      </button>
+
+      <div v-if="healthResult" class="mt-4 p-4 rounded" :class="healthResult.status === 'healthy' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'">
+        <p class="font-medium" :class="healthResult.status === 'healthy' ? 'text-green-700' : 'text-red-700'">
+          Status: {{ healthResult.status }}
+        </p>
+        <p class="text-sm text-gray-600">Model Loaded: {{ healthResult.model_loaded }}</p>
+      </div>
+      <div v-if="healthError" class="mt-4 p-4 bg-red-50 border border-red-200 rounded">
+        <p class="text-red-700 font-medium">Error</p>
+        <p class="text-sm text-red-600">{{ healthError }}</p>
+      </div>
+    </section>
+
+    <!-- File Upload Transcribe Section -->
+    <section class="bg-white rounded-lg shadow-md p-6 mb-6">
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">2. Transcribe (File Upload)</h2>
+      <p class="text-sm text-gray-500 mb-4">Endpoint: <code class="bg-gray-100 px-2 py-1 rounded">POST /transcribe</code></p>
+
+      <div class="flex items-center gap-4 mb-4">
+        <input
+          type="file"
+          accept=".wav"
+          @change="handleFileUpload($event, 'upload')"
+          class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+        >
+        <button
+          @click="transcribeUpload"
+          :disabled="!uploadFile || uploadLoading"
+          class="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-medium py-2 px-4 rounded transition-colors whitespace-nowrap"
+        >
+          {{ uploadLoading ? 'Transcribing...' : 'Transcribe' }}
+        </button>
+      </div>
+
+      <div v-if="uploadFile" class="text-sm text-gray-600 mb-4">
+        Selected: {{ uploadFile.name }} ({{ (uploadFile.size / 1024).toFixed(1) }} KB)
+      </div>
+
+      <div v-if="uploadResult" class="mt-4 p-4 bg-green-50 border border-green-200 rounded">
+        <p class="font-medium text-green-700">Transcription Result</p>
+        <p class="text-gray-800 mt-2">{{ uploadResult }}</p>
+      </div>
+      <div v-if="uploadError" class="mt-4 p-4 bg-red-50 border border-red-200 rounded">
+        <p class="text-red-700 font-medium">Error</p>
+        <p class="text-sm text-red-600">{{ uploadError }}</p>
+      </div>
+    </section>
+
+    <!-- Base64 Transcribe Section -->
+    <section class="bg-white rounded-lg shadow-md p-6 mb-6">
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">3. Transcribe (Base64)</h2>
+      <p class="text-sm text-gray-500 mb-4">Endpoint: <code class="bg-gray-100 px-2 py-1 rounded">POST /transcribe/base64</code></p>
+
+      <div class="flex items-center gap-4 mb-4">
+        <input
+          type="file"
+          accept=".wav"
+          @change="handleFileUpload($event, 'base64')"
+          class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+        >
+        <button
+          @click="transcribeBase64"
+          :disabled="!base64File || base64Loading"
+          class="bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white font-medium py-2 px-4 rounded transition-colors whitespace-nowrap"
+        >
+          {{ base64Loading ? 'Transcribing...' : 'Transcribe' }}
+        </button>
+      </div>
+
+      <div v-if="base64File" class="text-sm text-gray-600 mb-4">
+        Selected: {{ base64File.name }} ({{ (base64File.size / 1024).toFixed(1) }} KB)
+      </div>
+
+      <div v-if="base64Result" class="mt-4 p-4 bg-green-50 border border-green-200 rounded">
+        <p class="font-medium text-green-700">Transcription Result</p>
+        <p class="text-gray-800 mt-2">{{ base64Result }}</p>
+      </div>
+      <div v-if="base64Error" class="mt-4 p-4 bg-red-50 border border-red-200 rounded">
+        <p class="text-red-700 font-medium">Error</p>
+        <p class="text-sm text-red-600">{{ base64Error }}</p>
+      </div>
+    </section>
+
+    <!-- Streaming File Upload Section -->
+    <section class="bg-white rounded-lg shadow-md p-6 mb-6">
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">4. Streaming Transcribe (File Upload)</h2>
+      <p class="text-sm text-gray-500 mb-4">Endpoint: <code class="bg-gray-100 px-2 py-1 rounded">POST /transcribe/stream</code></p>
+
+      <div class="flex items-center gap-4 mb-4">
+        <input
+          type="file"
+          accept=".wav"
+          @change="handleFileUpload($event, 'streamUpload')"
+          class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+        >
+        <button
+          @click="transcribeStreamUpload"
+          :disabled="!streamUploadFile || streamUploadLoading"
+          class="bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-medium py-2 px-4 rounded transition-colors whitespace-nowrap"
+        >
+          {{ streamUploadLoading ? 'Streaming...' : 'Stream Transcribe' }}
+        </button>
+      </div>
+
+      <div v-if="streamUploadFile" class="text-sm text-gray-600 mb-4">
+        Selected: {{ streamUploadFile.name }} ({{ (streamUploadFile.size / 1024).toFixed(1) }} KB)
+      </div>
+
+      <div v-if="streamUploadEvents.length > 0" class="mt-4 p-4 bg-orange-50 border border-orange-200 rounded">
+        <p class="font-medium text-orange-700 mb-2">Streaming Events</p>
+        <div class="space-y-1">
+          <div v-for="(event, idx) in streamUploadEvents" :key="idx" class="text-sm font-mono" :class="event === '[DONE]' ? 'text-green-600 font-bold' : 'text-gray-700'">
+            {{ event }}
+          </div>
+        </div>
+      </div>
+      <div v-if="streamUploadError" class="mt-4 p-4 bg-red-50 border border-red-200 rounded">
+        <p class="text-red-700 font-medium">Error</p>
+        <p class="text-sm text-red-600">{{ streamUploadError }}</p>
+      </div>
+    </section>
+
+    <!-- Streaming Base64 / Microphone Section -->
+    <section class="bg-white rounded-lg shadow-md p-6 mb-6">
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">5. Streaming Transcribe (Base64 / Microphone)</h2>
+      <p class="text-sm text-gray-500 mb-4">Endpoint: <code class="bg-gray-100 px-2 py-1 rounded">POST /transcribe/stream/base64</code></p>
+
+      <div class="flex flex-wrap items-center gap-4 mb-4">
+        <input
+          type="file"
+          accept=".wav"
+          @change="handleFileUpload($event, 'streamBase64')"
+          class="block text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"
+        >
+        <button
+          @click="transcribeStreamBase64"
+          :disabled="!streamBase64File || streamBase64Loading"
+          class="bg-teal-500 hover:bg-teal-600 disabled:bg-teal-300 text-white font-medium py-2 px-4 rounded transition-colors whitespace-nowrap"
+        >
+          {{ streamBase64Loading ? 'Streaming...' : 'Stream Transcribe' }}
+        </button>
+      </div>
+
+      <div v-if="streamBase64File" class="text-sm text-gray-600 mb-4">
+        Selected: {{ streamBase64File.name }} ({{ (streamBase64File.size / 1024).toFixed(1) }} KB)
+      </div>
+
+      <div class="border-t border-gray-200 pt-4 mt-4">
+        <p class="text-sm font-medium text-gray-700 mb-3">Or record from microphone:</p>
+        <div class="flex items-center gap-4">
+          <button
+            @click="toggleRecording"
+            :class="isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-teal-500 hover:bg-teal-600'"
+            class="text-white font-medium py-2 px-4 rounded transition-colors flex items-center gap-2"
+          >
+            <span v-if="isRecording" class="w-3 h-3 bg-white rounded-full animate-pulse"></span>
+            {{ isRecording ? 'Stop Recording' : 'Start Recording' }}
+          </button>
+          <button
+            v-if="recordedBlob && !isRecording"
+            @click="transcribeRecording"
+            :disabled="micLoading"
+            class="bg-teal-500 hover:bg-teal-600 disabled:bg-teal-300 text-white font-medium py-2 px-4 rounded transition-colors"
+          >
+            {{ micLoading ? 'Streaming...' : 'Transcribe Recording' }}
+          </button>
+        </div>
+        <div v-if="recordedBlob && !isRecording" class="text-sm text-gray-600 mt-2">
+          Recorded: {{ (recordedBlob.size / 1024).toFixed(1) }} KB
+        </div>
+      </div>
+
+      <div v-if="streamBase64Events.length > 0" class="mt-4 p-4 bg-teal-50 border border-teal-200 rounded">
+        <p class="font-medium text-teal-700 mb-2">Streaming Events</p>
+        <div class="space-y-1">
+          <div v-for="(event, idx) in streamBase64Events" :key="idx" class="text-sm font-mono" :class="event === '[DONE]' ? 'text-green-600 font-bold' : 'text-gray-700'">
+            {{ event }}
+          </div>
+        </div>
+      </div>
+      <div v-if="streamBase64Error" class="mt-4 p-4 bg-red-50 border border-red-200 rounded">
+        <p class="text-red-700 font-medium">Error</p>
+        <p class="text-sm text-red-600">{{ streamBase64Error }}</p>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const { createApp, ref } = Vue;
+
+    createApp({
+      setup() {
+        const API_BASE = 'http://localhost:8001';
+
+        // Health check state
+        const healthLoading = ref(false);
+        const healthResult = ref(null);
+        const healthError = ref(null);
+
+        // File upload state
+        const uploadFile = ref(null);
+        const uploadLoading = ref(false);
+        const uploadResult = ref(null);
+        const uploadError = ref(null);
+
+        // Base64 state
+        const base64File = ref(null);
+        const base64Loading = ref(false);
+        const base64Result = ref(null);
+        const base64Error = ref(null);
+
+        // Stream upload state
+        const streamUploadFile = ref(null);
+        const streamUploadLoading = ref(false);
+        const streamUploadEvents = ref([]);
+        const streamUploadError = ref(null);
+
+        // Stream base64 state
+        const streamBase64File = ref(null);
+        const streamBase64Loading = ref(false);
+        const streamBase64Events = ref([]);
+        const streamBase64Error = ref(null);
+
+        // Microphone state
+        const isRecording = ref(false);
+        const mediaRecorder = ref(null);
+        const recordedChunks = ref([]);
+        const recordedBlob = ref(null);
+        const micLoading = ref(false);
+
+        // Helper to convert ArrayBuffer to base64 without stack overflow
+        function arrayBufferToBase64(buffer) {
+          const bytes = new Uint8Array(buffer);
+          let binary = '';
+          const chunkSize = 8192;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            const chunk = bytes.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, chunk);
+          }
+          return btoa(binary);
+        }
+
+        // Health check
+        async function checkHealth() {
+          healthLoading.value = true;
+          healthResult.value = null;
+          healthError.value = null;
+          try {
+            const response = await fetch(`${API_BASE}/health`);
+            healthResult.value = await response.json();
+          } catch (err) {
+            healthError.value = err.message;
+          } finally {
+            healthLoading.value = false;
+          }
+        }
+
+        // File handling
+        function handleFileUpload(event, target) {
+          const file = event.target.files[0];
+          if (target === 'upload') uploadFile.value = file;
+          else if (target === 'base64') base64File.value = file;
+          else if (target === 'streamUpload') streamUploadFile.value = file;
+          else if (target === 'streamBase64') streamBase64File.value = file;
+        }
+
+        // Transcribe file upload
+        async function transcribeUpload() {
+          uploadLoading.value = true;
+          uploadResult.value = null;
+          uploadError.value = null;
+          try {
+            const formData = new FormData();
+            formData.append('file', uploadFile.value);
+            const response = await fetch(`${API_BASE}/transcribe`, {
+              method: 'POST',
+              body: formData,
+            });
+            if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.detail || response.statusText);
+            }
+            const data = await response.json();
+            uploadResult.value = data.text;
+          } catch (err) {
+            uploadError.value = err.message;
+          } finally {
+            uploadLoading.value = false;
+          }
+        }
+
+        // Transcribe base64
+        async function transcribeBase64() {
+          base64Loading.value = true;
+          base64Result.value = null;
+          base64Error.value = null;
+          try {
+            const arrayBuffer = await base64File.value.arrayBuffer();
+            const base64 = arrayBufferToBase64(arrayBuffer);
+            const response = await fetch(`${API_BASE}/transcribe/base64`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audio_base64: base64 }),
+            });
+            if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.detail || response.statusText);
+            }
+            const data = await response.json();
+            base64Result.value = data.text;
+          } catch (err) {
+            base64Error.value = err.message;
+          } finally {
+            base64Loading.value = false;
+          }
+        }
+
+        // Stream transcribe file upload
+        async function transcribeStreamUpload() {
+          streamUploadLoading.value = true;
+          streamUploadEvents.value = [];
+          streamUploadError.value = null;
+          try {
+            const formData = new FormData();
+            formData.append('file', streamUploadFile.value);
+            const response = await fetch(`${API_BASE}/transcribe/stream`, {
+              method: 'POST',
+              body: formData,
+            });
+            if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.detail || response.statusText);
+            }
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const text = decoder.decode(value);
+              const lines = text.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  streamUploadEvents.value.push(line.substring(6));
+                }
+              }
+            }
+          } catch (err) {
+            streamUploadError.value = err.message;
+          } finally {
+            streamUploadLoading.value = false;
+          }
+        }
+
+        // Stream transcribe base64
+        async function transcribeStreamBase64() {
+          streamBase64Loading.value = true;
+          streamBase64Events.value = [];
+          streamBase64Error.value = null;
+          try {
+            const arrayBuffer = await streamBase64File.value.arrayBuffer();
+            const base64 = arrayBufferToBase64(arrayBuffer);
+            const response = await fetch(`${API_BASE}/transcribe/stream/base64`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audio_base64: base64 }),
+            });
+            if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.detail || response.statusText);
+            }
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const text = decoder.decode(value);
+              const lines = text.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  streamBase64Events.value.push(line.substring(6));
+                }
+              }
+            }
+          } catch (err) {
+            streamBase64Error.value = err.message;
+          } finally {
+            streamBase64Loading.value = false;
+          }
+        }
+
+        // Microphone recording
+        async function toggleRecording() {
+          if (isRecording.value) {
+            mediaRecorder.value.stop();
+            isRecording.value = false;
+          } else {
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              recordedChunks.value = [];
+              recordedBlob.value = null;
+
+              mediaRecorder.value = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+              mediaRecorder.value.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                  recordedChunks.value.push(e.data);
+                }
+              };
+              mediaRecorder.value.onstop = async () => {
+                const webmBlob = new Blob(recordedChunks.value, { type: 'audio/webm' });
+                // Convert to WAV using AudioContext
+                const audioContext = new AudioContext();
+                const arrayBuffer = await webmBlob.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                const wavBlob = audioBufferToWav(audioBuffer);
+                recordedBlob.value = wavBlob;
+                stream.getTracks().forEach(track => track.stop());
+              };
+              mediaRecorder.value.start();
+              isRecording.value = true;
+            } catch (err) {
+              streamBase64Error.value = 'Microphone access denied: ' + err.message;
+            }
+          }
+        }
+
+        // Convert AudioBuffer to WAV Blob
+        function audioBufferToWav(audioBuffer) {
+          const numChannels = audioBuffer.numberOfChannels;
+          const sampleRate = audioBuffer.sampleRate;
+          const format = 1; // PCM
+          const bitDepth = 16;
+
+          const bytesPerSample = bitDepth / 8;
+          const blockAlign = numChannels * bytesPerSample;
+
+          const samples = audioBuffer.getChannelData(0);
+          const dataLength = samples.length * bytesPerSample;
+          const buffer = new ArrayBuffer(44 + dataLength);
+          const view = new DataView(buffer);
+
+          // WAV header
+          writeString(view, 0, 'RIFF');
+          view.setUint32(4, 36 + dataLength, true);
+          writeString(view, 8, 'WAVE');
+          writeString(view, 12, 'fmt ');
+          view.setUint32(16, 16, true);
+          view.setUint16(20, format, true);
+          view.setUint16(22, numChannels, true);
+          view.setUint32(24, sampleRate, true);
+          view.setUint32(28, sampleRate * blockAlign, true);
+          view.setUint16(32, blockAlign, true);
+          view.setUint16(34, bitDepth, true);
+          writeString(view, 36, 'data');
+          view.setUint32(40, dataLength, true);
+
+          // Write samples
+          let offset = 44;
+          for (let i = 0; i < samples.length; i++) {
+            const sample = Math.max(-1, Math.min(1, samples[i]));
+            view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+            offset += 2;
+          }
+
+          return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        function writeString(view, offset, string) {
+          for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+          }
+        }
+
+        // Transcribe microphone recording
+        async function transcribeRecording() {
+          micLoading.value = true;
+          streamBase64Events.value = [];
+          streamBase64Error.value = null;
+          try {
+            const arrayBuffer = await recordedBlob.value.arrayBuffer();
+            const base64 = arrayBufferToBase64(arrayBuffer);
+            const response = await fetch(`${API_BASE}/transcribe/stream/base64`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audio_base64: base64 }),
+            });
+            if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.detail || response.statusText);
+            }
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const text = decoder.decode(value);
+              const lines = text.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  streamBase64Events.value.push(line.substring(6));
+                }
+              }
+            }
+          } catch (err) {
+            streamBase64Error.value = err.message;
+          } finally {
+            micLoading.value = false;
+          }
+        }
+
+        return {
+          healthLoading, healthResult, healthError, checkHealth,
+          uploadFile, uploadLoading, uploadResult, uploadError, transcribeUpload,
+          base64File, base64Loading, base64Result, base64Error, transcribeBase64,
+          streamUploadFile, streamUploadLoading, streamUploadEvents, streamUploadError, transcribeStreamUpload,
+          streamBase64File, streamBase64Loading, streamBase64Events, streamBase64Error, transcribeStreamBase64,
+          isRecording, recordedBlob, micLoading, toggleRecording, transcribeRecording,
+          handleFileUpload,
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
