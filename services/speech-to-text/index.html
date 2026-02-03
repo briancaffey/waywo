@@ -209,6 +209,37 @@
         <p class="text-sm text-red-600">{{ streamBase64Error }}</p>
       </div>
     </section>
+
+    <!-- Real-time Live Transcription Section -->
+    <section class="bg-white rounded-lg shadow-md p-6 mb-6 border-2 border-pink-200">
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">6. Real-time Live Transcription</h2>
+      <p class="text-sm text-gray-500 mb-4">Endpoint: <code class="bg-gray-100 px-2 py-1 rounded">WebSocket /ws/transcribe</code></p>
+      <p class="text-sm text-gray-600 mb-4">Speak into your microphone and see words appear as you talk.</p>
+
+      <div class="flex items-center gap-4 mb-4">
+        <button
+          @click="toggleLiveTranscription"
+          :class="isLiveRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-pink-500 hover:bg-pink-600'"
+          class="text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center gap-2 text-lg"
+        >
+          <span v-if="isLiveRecording" class="w-4 h-4 bg-white rounded-full animate-pulse"></span>
+          <span v-else class="w-4 h-4 border-2 border-white rounded-full"></span>
+          {{ isLiveRecording ? 'Stop Live Transcription' : 'Start Live Transcription' }}
+        </button>
+      </div>
+
+      <div v-if="liveTranscript || isLiveRecording" class="mt-4 p-4 bg-pink-50 border border-pink-200 rounded min-h-32">
+        <p class="font-medium text-pink-700 mb-2">Live Transcript</p>
+        <p class="text-gray-800 text-lg" :class="{'animate-pulse': isLiveRecording && !liveTranscript}">
+          {{ liveTranscript || (isLiveRecording ? 'Listening...' : '') }}
+        </p>
+      </div>
+
+      <div v-if="liveError" class="mt-4 p-4 bg-red-50 border border-red-200 rounded">
+        <p class="text-red-700 font-medium">Error</p>
+        <p class="text-sm text-red-600">{{ liveError }}</p>
+      </div>
+    </section>
   </div>
 
   <script>
@@ -253,6 +284,14 @@
         const recordedChunks = ref([]);
         const recordedBlob = ref(null);
         const micLoading = ref(false);
+
+        // Live transcription state
+        const isLiveRecording = ref(false);
+        const liveTranscript = ref('');
+        const liveError = ref(null);
+        const liveWebSocket = ref(null);
+        const liveMediaRecorder = ref(null);
+        const liveAudioContext = ref(null);
 
         // Helper to convert ArrayBuffer to base64 without stack overflow
         function arrayBufferToBase64(buffer) {
@@ -533,6 +572,163 @@
           }
         }
 
+        // Live real-time transcription via WebSocket
+        async function toggleLiveTranscription() {
+          if (isLiveRecording.value) {
+            // Stop recording
+            console.log('[Live] Stopping...');
+            isLiveRecording.value = false;
+            if (liveMediaRecorder.value) {
+              liveMediaRecorder.value.stop();
+            }
+            if (liveWebSocket.value && liveWebSocket.value.readyState === WebSocket.OPEN) {
+              console.log('[Live] Sending END');
+              liveWebSocket.value.send('END');
+            }
+            return;
+          }
+
+          // Start recording
+          console.log('[Live] Starting...');
+          liveError.value = null;
+          liveTranscript.value = '';
+
+          try {
+            // Connect WebSocket
+            const wsUrl = API_BASE.replace('http', 'ws') + '/ws/transcribe';
+            console.log('[Live] Connecting to:', wsUrl);
+            const ws = new WebSocket(wsUrl);
+            liveWebSocket.value = ws;
+
+            ws.onopen = async () => {
+              console.log('[Live] WebSocket connected');
+
+              try {
+                // Start audio capture
+                const stream = await navigator.mediaDevices.getUserMedia({
+                  audio: {
+                    sampleRate: 16000,
+                    channelCount: 1,
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                  }
+                });
+                console.log('[Live] Got microphone access');
+
+                // Create AudioContext
+                const audioContext = new AudioContext({ sampleRate: 16000 });
+                liveAudioContext.value = audioContext;
+                console.log('[Live] AudioContext sample rate:', audioContext.sampleRate);
+
+                const source = audioContext.createMediaStreamSource(stream);
+                const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+                let chunkCount = 0;
+                processor.onaudioprocess = (e) => {
+                  if (!isLiveRecording.value || ws.readyState !== WebSocket.OPEN) return;
+
+                  const inputData = e.inputBuffer.getChannelData(0);
+                  // Convert float32 to int16 PCM
+                  const int16Data = new Int16Array(inputData.length);
+                  for (let i = 0; i < inputData.length; i++) {
+                    const s = Math.max(-1, Math.min(1, inputData[i]));
+                    int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                  }
+
+                  // Send raw PCM bytes (no WAV header)
+                  ws.send(int16Data.buffer);
+                  chunkCount++;
+                  if (chunkCount % 10 === 0) {
+                    console.log('[Live] Sent', chunkCount, 'chunks');
+                  }
+                };
+
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+
+                liveMediaRecorder.value = {
+                  stream,
+                  processor,
+                  source,
+                  audioContext,
+                  stop: () => {
+                    console.log('[Live] Cleaning up audio');
+                    processor.disconnect();
+                    source.disconnect();
+                    stream.getTracks().forEach(t => t.stop());
+                    audioContext.close();
+                  }
+                };
+
+                isLiveRecording.value = true;
+                console.log('[Live] Recording started');
+              } catch (err) {
+                console.error('[Live] Microphone error:', err);
+                liveError.value = 'Microphone error: ' + err.message;
+                ws.close();
+              }
+            };
+
+            ws.onmessage = (event) => {
+              console.log('[Live] Received:', event.data);
+              const data = JSON.parse(event.data);
+              if (data.error) {
+                liveError.value = data.error;
+              } else if (data.text) {
+                liveTranscript.value = data.text;
+              }
+            };
+
+            ws.onerror = (error) => {
+              console.error('[Live] WebSocket error:', error);
+              liveError.value = 'WebSocket connection error';
+              isLiveRecording.value = false;
+            };
+
+            ws.onclose = (event) => {
+              console.log('[Live] WebSocket closed:', event.code, event.reason);
+              isLiveRecording.value = false;
+              if (liveMediaRecorder.value) {
+                liveMediaRecorder.value.stop();
+              }
+            };
+
+          } catch (err) {
+            liveError.value = err.message;
+            isLiveRecording.value = false;
+          }
+        }
+
+        // Create a minimal WAV buffer from int16 samples
+        function createWavBuffer(samples, sampleRate) {
+          const buffer = new ArrayBuffer(44 + samples.length * 2);
+          const view = new DataView(buffer);
+
+          // WAV header
+          writeString(view, 0, 'RIFF');
+          view.setUint32(4, 36 + samples.length * 2, true);
+          writeString(view, 8, 'WAVE');
+          writeString(view, 12, 'fmt ');
+          view.setUint32(16, 16, true);
+          view.setUint16(20, 1, true); // PCM
+          view.setUint16(22, 1, true); // mono
+          view.setUint32(24, sampleRate, true);
+          view.setUint32(28, sampleRate * 2, true);
+          view.setUint16(32, 2, true);
+          view.setUint16(34, 16, true);
+          writeString(view, 36, 'data');
+          view.setUint32(40, samples.length * 2, true);
+
+          // Write samples
+          let offset = 44;
+          for (let i = 0; i < samples.length; i++) {
+            view.setInt16(offset, samples[i], true);
+            offset += 2;
+          }
+
+          return buffer;
+        }
+
         return {
           healthLoading, healthResult, healthError, checkHealth,
           uploadFile, uploadLoading, uploadResult, uploadError, transcribeUpload,
@@ -540,6 +736,7 @@
           streamUploadFile, streamUploadLoading, streamUploadEvents, streamUploadError, transcribeStreamUpload,
           streamBase64File, streamBase64Loading, streamBase64Events, streamBase64Error, transcribeStreamBase64,
           isRecording, recordedBlob, micLoading, toggleRecording, transcribeRecording,
+          isLiveRecording, liveTranscript, liveError, toggleLiveTranscription,
           handleFileUpload,
         };
       }

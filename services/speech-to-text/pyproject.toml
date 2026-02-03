@@ -8,4 +8,5 @@ dependencies = [
     "uvicorn>=0.34.0",
     "nemo_toolkit[asr]>=2.0.0",
     "python-multipart>=0.0.9",
+    "websockets>=12.0",
 ]

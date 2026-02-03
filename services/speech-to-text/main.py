@@ -1,4 +1,5 @@
 import base64
+import io
 import logging
 import tempfile
 import traceback
@@ -6,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import nemo.collections.asr as nemo_asr
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -224,3 +225,125 @@ async def transcribe_stream_base64(request: TranscribeBase64Request):
 @app.get("/health")
 async def health():
     return {"status": "healthy", "model_loaded": model is not None}
+
+
+def create_wav_header(sample_rate: int, num_samples: int) -> bytes:
+    """Create a WAV header for 16-bit mono PCM audio."""
+    data_size = num_samples * 2
+    header = io.BytesIO()
+    # RIFF header
+    header.write(b'RIFF')
+    header.write((36 + data_size).to_bytes(4, 'little'))
+    header.write(b'WAVE')
+    # fmt chunk
+    header.write(b'fmt ')
+    header.write((16).to_bytes(4, 'little'))  # chunk size
+    header.write((1).to_bytes(2, 'little'))   # PCM format
+    header.write((1).to_bytes(2, 'little'))   # mono
+    header.write(sample_rate.to_bytes(4, 'little'))
+    header.write((sample_rate * 2).to_bytes(4, 'little'))  # byte rate
+    header.write((2).to_bytes(2, 'little'))   # block align
+    header.write((16).to_bytes(2, 'little'))  # bits per sample
+    # data chunk
+    header.write(b'data')
+    header.write(data_size.to_bytes(4, 'little'))
+    return header.getvalue()
+
+
+@app.websocket("/ws/transcribe")
+async def websocket_transcribe(websocket: WebSocket):
+    """Real-time transcription via WebSocket."""
+    logger.info("WebSocket: New connection")
+    await websocket.accept()
+    logger.info("WebSocket: Connection accepted")
+
+    if model is None:
+        logger.error("WebSocket: Model not loaded")
+        await websocket.send_json({"error": "Model not loaded"})
+        await websocket.close()
+        return
+
+    # Buffer for raw PCM samples (16-bit signed integers)
+    pcm_buffer = bytearray()
+    sample_rate = 16000
+    last_text = ""
+    chunk_count = 0
+
+    try:
+        while True:
+            message = await websocket.receive()
+
+            if message["type"] == "websocket.disconnect":
+                logger.info("WebSocket: Client disconnected")
+                break
+
+            if "text" in message:
+                text = message["text"]
+                logger.info(f"WebSocket: Received text message: {text}")
+
+                if text == "END":
+                    logger.info(f"WebSocket: END received, buffer has {len(pcm_buffer)} bytes")
+                    if len(pcm_buffer) > 0:
+                        text_result = await transcribe_pcm_buffer(pcm_buffer, sample_rate)
+                        logger.info(f"WebSocket: Final transcription: {text_result}")
+                        await websocket.send_json({"text": text_result, "final": True})
+                    break
+
+            elif "bytes" in message:
+                chunk = message["bytes"]
+                chunk_count += 1
+                pcm_buffer.extend(chunk)
+
+                # Log every 10 chunks to avoid spam
+                if chunk_count % 10 == 0:
+                    logger.info(f"WebSocket: Received {chunk_count} chunks, buffer: {len(pcm_buffer)} bytes")
+
+                # Transcribe every ~2 seconds of audio (16000 samples/sec * 2 bytes * 2 sec)
+                if len(pcm_buffer) >= sample_rate * 2 * 2:
+                    logger.info(f"WebSocket: Transcribing {len(pcm_buffer)} bytes of audio...")
+                    text_result = await transcribe_pcm_buffer(pcm_buffer, sample_rate)
+
+                    if text_result and text_result != last_text:
+                        logger.info(f"WebSocket: Partial result: {text_result}")
+                        last_text = text_result
+                        await websocket.send_json({"text": text_result, "final": False})
+
+    except Exception as e:
+        logger.error(f"WebSocket: Error - {e}", exc_info=True)
+        try:
+            await websocket.send_json({"error": str(e)})
+        except:
+            pass
+    finally:
+        logger.info("WebSocket: Closing connection")
+
+
+async def transcribe_pcm_buffer(pcm_buffer: bytearray, sample_rate: int) -> str:
+    """Transcribe PCM audio buffer."""
+    if model is None or len(pcm_buffer) == 0:
+        return ""
+
+    # Create WAV file with header + PCM data
+    num_samples = len(pcm_buffer) // 2
+    wav_header = create_wav_header(sample_rate, num_samples)
+    wav_data = wav_header + bytes(pcm_buffer)
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp.write(wav_data)
+        tmp_path = tmp.name
+
+    try:
+        results = model.transcribe([tmp_path])
+        if isinstance(results, tuple):
+            results = results[0]
+        if results:
+            result = results[0]
+            if hasattr(result, "text"):
+                return result.text
+            return str(result)
+        return ""
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        return ""
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
