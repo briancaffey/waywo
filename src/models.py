@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class HNItem(BaseModel):
@@ -66,3 +67,74 @@ class NatQueryRequest(BaseModel):
     """Request body for NAT query endpoint."""
 
     message: str = "Hello, who are you?"
+
+
+class WaywoProject(BaseModel):
+    """Extracted project data from a WaywoComment."""
+
+    id: int
+    source_comment_id: int
+
+    # Validation
+    is_valid_project: bool = True
+    invalid_reason: Optional[str] = None
+
+    # Core metadata
+    title: str
+    short_description: str  # 5-10 words
+    description: str  # 1-2 sentences
+    hashtags: list[str] = Field(default_factory=list)  # 3-5 tags
+
+    # URLs
+    project_urls: list[str] = Field(default_factory=list)
+    url_summaries: dict[str, str] = Field(default_factory=dict)
+
+    # Scores (1-10)
+    idea_score: int = Field(ge=1, le=10)
+    complexity_score: int = Field(ge=1, le=10)
+
+    # Timestamps
+    created_at: datetime
+    processed_at: datetime
+
+    # Workflow metadata
+    workflow_logs: list[str] = Field(default_factory=list)
+
+
+class WaywoProjectSummary(BaseModel):
+    """Summary of a WaywoProject for list views."""
+
+    id: int
+    source_comment_id: int
+    title: str
+    short_description: str
+    hashtags: list[str]
+    idea_score: int
+    complexity_score: int
+    is_valid_project: bool
+    created_at: datetime
+
+
+class ProcessCommentRequest(BaseModel):
+    """Request body for processing a single comment."""
+
+    pass  # No parameters needed, comment_id comes from URL
+
+
+class ProcessCommentsRequest(BaseModel):
+    """Request body for batch processing comments."""
+
+    limit: Optional[int] = None  # Limit for testing
+
+
+class WaywoProjectListFilters(BaseModel):
+    """Query parameters for filtering WaywoProject list."""
+
+    tags: Optional[list[str]] = None
+    min_idea_score: Optional[int] = Field(None, ge=1, le=10)
+    max_idea_score: Optional[int] = Field(None, ge=1, le=10)
+    min_complexity_score: Optional[int] = Field(None, ge=1, le=10)
+    max_complexity_score: Optional[int] = Field(None, ge=1, le=10)
+    date_from: Optional[datetime] = None
+    date_to: Optional[datetime] = None
+    is_valid: Optional[bool] = None

@@ -6,44 +6,65 @@
         <div class="flex h-16 items-center justify-between">
           <!-- Logo/Brand -->
           <div class="flex items-center space-x-2">
-            <NuxtLink to="/" class="flex items-center space-x-2">
+            <a href="/" class="flex items-center space-x-2">
               <div class="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
                 <span class="text-primary-foreground font-bold text-sm">w</span>
               </div>
               <span class="text-xl font-bold">waywo</span>
-            </NuxtLink>
+            </a>
           </div>
 
           <!-- Navigation Links -->
           <div class="hidden md:flex items-center space-x-6">
-            <NuxtLink
-              to="/"
+            <a
+              href="/"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/') ? 'text-primary' : 'text-muted-foreground'"
             >
               Home
-            </NuxtLink>
-            <NuxtLink
-              to="/posts"
+            </a>
+            <a
+              href="/posts"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/posts') ? 'text-primary' : 'text-muted-foreground'"
             >
               Posts
-            </NuxtLink>
-            <NuxtLink
-              to="/comments"
+            </a>
+            <a
+              href="/comments"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/comments') ? 'text-primary' : 'text-muted-foreground'"
             >
               Comments
-            </NuxtLink>
-            <NuxtLink
-              to="/debug"
+            </a>
+            <a
+              href="/projects"
               class="text-sm font-medium transition-colors hover:text-primary"
-              :class="isActive('/debug') ? 'text-primary' : 'text-muted-foreground'"
+              :class="isActive('/projects') ? 'text-primary' : 'text-muted-foreground'"
             >
-              Debug
-            </NuxtLink>
+              Projects
+            </a>
+            <a
+              href="/search"
+              class="text-sm font-medium transition-colors hover:text-primary"
+              :class="isActive('/search') ? 'text-primary' : 'text-muted-foreground'"
+            >
+              Search
+            </a>
+            <a
+              href="/chat"
+              class="text-sm font-medium transition-colors hover:text-primary"
+              :class="isActive('/chat') ? 'text-primary' : 'text-muted-foreground'"
+            >
+              Chat
+            </a>
+            <a
+              href="/admin"
+              class="text-sm font-medium transition-colors hover:text-primary"
+              :class="isActive('/admin') ? 'text-primary' : 'text-muted-foreground'"
+            >
+              Admin
+            </a>
             <button
               @click="toggleTheme"
               class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -72,41 +93,64 @@
         <!-- Mobile Menu -->
         <div v-if="mobileMenuOpen" class="md:hidden border-t py-4">
           <div class="flex flex-col space-y-2">
-            <NuxtLink
-              to="/"
+            <a
+              href="/"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/') ? 'text-primary bg-accent' : 'text-muted-foreground'"
-              @click="mobileMenuOpen = false"
             >
               Home
-            </NuxtLink>
-            <NuxtLink
-              to="/posts"
+            </a>
+            <a
+              href="/posts"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/posts') ? 'text-primary bg-accent' : 'text-muted-foreground'"
-              @click="mobileMenuOpen = false"
             >
               Posts
-            </NuxtLink>
-            <NuxtLink
-              to="/comments"
+            </a>
+            <a
+              href="/comments"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/comments') ? 'text-primary bg-accent' : 'text-muted-foreground'"
-              @click="mobileMenuOpen = false"
             >
               Comments
-            </NuxtLink>
-            <NuxtLink
-              to="/debug"
+            </a>
+            <a
+              href="/projects"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
-              :class="isActive('/debug') ? 'text-primary bg-accent' : 'text-muted-foreground'"
-              @click="mobileMenuOpen = false"
+              :class="isActive('/projects') ? 'text-primary bg-accent' : 'text-muted-foreground'"
             >
-              Debug
-            </NuxtLink>
-            <div class="px-2 py-1">
-              <ThemeToggle />
-            </div>
+              Projects
+            </a>
+            <a
+              href="/search"
+              class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
+              :class="isActive('/search') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+            >
+              Search
+            </a>
+            <a
+              href="/chat"
+              class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
+              :class="isActive('/chat') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+            >
+              Chat
+            </a>
+            <a
+              href="/admin"
+              class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
+              :class="isActive('/admin') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+            >
+              Admin
+            </a>
+            <button
+              @click="toggleTheme"
+              class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <Icon
+                :name="colorMode.value === 'dark' ? 'lucide:sun' : 'lucide:moon'"
+                class="h-4 w-4"
+              />
+            </button>
           </div>
         </div>
       </div>
@@ -140,15 +184,10 @@ const mobileMenuOpen = ref(false)
 const colorMode = useColorMode()
 
 const isActive = (path: string) => {
-  return route.path === path
+  return route.path === path || route.path.startsWith(path + '/')
 }
 
 const toggleTheme = () => {
   colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
 }
-
-// Close mobile menu when route changes
-watch(() => route.path, () => {
-  mobileMenuOpen.value = false
-})
 </script>

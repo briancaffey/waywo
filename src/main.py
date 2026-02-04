@@ -1,21 +1,47 @@
-from fastapi import FastAPI, HTTPException
+import os
+from datetime import datetime
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from src.celery_app import debug_task
-from src.models import NatQueryRequest, ProcessWaywoPostsRequest, WaywoPostSummary
-from src.nat_client import generate as nat_generate
-from src.nat_client import health_check as nat_health_check
-from src.redis_client import (
+from src.database import init_db
+from src.embedding_client import (
+    EmbeddingError,
+    check_embedding_service_health,
+    get_single_embedding,
+)
+from src.db_client import (
+    delete_project,
     get_all_comments,
+    get_all_hashtags,
     get_all_post_ids,
+    get_all_projects,
     get_comment,
     get_comment_count_for_post,
     get_comments_for_post,
+    get_database_stats,
     get_post,
+    get_project,
+    get_projects_for_comment,
+    get_projects_with_embeddings_count,
     get_total_comment_count,
+    get_total_project_count,
+    reset_all_data,
+    semantic_search,
 )
-from src.tasks import process_waywo_posts
+from src.models import (
+    NatQueryRequest,
+    ProcessCommentsRequest,
+    ProcessWaywoPostsRequest,
+    WaywoPostSummary,
+)
+from src.nat_client import generate as nat_generate
+from src.nat_client import health_check as nat_health_check
+from src.tasks import process_waywo_comment, process_waywo_comments, process_waywo_posts
 
 app = FastAPI(
     title="Waywo Backend",
@@ -38,6 +64,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
+    init_db()
     print("✅ FastAPI application has started")
 
 
@@ -94,6 +121,30 @@ async def trigger_process_waywo_posts(request: ProcessWaywoPostsRequest = None):
             "task_id": task.id,
             "limit_posts": request.limit_posts,
             "limit_comments": request.limit_comments,
+        }
+    )
+
+
+@app.post("/api/process-waywo-comments", tags=["waywo"])
+async def trigger_process_waywo_comments(request: ProcessCommentsRequest = None):
+    """
+    Trigger processing of comments through the WaywoProjectWorkflow.
+
+    This will extract projects from unprocessed comments.
+    Optionally pass a limit for testing purposes.
+    """
+    if request is None:
+        request = ProcessCommentsRequest()
+
+    task = process_waywo_comments.delay(
+        limit=request.limit,
+    )
+    return JSONResponse(
+        content={
+            "status": "task_queued",
+            "task_id": task.id,
+            "limit": request.limit,
+            "message": "Comment processing task has been queued",
         }
     )
 
@@ -204,25 +255,32 @@ async def get_waywo_post(post_id: int):
 
 
 @app.get("/api/waywo-comments", tags=["waywo"])
-async def list_waywo_comments(limit: int = 50, offset: int = 0):
+async def list_waywo_comments(
+    limit: int = 50,
+    offset: int = 0,
+    post_id: int | None = None,
+):
     """
     List all stored WaywoComment entries with pagination.
+
+    Optionally filter by post_id to get comments for a specific post.
     """
-    comments = get_all_comments(limit=limit, offset=offset)
-    total = get_total_comment_count()
+    comments = get_all_comments(limit=limit, offset=offset, post_id=post_id)
+    total = get_total_comment_count(post_id=post_id)
 
     return {
         "comments": [c.model_dump() for c in comments],
         "total": total,
         "limit": limit,
         "offset": offset,
+        "post_id": post_id,
     }
 
 
 @app.get("/api/waywo-comments/{comment_id}", tags=["waywo"])
 async def get_waywo_comment(comment_id: int):
     """
-    Get a single WaywoComment.
+    Get a single WaywoComment with its extracted projects.
     """
     comment = get_comment(comment_id)
     if comment is None:
@@ -233,10 +291,37 @@ async def get_waywo_comment(comment_id: int):
     if comment.parent:
         parent_post = get_post(comment.parent)
 
+    # Get any extracted projects for this comment
+    projects = get_projects_for_comment(comment_id)
+
     return {
         "comment": comment.model_dump(),
         "parent_post": parent_post.model_dump() if parent_post else None,
+        "projects": [p.model_dump() for p in projects],
     }
+
+
+@app.post("/api/waywo-comments/{comment_id}/process", tags=["waywo"])
+async def process_single_comment(comment_id: int):
+    """
+    Trigger processing of a single comment through the WaywoProjectWorkflow.
+
+    This will extract projects from the specified comment.
+    """
+    # Verify comment exists
+    comment = get_comment(comment_id)
+    if comment is None:
+        raise HTTPException(status_code=404, detail=f"Comment {comment_id} not found")
+
+    task = process_waywo_comment.delay(comment_id=comment_id)
+    return JSONResponse(
+        content={
+            "status": "task_queued",
+            "task_id": task.id,
+            "comment_id": comment_id,
+            "message": f"Processing task queued for comment {comment_id}",
+        }
+    )
 
 
 @app.get("/api/nat/health", tags=["nat"])
@@ -269,3 +354,401 @@ async def query_nat_service(request: NatQueryRequest):
             status_code=502,
             detail=f"Failed to get response from NAT service: {str(e)}",
         )
+
+
+# =============================================================================
+# Projects API
+# =============================================================================
+
+
+@app.get("/api/waywo-projects", tags=["projects"])
+async def list_waywo_projects(
+    limit: int = 50,
+    offset: int = 0,
+    comment_id: Optional[int] = None,
+    tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
+    min_idea_score: Optional[int] = Query(None, ge=1, le=10),
+    max_idea_score: Optional[int] = Query(None, ge=1, le=10),
+    min_complexity_score: Optional[int] = Query(None, ge=1, le=10),
+    max_complexity_score: Optional[int] = Query(None, ge=1, le=10),
+    is_valid: Optional[bool] = None,
+):
+    """
+    List all WaywoProject entries with pagination and filtering.
+
+    Filters:
+    - comment_id: Filter by source comment
+    - tags: Comma-separated list of hashtags to filter by
+    - min/max_idea_score: Filter by idea score range
+    - min/max_complexity_score: Filter by complexity score range
+    - is_valid: Filter by validity status
+    """
+    # Parse tags if provided
+    tag_list = None
+    if tags:
+        tag_list = [t.strip().lower() for t in tags.split(",") if t.strip()]
+
+    # If filtering by comment_id, use the dedicated function
+    if comment_id is not None:
+        projects = get_projects_for_comment(comment_id)
+        total = len(projects)
+    else:
+        projects = get_all_projects(
+            limit=limit,
+            offset=offset,
+            tags=tag_list,
+            min_idea_score=min_idea_score,
+            max_idea_score=max_idea_score,
+            min_complexity_score=min_complexity_score,
+            max_complexity_score=max_complexity_score,
+            is_valid=is_valid,
+        )
+        total = get_total_project_count(is_valid=is_valid)
+
+    return {
+        "projects": [p.model_dump() for p in projects],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "filters": {
+            "comment_id": comment_id,
+            "tags": tag_list,
+            "min_idea_score": min_idea_score,
+            "max_idea_score": max_idea_score,
+            "min_complexity_score": min_complexity_score,
+            "max_complexity_score": max_complexity_score,
+            "is_valid": is_valid,
+        },
+    }
+
+
+@app.get("/api/waywo-projects/hashtags", tags=["projects"])
+async def list_project_hashtags():
+    """
+    Get all unique hashtags used across projects.
+
+    Useful for tag autocomplete/filtering.
+    """
+    hashtags = get_all_hashtags()
+    return {"hashtags": hashtags, "total": len(hashtags)}
+
+
+@app.get("/api/waywo-projects/{project_id}", tags=["projects"])
+async def get_waywo_project(project_id: int):
+    """
+    Get a single WaywoProject with full details.
+
+    Includes the source comment and parent post information.
+    """
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+
+    # Get the source comment
+    source_comment = get_comment(project.source_comment_id)
+
+    # Get the parent post if available
+    parent_post = None
+    if source_comment and source_comment.parent:
+        parent_post = get_post(source_comment.parent)
+
+    return {
+        "project": project.model_dump(),
+        "source_comment": source_comment.model_dump() if source_comment else None,
+        "parent_post": parent_post.model_dump() if parent_post else None,
+    }
+
+
+@app.delete("/api/waywo-projects/{project_id}", tags=["projects"])
+async def delete_waywo_project(project_id: int):
+    """
+    Delete a single WaywoProject.
+
+    Returns success status and the deleted project ID.
+    """
+    deleted = delete_project(project_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+
+    return JSONResponse(
+        content={
+            "status": "deleted",
+            "project_id": project_id,
+            "message": f"Project {project_id} has been deleted",
+        }
+    )
+
+
+# =============================================================================
+# Semantic Search & RAG Chatbot API
+# =============================================================================
+
+
+class SemanticSearchRequest(BaseModel):
+    """Request body for semantic search."""
+
+    query: str = Field(..., min_length=1, description="Search query text")
+    limit: int = Field(default=10, ge=1, le=50, description="Maximum results to return")
+
+
+class ChatbotRequest(BaseModel):
+    """Request body for chatbot query."""
+
+    query: str = Field(..., min_length=1, description="User's question or message")
+    top_k: int = Field(default=5, ge=1, le=20, description="Number of projects for context")
+
+
+@app.get("/api/embedding/health", tags=["semantic"])
+async def embedding_service_health():
+    """
+    Check if the embedding service is healthy.
+    """
+    embedding_url = os.environ.get("EMBEDDING_URL", "http://192.168.5.96:8000")
+    is_healthy = await check_embedding_service_health(embedding_url)
+
+    if not is_healthy:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "message": "Embedding service is not reachable",
+                "url": embedding_url,
+            },
+        )
+
+    return JSONResponse(
+        content={
+            "status": "healthy",
+            "url": embedding_url,
+        }
+    )
+
+
+@app.get("/api/semantic-search/stats", tags=["semantic"])
+async def semantic_search_stats():
+    """
+    Get statistics about semantic search capabilities.
+    """
+    total_projects = get_total_project_count()
+    projects_with_embeddings = get_projects_with_embeddings_count()
+
+    return {
+        "total_projects": total_projects,
+        "projects_with_embeddings": projects_with_embeddings,
+        "embedding_coverage": (
+            round(projects_with_embeddings / total_projects * 100, 1)
+            if total_projects > 0
+            else 0
+        ),
+    }
+
+
+@app.post("/api/semantic-search", tags=["semantic"])
+async def perform_semantic_search(request: SemanticSearchRequest):
+    """
+    Perform semantic search over projects using vector similarity.
+
+    Returns the most similar projects based on the query embedding.
+    """
+    embedding_url = os.environ.get("EMBEDDING_URL", "http://192.168.5.96:8000")
+
+    try:
+        # Get embedding for the query
+        query_embedding = await get_single_embedding(
+            text=request.query,
+            embedding_url=embedding_url,
+        )
+    except EmbeddingError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Embedding service error: {str(e)}",
+        )
+
+    # Perform semantic search
+    results = semantic_search(
+        query_embedding=query_embedding,
+        limit=request.limit,
+        is_valid=True,
+    )
+
+    # Format results
+    formatted_results = [
+        {
+            "project": project.model_dump(),
+            "similarity": round(similarity, 4),
+        }
+        for project, similarity in results
+    ]
+
+    return {
+        "results": formatted_results,
+        "query": request.query,
+        "total": len(formatted_results),
+    }
+
+
+@app.post("/api/waywo-chatbot", tags=["semantic"])
+async def chatbot_query(request: ChatbotRequest):
+    """
+    Query the RAG chatbot about projects.
+
+    Uses semantic search to find relevant projects and generates
+    a conversational response using an LLM.
+    """
+    from src.workflows.waywo_chatbot_workflow import run_chatbot_query
+
+    embedding_url = os.environ.get("EMBEDDING_URL", "http://192.168.5.96:8000")
+
+    try:
+        result = await run_chatbot_query(
+            query=request.query,
+            embedding_url=embedding_url,
+            top_k=request.top_k,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chatbot error: {str(e)}",
+        )
+
+    return {
+        "response": result.response,
+        "source_projects": result.source_projects,
+        "query": result.query,
+        "projects_found": result.projects_found,
+    }
+
+
+# =============================================================================
+# Admin API
+# =============================================================================
+
+
+@app.get("/api/admin/stats", tags=["admin"])
+async def get_admin_stats():
+    """
+    Get database statistics for the admin dashboard.
+    """
+    import redis
+
+    stats = get_database_stats()
+
+    # Get Redis stats
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    try:
+        r = redis.from_url(redis_url)
+        redis_info = r.info()
+        redis_keys = r.dbsize()
+        stats["redis_keys_count"] = redis_keys
+        stats["redis_memory_used"] = redis_info.get("used_memory_human", "unknown")
+        stats["redis_connected"] = True
+    except Exception as e:
+        stats["redis_keys_count"] = 0
+        stats["redis_memory_used"] = "unknown"
+        stats["redis_connected"] = False
+        stats["redis_error"] = str(e)
+
+    return stats
+
+
+@app.delete("/api/admin/reset-sqlite", tags=["admin"])
+async def reset_sqlite_database():
+    """
+    Delete all data from the SQLite database.
+
+    WARNING: This will delete all posts, comments, and projects!
+    """
+    try:
+        result = reset_all_data()
+        return JSONResponse(
+            content={
+                "status": "success",
+                "message": "SQLite database has been reset",
+                **result,
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to reset SQLite database: {str(e)}",
+        )
+
+
+@app.delete("/api/admin/reset-redis", tags=["admin"])
+async def reset_redis_database():
+    """
+    Flush all data from Redis.
+
+    WARNING: This will delete all Redis keys including Celery task data!
+    """
+    import redis
+
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+    try:
+        r = redis.from_url(redis_url)
+        r.flushall()
+        return JSONResponse(
+            content={
+                "status": "success",
+                "message": "Redis database has been flushed",
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to flush Redis: {str(e)}",
+        )
+
+
+@app.delete("/api/admin/reset-all", tags=["admin"])
+async def reset_all_databases():
+    """
+    Reset both SQLite and Redis databases.
+
+    WARNING: This will delete ALL data!
+    """
+    import redis
+
+    errors = []
+    results = {}
+
+    # Reset SQLite
+    try:
+        sqlite_result = reset_all_data()
+        results["sqlite"] = {
+            "status": "success",
+            **sqlite_result,
+        }
+    except Exception as e:
+        errors.append(f"SQLite: {str(e)}")
+        results["sqlite"] = {"status": "error", "error": str(e)}
+
+    # Reset Redis
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    try:
+        r = redis.from_url(redis_url)
+        r.flushall()
+        results["redis"] = {"status": "success", "message": "flushed"}
+    except Exception as e:
+        errors.append(f"Redis: {str(e)}")
+        results["redis"] = {"status": "error", "error": str(e)}
+
+    if errors:
+        return JSONResponse(
+            status_code=207,  # Multi-Status
+            content={
+                "status": "partial",
+                "message": "Some databases failed to reset",
+                "errors": errors,
+                "results": results,
+            },
+        )
+
+    return JSONResponse(
+        content={
+            "status": "success",
+            "message": "All databases have been reset",
+            "results": results,
+        }
+    )

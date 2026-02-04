@@ -10,24 +10,58 @@
         <p class="text-xl text-muted-foreground">
           Browse project submissions from "What are you working on?" posts
         </p>
+        <!-- Filter indicator -->
+        <div v-if="postId" class="mt-4">
+          <Badge variant="outline" class="text-sm">
+            Filtered by Post ID: {{ postId }}
+            <button @click="clearFilter" class="ml-2 hover:text-destructive">
+              <Icon name="lucide:x" class="h-3 w-3" />
+            </button>
+          </Badge>
+        </div>
       </div>
 
-      <!-- Stats Card -->
+      <!-- Stats & Processing Card -->
       <Card class="p-6 mb-8">
-        <div class="flex items-center justify-between">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <p class="text-sm text-muted-foreground">Total Comments</p>
             <p class="text-3xl font-bold">{{ total }}</p>
           </div>
-          <Button variant="outline" @click="fetchComments" :disabled="isLoading">
-            <Icon
-              :name="isLoading ? 'lucide:loader-2' : 'lucide:refresh-cw'"
-              :class="isLoading ? 'animate-spin' : ''"
-              class="mr-2 h-4 w-4"
-            />
-            Refresh
-          </Button>
+          <div class="flex gap-3">
+            <Button variant="outline" @click="fetchComments" :disabled="isLoading">
+              <Icon
+                :name="isLoading ? 'lucide:loader-2' : 'lucide:refresh-cw'"
+                :class="isLoading ? 'animate-spin' : ''"
+                class="mr-2 h-4 w-4"
+              />
+              Refresh
+            </Button>
+            <Button @click="processComments" :disabled="isProcessing">
+              <Icon
+                :name="isProcessing ? 'lucide:loader-2' : 'lucide:sparkles'"
+                :class="isProcessing ? 'animate-spin' : ''"
+                class="mr-2 h-4 w-4"
+              />
+              {{ isProcessing ? 'Processing...' : 'Extract Projects' }}
+            </Button>
+          </div>
         </div>
+
+        <!-- Processing Status Messages -->
+        <Alert v-if="processSuccess" class="mt-4 border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+          <Icon name="lucide:check-circle" class="h-4 w-4 text-green-600 dark:text-green-400" />
+          <AlertTitle class="text-green-800 dark:text-green-200">Task Queued</AlertTitle>
+          <AlertDescription class="text-green-700 dark:text-green-300">
+            Project extraction task has been queued. Task ID: {{ taskId }}
+          </AlertDescription>
+        </Alert>
+
+        <Alert v-if="processError" variant="destructive" class="mt-4">
+          <Icon name="lucide:alert-circle" class="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{{ processError }}</AlertDescription>
+        </Alert>
       </Card>
 
       <!-- Comments List -->
@@ -49,16 +83,21 @@
         <p class="text-sm text-muted-foreground mt-2">
           Process some posts first to fetch comments
         </p>
-        <NuxtLink to="/posts">
+        <a href="/posts">
           <Button class="mt-4">
             Go to Posts
             <Icon name="lucide:arrow-right" class="ml-2 h-4 w-4" />
           </Button>
-        </NuxtLink>
+        </a>
       </div>
 
       <div v-else class="space-y-4">
-        <Card v-for="comment in comments" :key="comment.id" class="p-6">
+        <Card
+          v-for="comment in comments"
+          :key="comment.id"
+          class="p-6 cursor-pointer hover:border-primary/50 transition-colors"
+          @click="viewComment(comment.id)"
+        >
           <div class="flex justify-between items-start mb-4">
             <div class="flex items-center gap-3">
               <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -71,6 +110,7 @@
                   :href="`https://news.ycombinator.com/user?id=${comment.by}`"
                   target="_blank"
                   class="font-medium hover:underline"
+                  @click.stop
                 >
                   {{ comment.by || 'Unknown' }}
                 </a>
@@ -83,6 +123,7 @@
               :href="`https://news.ycombinator.com/item?id=${comment.id}`"
               target="_blank"
               class="text-muted-foreground hover:text-primary"
+              @click.stop
             >
               <Icon name="lucide:external-link" class="h-4 w-4" />
             </a>
@@ -91,15 +132,47 @@
           <div
             class="prose prose-sm max-w-none dark:prose-invert"
             v-html="comment.text || '<em>No content</em>'"
+            @click.stop
           />
 
           <div class="mt-4 pt-4 border-t flex items-center justify-between text-sm text-muted-foreground">
             <span>
               ID: {{ comment.id }}
+              <span v-if="comment.kids?.length" class="ml-2">
+                | {{ comment.kids.length }} {{ comment.kids.length === 1 ? 'reply' : 'replies' }}
+              </span>
             </span>
-            <span v-if="comment.kids?.length">
-              {{ comment.kids.length }} {{ comment.kids.length === 1 ? 'reply' : 'replies' }}
-            </span>
+            <div class="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                @click.stop="processSingleComment(comment.id)"
+                :disabled="processingCommentId === comment.id"
+              >
+                <Icon
+                  :name="processingCommentId === comment.id ? 'lucide:loader-2' : 'lucide:sparkles'"
+                  :class="processingCommentId === comment.id ? 'animate-spin' : ''"
+                  class="mr-1 h-3 w-3"
+                />
+                {{ processingCommentId === comment.id ? 'Processing...' : 'Process' }}
+              </Button>
+              <a
+                :href="`/projects?comment_id=${comment.id}`"
+                class="text-primary hover:underline flex items-center gap-1"
+                @click.stop
+              >
+                Projects
+                <Icon name="lucide:arrow-right" class="h-3 w-3" />
+              </a>
+              <a
+                :href="`/comments/${comment.id}`"
+                class="text-primary hover:underline flex items-center gap-1"
+                @click.stop
+              >
+                Details
+                <Icon name="lucide:arrow-right" class="h-3 w-3" />
+              </a>
+            </div>
           </div>
         </Card>
 
@@ -153,6 +226,13 @@ useHead({
 
 // Get runtime config for API base URL
 const config = useRuntimeConfig()
+const route = useRoute()
+
+// Get post_id from query params
+const postId = computed(() => {
+  const id = route.query.post_id
+  return id ? Number(id) : null
+})
 
 // Reactive state
 const comments = ref<WaywoComment[]>([])
@@ -162,6 +242,15 @@ const fetchError = ref<string | null>(null)
 
 const limit = ref(20)
 const offset = ref(0)
+
+// Processing state (batch)
+const isProcessing = ref(false)
+const processError = ref<string | null>(null)
+const processSuccess = ref(false)
+const taskId = ref<string | null>(null)
+
+// Processing state (single comment)
+const processingCommentId = ref<number | null>(null)
 
 // Format Unix timestamp to readable date
 function formatTime(timestamp: number | null): string {
@@ -182,17 +271,20 @@ async function fetchComments() {
   fetchError.value = null
 
   try {
+    const params: Record<string, number | undefined> = {
+      limit: limit.value,
+      offset: offset.value
+    }
+    if (postId.value) {
+      params.post_id = postId.value
+    }
+
     const response = await $fetch<{
       comments: WaywoComment[]
       total: number
       limit: number
       offset: number
-    }>(`${config.public.apiBase}/api/waywo-comments`, {
-      params: {
-        limit: limit.value,
-        offset: offset.value
-      }
-    })
+    }>(`${config.public.apiBase}/api/waywo-comments`, { params })
     comments.value = response.comments
     total.value = response.total
   } catch (err) {
@@ -201,6 +293,72 @@ async function fetchComments() {
   } finally {
     isLoading.value = false
   }
+}
+
+// View comment detail
+function viewComment(commentId: number) {
+  window.location.href = `/comments/${commentId}`
+}
+
+// Process a single comment
+async function processSingleComment(commentId: number) {
+  if (processingCommentId.value === commentId) return
+
+  processingCommentId.value = commentId
+
+  try {
+    await $fetch<{ task_id: string; status: string }>(
+      `${config.public.apiBase}/api/waywo-comments/${commentId}/process`,
+      {
+        method: 'POST'
+      }
+    )
+  } catch (err) {
+    console.error('Failed to process comment:', err)
+  } finally {
+    // Keep the loading state for a moment to indicate task was queued
+    setTimeout(() => {
+      processingCommentId.value = null
+    }, 2000)
+  }
+}
+
+// Trigger processing of comments to extract projects
+async function processComments() {
+  if (isProcessing.value) return
+
+  isProcessing.value = true
+  processError.value = null
+  processSuccess.value = false
+  taskId.value = null
+
+  try {
+    const response = await $fetch<{ task_id: string; status: string }>(
+      `${config.public.apiBase}/api/process-waywo-comments`,
+      {
+        method: 'POST',
+        body: {}
+      }
+    )
+
+    taskId.value = response.task_id
+    processSuccess.value = true
+
+    // Clear success message after 10 seconds
+    setTimeout(() => {
+      processSuccess.value = false
+    }, 10000)
+  } catch (err) {
+    console.error('Failed to trigger processing:', err)
+    processError.value = 'Failed to trigger processing. Make sure the backend is running.'
+  } finally {
+    isProcessing.value = false
+  }
+}
+
+// Clear post filter
+function clearFilter() {
+  window.location.href = '/comments'
 }
 
 // Pagination

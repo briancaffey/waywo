@@ -3,11 +3,15 @@ x-common-env: &common-env
   CELERY_RESULT_BACKEND: redis://redis:6379/0
   REDIS_URL: redis://redis:6379/0
   NAT_SERVICE_URL: http://nat:8080
+  FIRECRAWL_URL: http://host.docker.internal:3002
+  EMBEDDING_URL: http://192.168.5.96:8000
+  DATA_DIR: /app/data
   LOG_LEVEL: DEBUG
 
 x-common-volumes: &common-volumes
   - ./src:/app/src
   - ./media:/app/media
+  - ./data:/app/data
   - ./waywo.yml:/app/waywo.yml:ro
   - /app/.venv
 
@@ -49,6 +53,8 @@ services:
     volumes: *common-volumes
     command: /app/.venv/bin/python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     <<: [*common-depends, *common-networks]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   celery-worker:
     build: .
@@ -56,10 +62,17 @@ services:
     environment:
       <<: *common-env
     volumes: *common-volumes
-    command: /app/.venv/bin/watchmedo auto-restart --directory=/app/src --pattern=*.py --recursive -- /app/.venv/bin/celery -A src.celery_app worker --loglevel=info --queues=waywo
+    command: /app/.venv/bin/watchmedo auto-restart --directory=/app/src --pattern=*.py --recursive -- /app/.venv/bin/celery -A src.celery_app worker --loglevel=info --queues=waywo --concurrency=4
     <<: [*common-depends, *common-networks]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "/app/.venv/bin/python", "/app/src/celery_worker_healthcheck.py"]
+      test:
+        [
+          "CMD",
+          "/app/.venv/bin/python",
+          "/app/src/celery_worker_healthcheck.py",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -73,13 +86,15 @@ services:
     volumes:
       - ./src:/app/src
       - ./media:/app/media
+      - ./data:/app/data
       - ./waywo.yml:/app/waywo.yml:ro
       - /app/.venv
       - celery-beat-data:/app/celery-data
     command: /app/.venv/bin/watchmedo auto-restart --directory=/app/src --pattern=*.py --recursive -- /app/.venv/bin/celery -A src.celery_app beat --loglevel=info
     <<: [*common-depends, *common-networks]
     healthcheck:
-      test: ["CMD", "/app/.venv/bin/python", "/app/src/celery_beat_healthcheck.py"]
+      test:
+        ["CMD", "/app/.venv/bin/python", "/app/src/celery_beat_healthcheck.py"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -108,7 +123,15 @@ services:
     networks:
       - waywo-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5555/"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5555/",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

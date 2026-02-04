@@ -120,7 +120,12 @@
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow v-for="post in posts" :key="post.id">
+            <TableRow
+              v-for="post in posts"
+              :key="post.id"
+              class="cursor-pointer hover:bg-muted/50"
+              @click="viewComments(post.id)"
+            >
               <TableCell class="font-medium">
                 {{ formatDate(post.year, post.month) }}
               </TableCell>
@@ -129,6 +134,7 @@
                   :href="`https://news.ycombinator.com/item?id=${post.id}`"
                   target="_blank"
                   class="hover:underline text-primary"
+                  @click.stop
                 >
                   {{ post.title || `Post ${post.id}` }}
                 </a>
@@ -137,9 +143,14 @@
                 {{ post.score ?? '-' }}
               </TableCell>
               <TableCell class="text-right">
-                <Badge variant="secondary">
-                  {{ post.comment_count }}
-                </Badge>
+                <a
+                  :href="`/comments?post_id=${post.id}`"
+                  @click.stop
+                >
+                  <Badge variant="secondary" class="hover:bg-primary hover:text-primary-foreground transition-colors">
+                    {{ post.comment_count }}
+                  </Badge>
+                </a>
               </TableCell>
               <TableCell class="text-right text-muted-foreground">
                 {{ post.descendants ?? '-' }}
@@ -201,6 +212,11 @@ function formatDate(year: number | null, month: number | null): string {
   if (!year || !month) return 'Unknown'
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
   return `${monthNames[month - 1]} ${year}`
+}
+
+// Navigate to comments page filtered by post
+function viewComments(postId: number) {
+  window.location.href = `/comments?post_id=${postId}`
 }
 
 // Fetch posts from API
