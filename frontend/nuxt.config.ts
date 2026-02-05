@@ -5,12 +5,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   components: [
     {
-      path: './app/components/ui',
-      prefix: '',
-      extensions: ['.vue'], // <-- block .ts barrels from becoming components
-    },
-    {
-      path: './app/components/waywo',
+      path: '~/components/waywo',
       prefix: 'Waywo',
       extensions: ['.vue'],
     },
