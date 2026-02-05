@@ -7,9 +7,9 @@ general:
 llms:
   llm_nim:
     _type: nim
-    base_url: "http://192.168.6.19:8002/v1"
+    base_url: ${LLM_BASE_URL}
     api_key: "not-needed"
-    model_name: "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4"
+    model_name: ${LLM_MODEL_NAME}
 
 workflow:
   _type: chat_completion

@@ -624,6 +624,70 @@ async def chatbot_query(request: ChatbotRequest):
 # =============================================================================
 
 
+@app.get("/api/admin/services-health", tags=["admin"])
+async def get_services_health():
+    """
+    Check health status of external services (LLM, Embedder).
+    """
+    import httpx
+
+    llm_base_url = os.environ.get("LLM_BASE_URL", "http://192.168.6.19:8002/v1")
+    llm_model_name = os.environ.get("LLM_MODEL_NAME", "")
+    embedding_url = os.environ.get("EMBEDDING_URL", "http://192.168.5.96:8000")
+
+    services = {}
+
+    # Check LLM server
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{llm_base_url}/models")
+            if response.status_code == 200:
+                data = response.json()
+                models = [m.get("id", "unknown") for m in data.get("data", [])]
+                services["llm"] = {
+                    "status": "healthy",
+                    "url": llm_base_url,
+                    "configured_model": llm_model_name,
+                    "available_models": models,
+                }
+            else:
+                services["llm"] = {
+                    "status": "unhealthy",
+                    "url": llm_base_url,
+                    "error": f"HTTP {response.status_code}",
+                }
+    except Exception as e:
+        services["llm"] = {
+            "status": "unhealthy",
+            "url": llm_base_url,
+            "error": str(e),
+        }
+
+    # Check Embedding server
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{embedding_url}/health")
+            if response.status_code == 200:
+                services["embedder"] = {
+                    "status": "healthy",
+                    "url": embedding_url,
+                }
+            else:
+                services["embedder"] = {
+                    "status": "unhealthy",
+                    "url": embedding_url,
+                    "error": f"HTTP {response.status_code}",
+                }
+    except Exception as e:
+        services["embedder"] = {
+            "status": "unhealthy",
+            "url": embedding_url,
+            "error": str(e),
+        }
+
+    return services
+
+
 @app.get("/api/admin/stats", tags=["admin"])
 async def get_admin_stats():
     """
@@ -752,3 +816,28 @@ async def reset_all_databases():
             "results": results,
         }
     )
+
+
+@app.post("/api/admin/rebuild-vector-index", tags=["admin"])
+async def rebuild_vector_index():
+    """
+    Rebuild the vector quantization index for semantic search.
+
+    Call this after adding new embeddings to enable fast vector search.
+    Safe to call multiple times.
+    """
+    from src.database import build_vector_index
+
+    try:
+        build_vector_index()
+        return JSONResponse(
+            content={
+                "status": "success",
+                "message": "Vector index rebuilt successfully",
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to rebuild vector index: {str(e)}",
+        )

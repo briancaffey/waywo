@@ -3,23 +3,74 @@
     <div class="max-w-4xl mx-auto">
       <!-- Header -->
       <div class="text-center mb-12">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 mb-6">
-          <Icon name="lucide:shield-alert" class="h-8 w-8 text-destructive" />
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6">
+          <Icon name="lucide:settings-2" class="h-8 w-8 text-primary" />
         </div>
         <h1 class="text-4xl font-bold tracking-tight mb-4">Admin Panel</h1>
         <p class="text-xl text-muted-foreground">
-          Database management and development tools
+          System status and database management
         </p>
       </div>
 
-      <!-- Warning Banner -->
-      <Alert variant="destructive" class="mb-8">
-        <Icon name="lucide:alert-triangle" class="h-4 w-4" />
-        <AlertTitle>Danger Zone</AlertTitle>
-        <AlertDescription>
-          Actions on this page will permanently delete data. Use with caution!
-        </AlertDescription>
-      </Alert>
+      <!-- Services Health Card -->
+      <Card class="p-6 mb-8">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold">External Services</h2>
+          <Button variant="outline" size="sm" @click="fetchServicesHealth" :disabled="isLoadingServices">
+            <Icon
+              :name="isLoadingServices ? 'lucide:loader-2' : 'lucide:refresh-cw'"
+              :class="isLoadingServices ? 'animate-spin' : ''"
+              class="mr-2 h-4 w-4"
+            />
+            Refresh
+          </Button>
+        </div>
+
+        <div v-if="isLoadingServices" class="flex justify-center py-8">
+          <Icon name="lucide:loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+
+        <div v-else-if="servicesHealth" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- LLM Server -->
+          <div class="p-4 border rounded-lg">
+            <div class="flex items-center gap-2 mb-2">
+              <Icon
+                :name="servicesHealth.llm?.status === 'healthy' ? 'lucide:check-circle' : 'lucide:x-circle'"
+                :class="servicesHealth.llm?.status === 'healthy' ? 'text-green-500' : 'text-destructive'"
+                class="h-5 w-5"
+              />
+              <span class="font-medium">LLM Server</span>
+            </div>
+            <div class="text-sm text-muted-foreground space-y-1">
+              <p class="truncate" :title="servicesHealth.llm?.url">{{ servicesHealth.llm?.url }}</p>
+              <p v-if="servicesHealth.llm?.status === 'healthy' && servicesHealth.llm?.configured_model">
+                Model: <span class="font-mono text-xs">{{ servicesHealth.llm.configured_model }}</span>
+              </p>
+              <p v-if="servicesHealth.llm?.error" class="text-destructive">
+                Error: {{ servicesHealth.llm.error }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Embedder Server -->
+          <div class="p-4 border rounded-lg">
+            <div class="flex items-center gap-2 mb-2">
+              <Icon
+                :name="servicesHealth.embedder?.status === 'healthy' ? 'lucide:check-circle' : 'lucide:x-circle'"
+                :class="servicesHealth.embedder?.status === 'healthy' ? 'text-green-500' : 'text-destructive'"
+                class="h-5 w-5"
+              />
+              <span class="font-medium">Embedding Server</span>
+            </div>
+            <div class="text-sm text-muted-foreground space-y-1">
+              <p class="truncate" :title="servicesHealth.embedder?.url">{{ servicesHealth.embedder?.url }}</p>
+              <p v-if="servicesHealth.embedder?.error" class="text-destructive">
+                Error: {{ servicesHealth.embedder.error }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       <!-- Stats Card -->
       <Card class="p-6 mb-8">
@@ -99,24 +150,61 @@
         </div>
       </Card>
 
-      <!-- Reset Actions -->
-      <Card class="p-6">
-        <h2 class="text-xl font-semibold mb-4">Reset Actions</h2>
-
-        <div class="space-y-4">
-          <!-- Reset SQLite -->
-          <div class="flex items-center justify-between p-4 border rounded-lg">
+      <!-- Maintenance Actions -->
+      <Card class="p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Maintenance</h2>
+        <div class="flex items-center justify-between p-4 border rounded-lg">
+          <div class="flex items-center gap-3">
+            <Icon name="lucide:search" class="h-5 w-5 text-muted-foreground" />
             <div>
-              <h3 class="font-medium flex items-center gap-2">
-                <Icon name="lucide:database" class="h-5 w-5" />
-                Reset SQLite Database
-              </h3>
-              <p class="text-sm text-muted-foreground mt-1">
-                Delete all posts, comments, and projects from SQLite
+              <h3 class="font-medium">Rebuild Vector Index</h3>
+              <p class="text-sm text-muted-foreground">
+                Rebuild the search index after adding new embeddings
               </p>
             </div>
+          </div>
+          <Button
+            variant="outline"
+            @click="rebuildVectorIndex"
+            :disabled="isRebuilding"
+          >
+            <Icon
+              :name="isRebuilding ? 'lucide:loader-2' : 'lucide:refresh-cw'"
+              :class="isRebuilding ? 'animate-spin' : ''"
+              class="mr-2 h-4 w-4"
+            />
+            Rebuild
+          </Button>
+        </div>
+      </Card>
+
+      <!-- Danger Zone -->
+      <div class="mt-4">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="flex items-center justify-center w-10 h-10 rounded-full bg-destructive/10">
+            <Icon name="lucide:alert-triangle" class="h-5 w-5 text-destructive" />
+          </div>
+          <div>
+            <h2 class="text-xl font-semibold text-destructive">Danger Zone</h2>
+            <p class="text-sm text-muted-foreground">Destructive actions that cannot be undone</p>
+          </div>
+        </div>
+
+        <div class="border-2 border-destructive/30 rounded-lg overflow-hidden">
+          <!-- Reset SQLite -->
+          <div class="flex items-center justify-between p-4 bg-background hover:bg-destructive/5 transition-colors">
+            <div class="flex items-center gap-3">
+              <Icon name="lucide:database" class="h-5 w-5 text-muted-foreground" />
+              <div>
+                <h3 class="font-medium">Reset SQLite Database</h3>
+                <p class="text-sm text-muted-foreground">
+                  Delete all posts, comments, and projects
+                </p>
+              </div>
+            </div>
             <Button
-              variant="destructive"
+              variant="outline"
+              class="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
               @click="resetSqlite"
               :disabled="isResetting"
             >
@@ -125,23 +213,26 @@
                 :class="isResetting === 'sqlite' ? 'animate-spin' : ''"
                 class="mr-2 h-4 w-4"
               />
-              Reset SQLite
+              Reset
             </Button>
           </div>
 
+          <Separator />
+
           <!-- Reset Redis -->
-          <div class="flex items-center justify-between p-4 border rounded-lg">
-            <div>
-              <h3 class="font-medium flex items-center gap-2">
-                <Icon name="lucide:server" class="h-5 w-5" />
-                Reset Redis
-              </h3>
-              <p class="text-sm text-muted-foreground mt-1">
-                Flush all Redis keys including Celery task data
-              </p>
+          <div class="flex items-center justify-between p-4 bg-background hover:bg-destructive/5 transition-colors">
+            <div class="flex items-center gap-3">
+              <Icon name="lucide:server" class="h-5 w-5 text-muted-foreground" />
+              <div>
+                <h3 class="font-medium">Reset Redis</h3>
+                <p class="text-sm text-muted-foreground">
+                  Flush all keys including Celery task data
+                </p>
+              </div>
             </div>
             <Button
-              variant="destructive"
+              variant="outline"
+              class="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
               @click="resetRedis"
               :disabled="isResetting"
             >
@@ -150,20 +241,22 @@
                 :class="isResetting === 'redis' ? 'animate-spin' : ''"
                 class="mr-2 h-4 w-4"
               />
-              Reset Redis
+              Reset
             </Button>
           </div>
 
+          <Separator />
+
           <!-- Reset All -->
-          <div class="flex items-center justify-between p-4 border-2 border-destructive rounded-lg bg-destructive/5">
-            <div>
-              <h3 class="font-medium flex items-center gap-2 text-destructive">
-                <Icon name="lucide:alert-octagon" class="h-5 w-5" />
-                Reset Everything
-              </h3>
-              <p class="text-sm text-muted-foreground mt-1">
-                Delete ALL data from both SQLite and Redis
-              </p>
+          <div class="flex items-center justify-between p-4 bg-destructive/5">
+            <div class="flex items-center gap-3">
+              <Icon name="lucide:bomb" class="h-5 w-5 text-destructive" />
+              <div>
+                <h3 class="font-medium text-destructive">Reset Everything</h3>
+                <p class="text-sm text-muted-foreground">
+                  Delete ALL data from both SQLite and Redis
+                </p>
+              </div>
             </div>
             <Button
               variant="destructive"
@@ -171,7 +264,7 @@
               :disabled="isResetting"
             >
               <Icon
-                :name="isResetting === 'all' ? 'lucide:loader-2' : 'lucide:bomb'"
+                :name="isResetting === 'all' ? 'lucide:loader-2' : 'lucide:flame'"
                 :class="isResetting === 'all' ? 'animate-spin' : ''"
                 class="mr-2 h-4 w-4"
               />
@@ -179,7 +272,7 @@
             </Button>
           </div>
         </div>
-      </Card>
+      </div>
 
       <!-- Result Messages -->
       <div v-if="lastResult" class="mt-6">
@@ -211,6 +304,19 @@ interface DatabaseStats {
   redis_connected: boolean
 }
 
+interface ServiceHealth {
+  status: 'healthy' | 'unhealthy'
+  url: string
+  error?: string
+  configured_model?: string
+  available_models?: string[]
+}
+
+interface ServicesHealth {
+  llm: ServiceHealth
+  embedder: ServiceHealth
+}
+
 interface ResultMessage {
   success: boolean
   message: string
@@ -230,9 +336,24 @@ const config = useRuntimeConfig()
 
 // Reactive state
 const stats = ref<DatabaseStats | null>(null)
+const servicesHealth = ref<ServicesHealth | null>(null)
 const isLoadingStats = ref(false)
+const isLoadingServices = ref(false)
 const isResetting = ref<string | null>(null)
+const isRebuilding = ref(false)
 const lastResult = ref<ResultMessage | null>(null)
+
+// Fetch services health
+async function fetchServicesHealth() {
+  isLoadingServices.value = true
+  try {
+    servicesHealth.value = await $fetch<ServicesHealth>(`${config.public.apiBase}/api/admin/services-health`)
+  } catch (err) {
+    console.error('Failed to fetch services health:', err)
+  } finally {
+    isLoadingServices.value = false
+  }
+}
 
 // Fetch database stats
 async function fetchStats() {
@@ -243,6 +364,29 @@ async function fetchStats() {
     console.error('Failed to fetch stats:', err)
   } finally {
     isLoadingStats.value = false
+  }
+}
+
+// Rebuild vector index
+async function rebuildVectorIndex() {
+  isRebuilding.value = true
+  lastResult.value = null
+
+  try {
+    const response = await $fetch<any>(`${config.public.apiBase}/api/admin/rebuild-vector-index`, {
+      method: 'POST'
+    })
+    lastResult.value = {
+      success: true,
+      message: response.message || 'Vector index rebuilt successfully'
+    }
+  } catch (err: any) {
+    lastResult.value = {
+      success: false,
+      message: err.data?.detail || 'Failed to rebuild vector index'
+    }
+  } finally {
+    isRebuilding.value = false
   }
 }
 
@@ -342,8 +486,9 @@ async function resetAll() {
   }
 }
 
-// Fetch stats on mount
+// Fetch data on mount
 onMounted(() => {
+  fetchServicesHealth()
   fetchStats()
 })
 </script>

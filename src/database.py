@@ -41,6 +41,14 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         dbapi_connection.load_extension(str(ext_path))
         dbapi_connection.enable_load_extension(False)
         logger.debug("🔌 sqlite-vector extension loaded")
+
+        # Initialize vector search for this connection
+        # vector_init() must be called on each connection to set up the context
+        cursor.execute(
+            "SELECT vector_init('waywo_projects', 'description_embedding', "
+            "'type=FLOAT32,dimension=4096,distance=COSINE')"
+        )
+        logger.debug("🔍 Vector search context initialized for connection")
     except Exception as e:
         logger.warning(f"⚠️ Could not load sqlite-vector extension: {e}")
 
@@ -107,3 +115,34 @@ def init_vector_search():
             logger.info("✅ Vector search initialized for waywo_projects.description_embedding")
     except Exception as e:
         logger.warning(f"⚠️ Could not initialize vector search: {e}")
+
+
+def build_vector_index():
+    """
+    Build/rebuild the vector quantization index for fast similarity search.
+
+    This must be called after adding/updating embeddings to enable
+    vector_quantize_scan() searches. Safe to call multiple times.
+    """
+    try:
+        with SessionLocal() as session:
+            # Check if there are any embeddings to index
+            result = session.execute(
+                text("SELECT COUNT(*) FROM waywo_projects WHERE description_embedding IS NOT NULL")
+            )
+            count = result.scalar()
+
+            if count == 0:
+                logger.info("📭 No embeddings to index yet, skipping vector_quantize()")
+                return
+
+            # Build the quantization index
+            # This enables fast approximate nearest neighbor search
+            logger.info(f"🔨 Building vector quantization index for {count} embeddings...")
+            session.execute(
+                text("SELECT vector_quantize('waywo_projects', 'description_embedding')")
+            )
+            session.commit()
+            logger.info(f"✅ Vector quantization index built for {count} embeddings")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not build vector quantization index: {e}")

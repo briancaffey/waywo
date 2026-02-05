@@ -622,23 +622,36 @@ def semantic_search(
         # Convert embedding to blob for query
         query_blob = embedding_to_blob(query_embedding)
 
-        # Use sqlite-vector's vector_quantize_scan for similarity search
-        # This uses cosine distance (configured in vector_init)
+        # Use sqlite-vector's vector_full_scan for brute-force similarity search
+        # This doesn't require quantization and works reliably across connections
+        # Uses cosine distance (configured in vector_init)
         # Lower distance = more similar
-        sql = text("""
-            SELECT p.id, v.distance
-            FROM waywo_projects AS p
-            JOIN vector_quantize_scan('waywo_projects', 'description_embedding', :query, :limit) AS v
-            ON p.id = v.rowid
-            WHERE p.description_embedding IS NOT NULL
-            AND (:is_valid IS NULL OR p.is_valid_project = :is_valid)
-            ORDER BY v.distance ASC
-        """)
-
-        result = db.execute(
-            sql,
-            {"query": query_blob, "limit": limit, "is_valid": is_valid}
-        )
+        #
+        # We use vector_full_scan_stream with a subquery to apply filters,
+        # since vector_full_scan doesn't support WHERE clauses directly
+        if is_valid is not None:
+            sql = text("""
+                SELECT p.id, v.distance
+                FROM waywo_projects AS p
+                JOIN vector_full_scan('waywo_projects', 'description_embedding', :query, :limit) AS v
+                ON p.id = v.rowid
+                WHERE p.is_valid_project = :is_valid
+                ORDER BY v.distance ASC
+            """)
+            result = db.execute(
+                sql,
+                {"query": query_blob, "limit": limit * 2, "is_valid": is_valid}
+            )
+        else:
+            sql = text("""
+                SELECT v.rowid AS id, v.distance
+                FROM vector_full_scan('waywo_projects', 'description_embedding', :query, :limit) AS v
+                ORDER BY v.distance ASC
+            """)
+            result = db.execute(
+                sql,
+                {"query": query_blob, "limit": limit}
+            )
 
         # Fetch projects and convert distances to similarity scores
         results = []
@@ -650,6 +663,8 @@ def semantic_search(
                 # Cosine distance ranges from 0 (identical) to 2 (opposite)
                 similarity = 1.0 - (distance / 2.0)
                 results.append((project, similarity))
+                if len(results) >= limit:
+                    break
 
         return results
     except Exception as e:

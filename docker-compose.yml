@@ -5,6 +5,8 @@ x-common-env: &common-env
   NAT_SERVICE_URL: http://nat:8080
   FIRECRAWL_URL: http://host.docker.internal:3002
   EMBEDDING_URL: http://192.168.5.96:8000
+  LLM_BASE_URL: http://192.168.6.19:8002/v1
+  LLM_MODEL_NAME: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
   DATA_DIR: /app/data
   LOG_LEVEL: DEBUG
 
@@ -43,6 +45,18 @@ services:
       retries: 5
       start_period: 30s
 
+  # Database migrations - runs once before other services start
+  migrate:
+    build: .
+    container_name: waywo-migrate
+    environment:
+      <<: *common-env
+    volumes: *common-volumes
+    command: /app/.venv/bin/python -m src.migrate
+    networks:
+      - waywo-network
+    restart: "no"
+
   backend:
     build: .
     container_name: waywo-backend
@@ -52,9 +66,21 @@ services:
       <<: *common-env
     volumes: *common-volumes
     command: /app/.venv/bin/python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
-    <<: [*common-depends, *common-networks]
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - waywo-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "/app/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   celery-worker:
     build: .
@@ -63,7 +89,13 @@ services:
       <<: *common-env
     volumes: *common-volumes
     command: /app/.venv/bin/watchmedo auto-restart --directory=/app/src --pattern=*.py --recursive -- /app/.venv/bin/celery -A src.celery_app worker --loglevel=info --queues=waywo --concurrency=4
-    <<: [*common-depends, *common-networks]
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - waywo-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -91,7 +123,13 @@ services:
       - /app/.venv
       - celery-beat-data:/app/celery-data
     command: /app/.venv/bin/watchmedo auto-restart --directory=/app/src --pattern=*.py --recursive -- /app/.venv/bin/celery -A src.celery_app beat --loglevel=info
-    <<: [*common-depends, *common-networks]
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - waywo-network
     healthcheck:
       test:
         ["CMD", "/app/.venv/bin/python", "/app/src/celery_beat_healthcheck.py"]
@@ -147,6 +185,8 @@ services:
     environment:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY:-not-needed}
       - REDIS_URL=redis://redis:6379/0
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://192.168.6.19:8002/v1}
+      - LLM_MODEL_NAME=${LLM_MODEL_NAME:-nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16}
     volumes:
       - ./nat/workflow.yml:/app/workflow.yml:ro
     depends_on:
@@ -163,6 +203,12 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006" # UI and OTLP HTTP collector
+      - "4317:4317" # OTLP gRPC collector
 
 networks:
   waywo-network:
