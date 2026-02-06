@@ -1,4 +1,4 @@
-.PHONY: black check up
+.PHONY: black check up docs docs-build docs-install
 
 # Format code with black
 black:
@@ -11,4 +11,16 @@ check:
 # Start/restart Docker Compose services
 up:
 	docker compose up
+
+# Install docs dependencies
+docs-install:
+	cd docs && npm install
+
+# Start docs dev server on port 3001
+docs:
+	cd docs && npm run dev
+
+# Build docs for production
+docs-build:
+	cd docs && npm run build
 

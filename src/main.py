@@ -15,6 +15,7 @@ from src.embedding_client import (
     check_embedding_service_health,
     get_single_embedding,
 )
+from src.rerank_client import check_rerank_service_health, rerank_documents, RerankError
 from src.db_client import (
     delete_project,
     get_all_comments,
@@ -525,6 +526,7 @@ class SemanticSearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, description="Search query text")
     limit: int = Field(default=10, ge=1, le=50, description="Maximum results to return")
+    use_rerank: bool = Field(default=True, description="Use reranking to improve results")
 
 
 class ChatbotRequest(BaseModel):
@@ -562,6 +564,32 @@ async def embedding_service_health():
     )
 
 
+@app.get("/api/rerank/health", tags=["semantic"])
+async def rerank_service_health():
+    """
+    Check if the rerank service is healthy.
+    """
+    rerank_url = os.environ.get("RERANK_URL", "http://192.168.5.173:8111")
+    is_healthy = await check_rerank_service_health(rerank_url)
+
+    if not is_healthy:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "message": "Rerank service is not reachable",
+                "url": rerank_url,
+            },
+        )
+
+    return JSONResponse(
+        content={
+            "status": "healthy",
+            "url": rerank_url,
+        }
+    )
+
+
 @app.get("/api/semantic-search/stats", tags=["semantic"])
 async def semantic_search_stats():
     """
@@ -586,9 +614,13 @@ async def perform_semantic_search(request: SemanticSearchRequest):
     """
     Perform semantic search over projects using vector similarity.
 
-    Returns the most similar projects based on the query embedding.
+    When use_rerank is True (default), fetches more candidates and reranks
+    them using the rerank service for improved relevance.
+
+    Returns the most similar/relevant projects based on the query.
     """
     embedding_url = os.environ.get("EMBEDDING_URL", "http://192.168.5.96:8000")
+    rerank_url = os.environ.get("RERANK_URL", "http://192.168.5.173:8111")
 
     try:
         # Get embedding for the query
@@ -602,27 +634,72 @@ async def perform_semantic_search(request: SemanticSearchRequest):
             detail=f"Embedding service error: {str(e)}",
         )
 
+    # Fetch more candidates if reranking is enabled
+    candidate_limit = request.limit * 3 if request.use_rerank else request.limit
+
     # Perform semantic search
     results = semantic_search(
         query_embedding=query_embedding,
-        limit=request.limit,
+        limit=candidate_limit,
         is_valid=True,
     )
 
-    # Format results
-    formatted_results = [
+    # Build original results (top N by similarity)
+    original_results = [
         {
             "project": project.model_dump(),
             "similarity": round(similarity, 4),
         }
-        for project, similarity in results
+        for project, similarity in results[: request.limit]
     ]
 
-    return {
+    # Rerank results if enabled
+    reranked = False
+    formatted_results = original_results
+
+    if request.use_rerank and results:
+        try:
+            # Prepare documents for reranking (title + description)
+            documents = [
+                f"{project.title}: {project.description}"
+                for project, _ in results
+            ]
+
+            rerank_result = await rerank_documents(
+                query=request.query,
+                documents=documents,
+                rerank_url=rerank_url,
+            )
+
+            # Reorder results based on rerank scores
+            reranked_results = []
+            for idx in rerank_result.ranked_indices[: request.limit]:
+                project, similarity = results[idx]
+                reranked_results.append({
+                    "project": project.model_dump(),
+                    "similarity": round(similarity, 4),
+                    "rerank_score": round(rerank_result.scores[idx], 4),
+                })
+
+            reranked = True
+            formatted_results = reranked_results
+
+        except RerankError:
+            # Fall back to similarity-based ordering (already set above)
+            pass
+
+    response = {
         "results": formatted_results,
         "query": request.query,
         "total": len(formatted_results),
+        "reranked": reranked,
     }
+
+    # Include original results for comparison when reranking was used
+    if reranked:
+        response["original_results"] = original_results
+
+    return response
 
 
 @app.post("/api/waywo-chatbot", tags=["semantic"])
@@ -630,17 +707,19 @@ async def chatbot_query(request: ChatbotRequest):
     """
     Query the RAG chatbot about projects.
 
-    Uses semantic search to find relevant projects and generates
+    Uses semantic search with reranking to find relevant projects and generates
     a conversational response using an LLM.
     """
     from src.workflows.waywo_chatbot_workflow import run_chatbot_query
 
     embedding_url = os.environ.get("EMBEDDING_URL", "http://192.168.5.96:8000")
+    rerank_url = os.environ.get("RERANK_URL", "http://192.168.5.173:8111")
 
     try:
         result = await run_chatbot_query(
             query=request.query,
             embedding_url=embedding_url,
+            rerank_url=rerank_url,
             top_k=request.top_k,
         )
     except Exception as e:
@@ -665,13 +744,14 @@ async def chatbot_query(request: ChatbotRequest):
 @app.get("/api/admin/services-health", tags=["admin"])
 async def get_services_health():
     """
-    Check health status of external services (LLM, Embedder).
+    Check health status of external services (LLM, Embedder, Reranker).
     """
     import httpx
 
     llm_base_url = os.environ.get("LLM_BASE_URL", "http://192.168.6.19:8002/v1")
     llm_model_name = os.environ.get("LLM_MODEL_NAME", "")
     embedding_url = os.environ.get("EMBEDDING_URL", "http://192.168.5.96:8000")
+    rerank_url = os.environ.get("RERANK_URL", "http://192.168.5.173:8111")
 
     services = {}
 
@@ -720,6 +800,30 @@ async def get_services_health():
         services["embedder"] = {
             "status": "unhealthy",
             "url": embedding_url,
+            "error": str(e),
+        }
+
+    # Check Rerank server
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{rerank_url}/health")
+            if response.status_code == 200:
+                data = response.json()
+                services["reranker"] = {
+                    "status": "healthy",
+                    "url": rerank_url,
+                    "device": data.get("device", "unknown"),
+                }
+            else:
+                services["reranker"] = {
+                    "status": "unhealthy",
+                    "url": rerank_url,
+                    "error": f"HTTP {response.status_code}",
+                }
+    except Exception as e:
+        services["reranker"] = {
+            "status": "unhealthy",
+            "url": rerank_url,
             "error": str(e),
         }
 

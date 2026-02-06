@@ -209,6 +209,18 @@ class QueryEmbeddingEvent(Event):
     query_embedding: list[float]
 
 
+class ProjectsCandidatesEvent(Event):
+    """
+    Event emitted after retrieving candidate projects via semantic search.
+
+    This is an intermediate step before reranking.
+    """
+
+    query: str
+    top_k: int
+    candidates: list[dict]  # List of candidate projects with similarity scores
+
+
 class ProjectsRetrievedEvent(Event):
     """
     Event emitted after retrieving relevant projects via semantic search.

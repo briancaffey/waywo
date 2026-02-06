@@ -341,7 +341,7 @@ GET  /api/waywo-projects/hashtags
 | **Phase 5** | 12, 13 | Jupyter Lab & Workflow Visualization | ✅ Complete |
 | **Phase 6** | 14 | Project Bookmarking | ✅ Complete |
 | **Phase 7** | 15 | Project Filtering UI | ✅ Complete |
-| **Phase 8** | 16 | Reranking for RAG | 🔲 Planned |
+| **Phase 8** | 16 | Reranking for RAG | ✅ Complete |
 | **Phase 9** | 17 | Project Screenshots | 🔲 Planned |
 | **Phase 10** | 18 | Similar Projects | 🔲 Planned |
 | **Phase 11** | 19, 20 | Voice Interface (STT & TTS) | 🔲 Planned |
@@ -375,6 +375,11 @@ GET  /api/waywo-projects/hashtags
 - URL: `http://192.168.5.96:8000`
 - Model: `nvidia/llama-embed-nemotron-8b`
 - Embedding dimension: 4096
+
+### Rerank Service
+- URL: `http://192.168.5.173:8111`
+- Model: `nvidia/llama-nemotron-rerank-1b-v2`
+- Max sequence length: 512 tokens (configurable up to 8192)
 
 ---
 
@@ -723,54 +728,130 @@ GET /api/waywo-projects?bookmarked=true
 
 ---
 
-## Milestone 16: Reranking for RAG
+## Milestone 16: Reranking for RAG ✅ COMPLETE
 
 **Goal**: Add a reranking step to semantic search and chatbot to dramatically improve result relevance using the Nemotron Reranker model.
 
 ### Model
 - **llama-nemotron-rerank-1b-v2** - Cross-encoder fine-tuned for multilingual retrieval
 - Supports up to 8192 tokens per document
-- Available via NVIDIA NIM or self-hosted
+- Self-hosted via FastAPI service
 
 ### Architecture
 ```
-Query → Embedding Search (top 50) → Reranker (top 10) → Response
+Query → Embedding Search (top_k × 3) → Reranker (top_k) → Response
 ```
 
-### Files to Create/Modify
+### Files Created/Modified
 
 | File | Action |
 |------|--------|
+| `services/rerank-service/` | **New** - FastAPI rerank microservice |
 | `src/rerank_client.py` | **New** - HTTP client for reranker service |
-| `src/db_client.py` | Update `semantic_search()` to return more candidates |
-| `src/workflows/waywo_chatbot_workflow.py` | Add reranking step after retrieval |
-| `src/main.py` | Update search endpoint to use reranking |
-| `docker-compose.yml` | Add `RERANKER_URL` environment variable |
+| `src/workflows/events.py` | Added `ProjectsCandidatesEvent` for rerank pipeline |
+| `src/workflows/waywo_chatbot_workflow.py` | Added reranking step after retrieval |
+| `src/main.py` | Added rerank health endpoint, updated search with reranking |
+| `docker-compose.yml` | Added `RERANK_URL` environment variable |
+| `frontend/app/pages/admin.vue` | Added reranker to services health display |
+| `notebooks/getting_started.ipynb` | Added rerank service testing section |
 
-### New API Behavior
+### Rerank Service
 
 ```
+services/rerank-service/
+├── main.py          # FastAPI service with /rerank and /health endpoints
+├── pyproject.toml   # Dependencies (transformers, torch, fastapi)
+├── sample.py        # Standalone usage example
+└── README.md        # Documentation
+```
+
+### New API Endpoints
+
+```
+GET /api/rerank/health
+    Response: {status: "healthy/unhealthy", url: "..."}
+
 POST /api/semantic-search
      Body: {query: "...", limit: 10, use_rerank: true}
-     - Fetches top 50 by embedding similarity
-     - Reranks to top 10 by relevance score
-     - Returns reranked results with both scores
+     - Fetches limit × 3 candidates by embedding similarity
+     - Reranks to top `limit` by relevance score
+     - Returns reranked results with both similarity and rerank_score
+     - Falls back to similarity order if rerank service unavailable
 
 POST /api/waywo-chatbot
      - Automatically uses reranking for context retrieval
      - Better answers due to more relevant context
 ```
 
+### Chatbot Workflow Changes
+
+New workflow flow with reranking:
+```
+StartEvent
+  | @step start()
+  v
+ChatQueryEvent(query, top_k)
+  | @step generate_query_embedding()
+  v
+QueryEmbeddingEvent(query, top_k, query_embedding)
+  | @step retrieve_candidates()  ← Fetches top_k × 3 candidates
+  v
+ProjectsCandidatesEvent(query, top_k, candidates)
+  | @step rerank_projects()      ← Reranks and filters to top_k
+  v
+ProjectsRetrievedEvent(query, projects, context)
+  | @step generate_response()
+  v
+StopEvent(result=ChatbotResult)
+```
+
+### Configuration
+
+```yaml
+# docker-compose.yml
+RERANK_URL: http://192.168.5.173:8111
+```
+
 ### Tasks
 
-- [ ] Deploy/configure reranker model endpoint
-- [ ] Create `src/rerank_client.py` with retry logic
-- [ ] Update semantic search to fetch more candidates (50)
-- [ ] Add reranking step to search results
-- [ ] Update chatbot workflow with reranking
-- [ ] Add `use_rerank` toggle to search API
-- [ ] Add rerank scores to response
-- [ ] Test improvement in search quality
+- [x] Deploy/configure reranker model endpoint
+- [x] Create `src/rerank_client.py` with retry logic
+- [x] Update semantic search to fetch more candidates
+- [x] Add reranking step to search results
+- [x] Update chatbot workflow with reranking
+- [x] Add `use_rerank` toggle to search API
+- [x] Add rerank scores to response
+- [x] Add rerank health check endpoint
+- [x] Add reranker to admin services health page
+
+### Milestone 16.1: Rerank Comparison Mode ✅ COMPLETE
+
+**Goal**: Add side-by-side comparison view on semantic search page to visualize difference between similarity-based and reranked results.
+
+**Files Modified:**
+| File | Change |
+|------|--------|
+| `src/main.py` | Return `original_results` alongside `results` when reranking |
+| `frontend/app/pages/search.vue` | Add toggles and side-by-side comparison layout |
+| `frontend/app/components/SearchResultCard.vue` | **New** - Reusable result card component |
+
+**UI Features:**
+- "Use Rerank" toggle (default: on)
+- "Compare Mode" toggle (visible when Use Rerank is on)
+- Side-by-side columns: "By Similarity" vs "By Relevance"
+- Shows both similarity score and rerank score
+- Service health badges for both Embedding and Rerank services
+
+**API Response (when use_rerank=true):**
+```json
+{
+  "results": [...],           // Reranked results
+  "original_results": [...],  // Top N by similarity (for comparison)
+  "query": "...",
+  "total": 10,
+  "reranked": true
+}
+```
 
 ---
 

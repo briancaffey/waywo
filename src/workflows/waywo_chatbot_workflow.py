@@ -2,16 +2,18 @@
 LlamaIndex RAG workflow for the Waywo chatbot.
 
 This workflow provides conversational access to project data using
-vector similarity search and LLM-powered response generation.
+vector similarity search, reranking, and LLM-powered response generation.
 
 Workflow Steps:
 1. start -> ChatQueryEvent
 2. generate_query_embedding -> QueryEmbeddingEvent
-3. retrieve_projects -> ProjectsRetrievedEvent
-4. generate_response -> StopEvent(ChatbotResult)
+3. retrieve_candidates -> ProjectsCandidatesEvent (retrieves top_k * 3 candidates)
+4. rerank_projects -> ProjectsRetrievedEvent (reranks and filters to top_k)
+5. generate_response -> StopEvent(ChatbotResult)
 """
 
 import logging
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -34,15 +36,21 @@ from src.db_client import semantic_search
 from src.embedding_client import get_single_embedding
 from src.llm_config import get_llm
 from src.models import WaywoProject
+from src.rerank_client import RerankError, rerank_documents
 from src.workflows.events import (
     ChatQueryEvent,
     ChatResponseEvent,
+    ProjectsCandidatesEvent,
     ProjectsRetrievedEvent,
     QueryEmbeddingEvent,
 )
 from src.workflows.prompts import chatbot_response_prompt
 
 logger = logging.getLogger(__name__)
+
+# Default service URLs
+DEFAULT_EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://192.168.5.96:8000")
+DEFAULT_RERANK_URL = os.getenv("RERANK_URL", "http://192.168.5.173:8111")
 
 
 @dataclass
@@ -65,9 +73,9 @@ class WaywoVectorStore(BasePydanticVectorStore):
 
     stores_text: bool = True
     is_embedding_query: bool = True
-    embedding_url: str = "http://192.168.5.96:8000"
+    embedding_url: str = DEFAULT_EMBEDDING_URL
 
-    def __init__(self, embedding_url: str = "http://192.168.5.96:8000", **kwargs):
+    def __init__(self, embedding_url: str = DEFAULT_EMBEDDING_URL, **kwargs):
         super().__init__(embedding_url=embedding_url, **kwargs)
 
     @classmethod
@@ -152,18 +160,20 @@ class WaywoChatbotWorkflow(Workflow):
     RAG workflow for conversational access to Waywo projects.
 
     Uses LlamaIndex Workflow with @step decorators to process
-    chat queries through semantic search and LLM response generation.
+    chat queries through semantic search, reranking, and LLM response generation.
 
     Workflow Flow:
         StartEvent -> ChatQueryEvent -> QueryEmbeddingEvent ->
-        ProjectsRetrievedEvent -> StopEvent(ChatbotResult)
+        ProjectsCandidatesEvent -> ProjectsRetrievedEvent -> StopEvent(ChatbotResult)
     """
 
     def __init__(
         self,
         *args,
-        embedding_url: str = "http://192.168.5.96:8000",
+        embedding_url: str = DEFAULT_EMBEDDING_URL,
+        rerank_url: str = DEFAULT_RERANK_URL,
         top_k: int = 5,
+        candidate_multiplier: int = 3,
         **kwargs,
     ):
         """
@@ -171,11 +181,15 @@ class WaywoChatbotWorkflow(Workflow):
 
         Args:
             embedding_url: URL of the embedding service
-            top_k: Number of similar projects to retrieve for context
+            rerank_url: URL of the rerank service
+            top_k: Number of final projects to retrieve for context
+            candidate_multiplier: How many more candidates to retrieve before reranking
         """
         super().__init__(*args, **kwargs)
         self.embedding_url = embedding_url
+        self.rerank_url = rerank_url
         self.top_k = top_k
+        self.candidate_multiplier = candidate_multiplier
         self.llm = get_llm()
 
         # Configure LlamaIndex settings
@@ -209,7 +223,7 @@ class WaywoChatbotWorkflow(Workflow):
         """
         Generate embedding for the user's query.
         """
-        logger.info(f"🧠 Generating query embedding...")
+        logger.info("🧠 Generating query embedding...")
 
         try:
             query_embedding = await get_single_embedding(
@@ -234,57 +248,160 @@ class WaywoChatbotWorkflow(Workflow):
             )
 
     @step
-    async def retrieve_projects(
+    async def retrieve_candidates(
         self, ctx: Context, ev: QueryEmbeddingEvent
-    ) -> ProjectsRetrievedEvent:
+    ) -> ProjectsCandidatesEvent:
         """
-        Retrieve relevant projects using semantic search.
-        """
-        logger.info(f"📚 Retrieving projects with top_k={ev.top_k}...")
+        Retrieve candidate projects using semantic search.
 
-        projects: list[dict] = []
-        context = "No relevant projects found in the database."
+        Retrieves more candidates than final top_k to allow reranking to
+        select the best matches.
+        """
+        # Retrieve more candidates for reranking
+        candidate_limit = ev.top_k * self.candidate_multiplier
+        logger.info(f"📚 Retrieving {candidate_limit} candidate projects...")
+
+        candidates: list[dict] = []
 
         if ev.query_embedding:
             try:
                 results = semantic_search(
                     query_embedding=ev.query_embedding,
-                    limit=ev.top_k,
+                    limit=candidate_limit,
                     is_valid=True,
                 )
-                logger.info(f"📚 Retrieved {len(results)} relevant projects")
+                logger.info(f"📚 Retrieved {len(results)} candidate projects")
 
-                # Build context and project list
-                if results:
-                    context_parts = ["Here are the most relevant projects:\n"]
-
-                    for i, (project, similarity) in enumerate(results, 1):
-                        hashtags_str = ", ".join(f"#{tag}" for tag in project.hashtags)
-                        context_parts.append(f"""
----
-Project {i}: {project.title}
-Relevance: {similarity:.0%}
-Description: {project.description}
-Tags: {hashtags_str}
-Idea Score: {project.idea_score}/10 | Complexity Score: {project.complexity_score}/10
----""")
-
-                        projects.append(
-                            {
-                                "id": project.id,
-                                "title": project.title,
-                                "short_description": project.short_description,
-                                "similarity": round(similarity, 4),
-                                "hashtags": project.hashtags,
-                                "idea_score": project.idea_score,
-                                "complexity_score": project.complexity_score,
-                            }
-                        )
-
-                    context = "\n".join(context_parts)
+                for project, similarity in results:
+                    candidates.append(
+                        {
+                            "id": project.id,
+                            "title": project.title,
+                            "short_description": project.short_description,
+                            "description": project.description,
+                            "similarity": round(similarity, 4),
+                            "hashtags": project.hashtags,
+                            "idea_score": project.idea_score,
+                            "complexity_score": project.complexity_score,
+                        }
+                    )
 
             except Exception as e:
-                logger.error(f"❌ Failed to retrieve projects: {e}")
+                logger.error(f"❌ Failed to retrieve candidates: {e}")
+
+        return ProjectsCandidatesEvent(
+            query=ev.query,
+            top_k=ev.top_k,
+            candidates=candidates,
+        )
+
+    @step
+    async def rerank_projects(
+        self, ctx: Context, ev: ProjectsCandidatesEvent
+    ) -> ProjectsRetrievedEvent:
+        """
+        Rerank candidate projects using the rerank service.
+
+        Uses cross-encoder reranking to select the most relevant projects
+        from the initial semantic search candidates.
+        """
+        logger.info(f"🔄 Reranking {len(ev.candidates)} candidates...")
+
+        projects: list[dict] = []
+        context = "No relevant projects found in the database."
+
+        if not ev.candidates:
+            return ProjectsRetrievedEvent(
+                query=ev.query,
+                projects=projects,
+                context=context,
+            )
+
+        try:
+            # Prepare documents for reranking
+            # Use title + description for better reranking
+            documents = [
+                f"{c['title']}: {c['description']}" for c in ev.candidates
+            ]
+
+            # Call rerank service
+            rerank_result = await rerank_documents(
+                query=ev.query,
+                documents=documents,
+                rerank_url=self.rerank_url,
+            )
+
+            logger.info(f"✅ Reranked {len(ev.candidates)} candidates")
+
+            # Select top_k based on reranked order
+            reranked_candidates = []
+            for idx in rerank_result.ranked_indices[: ev.top_k]:
+                candidate = ev.candidates[idx]
+                candidate["rerank_score"] = rerank_result.scores[idx]
+                reranked_candidates.append(candidate)
+
+            # Build context and project list
+            if reranked_candidates:
+                context_parts = ["Here are the most relevant projects:\n"]
+
+                for i, candidate in enumerate(reranked_candidates, 1):
+                    hashtags_str = ", ".join(f"#{tag}" for tag in candidate["hashtags"])
+                    context_parts.append(f"""
+---
+Project {i}: {candidate['title']}
+Relevance Score: {candidate['rerank_score']:.2f}
+Description: {candidate['description']}
+Tags: {hashtags_str}
+Idea Score: {candidate['idea_score']}/10 | Complexity Score: {candidate['complexity_score']}/10
+---""")
+
+                    projects.append(
+                        {
+                            "id": candidate["id"],
+                            "title": candidate["title"],
+                            "short_description": candidate["short_description"],
+                            "rerank_score": round(candidate["rerank_score"], 4),
+                            "similarity": candidate["similarity"],
+                            "hashtags": candidate["hashtags"],
+                            "idea_score": candidate["idea_score"],
+                            "complexity_score": candidate["complexity_score"],
+                        }
+                    )
+
+                context = "\n".join(context_parts)
+
+        except RerankError as e:
+            logger.warning(f"⚠️ Reranking failed, falling back to similarity order: {e}")
+            # Fallback to original similarity order
+            for candidate in ev.candidates[: ev.top_k]:
+                projects.append(
+                    {
+                        "id": candidate["id"],
+                        "title": candidate["title"],
+                        "short_description": candidate["short_description"],
+                        "similarity": candidate["similarity"],
+                        "hashtags": candidate["hashtags"],
+                        "idea_score": candidate["idea_score"],
+                        "complexity_score": candidate["complexity_score"],
+                    }
+                )
+
+            if projects:
+                context_parts = ["Here are the most relevant projects:\n"]
+                for i, candidate in enumerate(ev.candidates[: ev.top_k], 1):
+                    hashtags_str = ", ".join(f"#{tag}" for tag in candidate["hashtags"])
+                    context_parts.append(f"""
+---
+Project {i}: {candidate['title']}
+Relevance: {candidate['similarity']:.0%}
+Description: {candidate['description']}
+Tags: {hashtags_str}
+Idea Score: {candidate['idea_score']}/10 | Complexity Score: {candidate['complexity_score']}/10
+---""")
+                context = "\n".join(context_parts)
+
+        except Exception as e:
+            logger.error(f"❌ Failed to rerank projects: {e}")
 
         return ProjectsRetrievedEvent(
             query=ev.query,
@@ -299,7 +416,7 @@ Idea Score: {project.idea_score}/10 | Complexity Score: {project.complexity_scor
         """
         Generate a response using the LLM with context from retrieved projects.
         """
-        logger.info(f"💬 Generating response...")
+        logger.info("💬 Generating response...")
 
         try:
             prompt = chatbot_response_prompt(query=ev.query, context=ev.context)
@@ -340,7 +457,8 @@ Idea Score: {project.idea_score}/10 | Complexity Score: {project.complexity_scor
 
 async def run_chatbot_query(
     query: str,
-    embedding_url: str = "http://192.168.5.96:8000",
+    embedding_url: str = DEFAULT_EMBEDDING_URL,
+    rerank_url: str = DEFAULT_RERANK_URL,
     top_k: int = 5,
 ) -> ChatbotResult:
     """
@@ -349,6 +467,7 @@ async def run_chatbot_query(
     Args:
         query: The user's question
         embedding_url: URL of the embedding service
+        rerank_url: URL of the rerank service
         top_k: Number of similar projects to retrieve
 
     Returns:
@@ -356,6 +475,7 @@ async def run_chatbot_query(
     """
     chatbot = WaywoChatbotWorkflow(
         embedding_url=embedding_url,
+        rerank_url=rerank_url,
         top_k=top_k,
         timeout=120,
     )

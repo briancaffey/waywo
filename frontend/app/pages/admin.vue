@@ -30,7 +30,7 @@
           <Icon name="lucide:loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
 
-        <div v-else-if="servicesHealth" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div v-else-if="servicesHealth" class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <!-- LLM Server -->
           <div class="p-4 border rounded-lg">
             <div class="flex items-center gap-2 mb-2">
@@ -66,6 +66,27 @@
               <p class="truncate" :title="servicesHealth.embedder?.url">{{ servicesHealth.embedder?.url }}</p>
               <p v-if="servicesHealth.embedder?.error" class="text-destructive">
                 Error: {{ servicesHealth.embedder.error }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Reranker Server -->
+          <div class="p-4 border rounded-lg">
+            <div class="flex items-center gap-2 mb-2">
+              <Icon
+                :name="servicesHealth.reranker?.status === 'healthy' ? 'lucide:check-circle' : 'lucide:x-circle'"
+                :class="servicesHealth.reranker?.status === 'healthy' ? 'text-green-500' : 'text-destructive'"
+                class="h-5 w-5"
+              />
+              <span class="font-medium">Rerank Server</span>
+            </div>
+            <div class="text-sm text-muted-foreground space-y-1">
+              <p class="truncate" :title="servicesHealth.reranker?.url">{{ servicesHealth.reranker?.url }}</p>
+              <p v-if="servicesHealth.reranker?.status === 'healthy' && servicesHealth.reranker?.device">
+                Device: <span class="font-mono text-xs">{{ servicesHealth.reranker.device }}</span>
+              </p>
+              <p v-if="servicesHealth.reranker?.error" class="text-destructive">
+                Error: {{ servicesHealth.reranker.error }}
               </p>
             </div>
           </div>
@@ -325,11 +346,13 @@ interface ServiceHealth {
   error?: string
   configured_model?: string
   available_models?: string[]
+  device?: string
 }
 
 interface ServicesHealth {
   llm: ServiceHealth
   embedder: ServiceHealth
+  reranker: ServiceHealth
 }
 
 interface ResultMessage {

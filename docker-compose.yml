@@ -5,6 +5,7 @@ x-common-env: &common-env
   NAT_SERVICE_URL: http://nat:8080
   FIRECRAWL_URL: http://host.docker.internal:3002
   EMBEDDING_URL: http://192.168.5.96:8000
+  RERANK_URL: http://192.168.5.173:8111
   LLM_BASE_URL: http://192.168.6.19:8002/v1
   LLM_MODEL_NAME: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
   DATA_DIR: /app/data
