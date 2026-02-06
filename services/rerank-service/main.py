@@ -3,7 +3,13 @@ from contextlib import asynccontextmanager
 import torch
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import (
+    AutoConfig,
+    AutoModel,
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+)
+from transformers.dynamic_module_utils import get_class_from_dynamic_module
 
 model: AutoModelForSequenceClassification | None = None
 tokenizer: AutoTokenizer | None = None
@@ -30,10 +36,23 @@ async def lifespan(app: FastAPI):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # Load config first so we can register the custom base model class
+    # with AutoModel. The model's auto_map only lists AutoConfig and
+    # AutoModelForSequenceClassification, but the parent class __init__
+    # internally calls AutoModel.from_config(config) which needs to
+    # resolve LlamaBidirectionalConfig -> LlamaBidirectionalModel.
+    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+    base_cls = get_class_from_dynamic_module(
+        "llama_bidirectional_model.LlamaBidirectionalModel",
+        pretrained_model_name_or_path=model_name,
+    )
+    AutoModel.register(type(config), base_cls)
+
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
+        config=config,
         trust_remote_code=True,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
     ).eval()
 
     if model.config.pad_token_id is None:
