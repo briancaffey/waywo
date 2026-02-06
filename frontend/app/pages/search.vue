@@ -36,7 +36,7 @@
           <!-- Search Options -->
           <div class="flex items-center gap-6 mt-4 pt-4 border-t">
             <div class="flex items-center gap-2">
-              <Switch id="use-rerank" v-model:checked="useRerank" />
+              <Switch id="use-rerank" v-model="useRerank" />
               <label for="use-rerank" class="text-sm cursor-pointer">
                 Use Rerank
               </label>
@@ -44,7 +44,7 @@
             </div>
 
             <div v-if="useRerank" class="flex items-center gap-2">
-              <Switch id="compare-mode" v-model:checked="compareMode" />
+              <Switch id="compare-mode" v-model="compareMode" />
               <label for="compare-mode" class="text-sm cursor-pointer">
                 Compare Mode
               </label>
@@ -135,15 +135,34 @@
                 <h3 class="font-semibold">By Similarity</h3>
                 <span class="text-xs text-muted-foreground">(embedding distance)</span>
               </div>
-              <div class="space-y-4">
-                <SearchResultCard
+              <div class="space-y-3">
+                <Card
                   v-for="(result, index) in originalResults"
                   :key="`original-${result.project.id}`"
-                  :result="result"
-                  :rank="index + 1"
-                  :show-rerank-score="false"
+                  class="p-4 cursor-pointer hover:border-primary/50 transition-colors"
                   @click="viewProject(result.project.id)"
-                />
+                >
+                  <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xs font-mono text-muted-foreground w-6">#{{ index + 1 }}</span>
+                        <h3 class="text-base font-semibold">{{ result.project.title }}</h3>
+                      </div>
+                      <p class="text-sm text-muted-foreground ml-6">{{ result.project.short_description }}</p>
+                    </div>
+                  </div>
+                  <div class="ml-6 flex flex-wrap gap-1 mb-2">
+                    <Badge v-for="tag in result.project.hashtags.slice(0, 4)" :key="tag" variant="secondary" class="text-xs">
+                      #{{ tag }}
+                    </Badge>
+                  </div>
+                  <div class="ml-6 flex items-center gap-4 text-xs text-muted-foreground">
+                    <div class="flex items-center gap-1">
+                      <Icon name="lucide:target" class="h-3 w-3" />
+                      <span>Similarity: {{ (result.similarity * 100).toFixed(1) }}%</span>
+                    </div>
+                  </div>
+                </Card>
               </div>
             </div>
 
@@ -154,29 +173,111 @@
                 <h3 class="font-semibold">By Relevance</h3>
                 <span class="text-xs text-muted-foreground">(reranked)</span>
               </div>
-              <div class="space-y-4">
-                <SearchResultCard
+              <div class="space-y-3">
+                <Card
                   v-for="(result, index) in results"
                   :key="`reranked-${result.project.id}`"
-                  :result="result"
-                  :rank="index + 1"
-                  :show-rerank-score="true"
+                  class="p-4 cursor-pointer hover:border-primary/50 transition-colors"
                   @click="viewProject(result.project.id)"
-                />
+                >
+                  <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xs font-mono text-muted-foreground w-6">#{{ index + 1 }}</span>
+                        <h3 class="text-base font-semibold">{{ result.project.title }}</h3>
+                      </div>
+                      <p class="text-sm text-muted-foreground ml-6">{{ result.project.short_description }}</p>
+                    </div>
+                  </div>
+                  <div class="ml-6 flex flex-wrap gap-1 mb-2">
+                    <Badge v-for="tag in result.project.hashtags.slice(0, 4)" :key="tag" variant="secondary" class="text-xs">
+                      #{{ tag }}
+                    </Badge>
+                  </div>
+                  <div class="ml-6 flex items-center gap-4 text-xs text-muted-foreground">
+                    <div class="flex items-center gap-1">
+                      <Icon name="lucide:target" class="h-3 w-3" />
+                      <span>Similarity: {{ (result.similarity * 100).toFixed(1) }}%</span>
+                    </div>
+                    <div v-if="result.rerank_score !== undefined" class="flex items-center gap-1">
+                      <Icon name="lucide:sparkles" class="h-3 w-3 text-primary" />
+                      <span>Rerank: {{ result.rerank_score.toFixed(2) }}</span>
+                    </div>
+                  </div>
+                </Card>
               </div>
             </div>
           </div>
 
           <!-- Standard Results (Single Column) -->
           <div v-else class="space-y-4">
-            <SearchResultCard
+            <Card
               v-for="(result, index) in results"
               :key="result.project.id"
-              :result="result"
-              :rank="index + 1"
-              :show-rerank-score="wasReranked"
+              class="p-6 cursor-pointer hover:border-primary/50 transition-colors"
               @click="viewProject(result.project.id)"
-            />
+            >
+              <div class="flex justify-between items-start mb-3">
+                <div class="flex-1">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-xs font-mono text-muted-foreground w-6">#{{ index + 1 }}</span>
+                    <h3 class="text-lg font-semibold">{{ result.project.title }}</h3>
+                    <Badge
+                      variant="secondary"
+                      class="text-xs"
+                      :class="getSimilarityClass(result.similarity)"
+                    >
+                      {{ formatSimilarity(result.similarity) }} match
+                    </Badge>
+                  </div>
+                  <p class="text-muted-foreground ml-6">{{ result.project.short_description }}</p>
+                </div>
+                <div class="flex gap-2">
+                  <Badge variant="outline" class="flex items-center gap-1">
+                    <Icon name="lucide:lightbulb" class="h-3 w-3" />
+                    {{ result.project.idea_score }}
+                  </Badge>
+                  <Badge variant="outline" class="flex items-center gap-1">
+                    <Icon name="lucide:settings" class="h-3 w-3" />
+                    {{ result.project.complexity_score }}
+                  </Badge>
+                </div>
+              </div>
+
+              <p class="text-sm text-muted-foreground mb-3 ml-6">{{ result.project.description }}</p>
+
+              <div class="flex flex-wrap gap-2 ml-6">
+                <Badge
+                  v-for="tag in result.project.hashtags"
+                  :key="tag"
+                  variant="secondary"
+                  class="text-xs"
+                >
+                  #{{ tag }}
+                </Badge>
+              </div>
+
+              <div class="mt-4 pt-4 border-t flex items-center justify-between text-sm text-muted-foreground ml-6">
+                <div class="flex items-center gap-4">
+                  <div class="flex items-center gap-2">
+                    <Icon name="lucide:target" class="h-4 w-4" />
+                    <span>Similarity: {{ (result.similarity * 100).toFixed(1) }}%</span>
+                  </div>
+                  <div v-if="wasReranked && result.rerank_score !== undefined" class="flex items-center gap-2">
+                    <Icon name="lucide:sparkles" class="h-4 w-4 text-primary" />
+                    <span>Rerank: {{ result.rerank_score.toFixed(2) }}</span>
+                  </div>
+                </div>
+                <a
+                  :href="`/projects/${result.project.id}`"
+                  class="text-primary hover:underline flex items-center gap-1"
+                  @click.stop
+                >
+                  View Details
+                  <Icon name="lucide:arrow-right" class="h-3 w-3" />
+                </a>
+              </div>
+            </Card>
           </div>
         </div>
       </div>
@@ -253,6 +354,24 @@ const compareMode = ref(false)
 const stats = ref<SearchStats | null>(null)
 const embeddingHealthy = ref(false)
 const rerankHealthy = ref(false)
+
+// Format similarity percentage
+function formatSimilarity(similarity: number): string {
+  const percent = similarity * 100
+  if (percent >= 90) return 'Excellent'
+  if (percent >= 75) return 'Great'
+  if (percent >= 60) return 'Good'
+  if (percent >= 45) return 'Fair'
+  return 'Partial'
+}
+
+// Get CSS class based on similarity
+function getSimilarityClass(similarity: number): string {
+  const percent = similarity * 100
+  if (percent >= 75) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+  if (percent >= 50) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+  return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+}
 
 // Perform semantic search
 async function performSearch() {
