@@ -50,7 +50,9 @@ class ValidatedProjectEvent(Event):
 
     # Validation results
     is_valid: bool
-    invalid_reason: Optional[str] = None  # e.g., "deleted", "not a project", "personal task"
+    invalid_reason: Optional[str] = (
+        None  # e.g., "deleted", "not a project", "personal task"
+    )
 
 
 class URLsFetchedEvent(Event):
@@ -68,7 +70,9 @@ class URLsFetchedEvent(Event):
 
     # URL data
     urls: list[str]  # Extracted URLs
-    url_contents: dict[str, str]  # URL -> markdown content (empty string if fetch failed)
+    url_contents: dict[
+        str, str
+    ]  # URL -> markdown content (empty string if fetch failed)
     url_errors: dict[str, str]  # URL -> error message for failed fetches
 
 
@@ -177,3 +181,50 @@ class ProjectCompleteEvent(Event):
 
     # Logs for debugging
     workflow_logs: list[str]
+
+
+# =============================================================================
+# Chatbot Workflow Events
+# =============================================================================
+
+
+class ChatQueryEvent(Event):
+    """
+    Event containing the user's chat query to process.
+
+    Emitted after StartEvent to begin the chatbot workflow.
+    """
+
+    query: str
+    top_k: int = 5
+
+
+class QueryEmbeddingEvent(Event):
+    """
+    Event emitted after generating the embedding for the user's query.
+    """
+
+    query: str
+    top_k: int
+    query_embedding: list[float]
+
+
+class ProjectsRetrievedEvent(Event):
+    """
+    Event emitted after retrieving relevant projects via semantic search.
+    """
+
+    query: str
+    projects: list[dict]
+    context: str
+
+
+class ChatResponseEvent(Event):
+    """
+    Final event containing the chatbot's response.
+    """
+
+    query: str
+    response: str
+    source_projects: list[dict]
+    projects_found: int

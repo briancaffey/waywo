@@ -338,7 +338,18 @@ GET  /api/waywo-projects/hashtags
 | **Phase 2** | 3, 4, 5 | Workflow implementation & Celery | ✅ Complete |
 | **Phase 3** | 6, 7, 8, 9 | API & Frontend | ✅ Complete |
 | **Phase 4** | 10, 11 | Vector Embeddings, RAG & Observability | ✅ Complete |
-| **Phase 5** | 12 | Jupyter Lab Integration | ✅ Complete |
+| **Phase 5** | 12, 13 | Jupyter Lab & Workflow Visualization | ✅ Complete |
+| **Phase 6** | 14 | Project Bookmarking | ✅ Complete |
+| **Phase 7** | 15 | Project Filtering UI | ✅ Complete |
+| **Phase 8** | 16 | Reranking for RAG | 🔲 Planned |
+| **Phase 9** | 17 | Project Screenshots | 🔲 Planned |
+| **Phase 10** | 18 | Similar Projects | 🔲 Planned |
+| **Phase 11** | 19, 20 | Voice Interface (STT & TTS) | 🔲 Planned |
+| **Phase 12** | 21 | Safety & Content Moderation | 🔲 Planned |
+| **Phase 13** | 22 | Vision-Language Screenshot Analysis | 🔲 Planned |
+| **Phase 14** | 23 | Multimodal Visual Search | 🔲 Planned |
+| **Phase 15** | 24 | Upgraded LLM & Tag Improvements | 🔲 Planned |
+| **Phase 16** | 25 | Audio Summaries / Podcast Generation | 🔲 Planned |
 
 ---
 
@@ -517,15 +528,763 @@ docker compose up jupyter
 
 ---
 
+## Milestone 13: Workflow Visualizer
+
+**Goal**: Add workflow visualization capabilities to visualize LlamaIndex workflows, supporting both static workflow structure diagrams and runtime execution traces.
+
+### Dependencies Added:
+| Package | Purpose |
+|---------|---------|
+| `llama-index-utils-workflow>=0.9.0` | Workflow visualization utilities |
+
+### Files Created/Modified:
+| File | Action |
+|------|--------|
+| `pyproject.toml` | Added `llama-index-utils-workflow` dependency |
+| `src/workflows/events.py` | Added chatbot workflow events |
+| `src/workflows/waywo_chatbot_workflow.py` | Converted to proper LlamaIndex Workflow class |
+| `src/workflows/__init__.py` | Updated exports for new events and workflow |
+| `src/visualization.py` | **New** - Visualization utility functions |
+| `src/workflow_server.py` | **New** - WorkflowServer configuration |
+| `src/main.py` | Added visualization endpoints and mounted WorkflowServer |
+
+### New Chatbot Events:
+| Event | Description |
+|-------|-------------|
+| `ChatQueryEvent` | Initial query with top_k setting |
+| `QueryEmbeddingEvent` | Query with generated embedding |
+| `ProjectsRetrievedEvent` | Retrieved projects and context |
+| `ChatResponseEvent` | Final response with sources |
+
+### Converted Chatbot Workflow Structure:
+```
+StartEvent
+  | @step start()
+  v
+ChatQueryEvent(query, top_k)
+  | @step generate_query_embedding()
+  v
+QueryEmbeddingEvent(query, top_k, query_embedding)
+  | @step retrieve_projects()
+  v
+ProjectsRetrievedEvent(query, projects, context)
+  | @step generate_response()
+  v
+StopEvent(result=ChatbotResult)
+```
+
+### New API Endpoints:
+```
+GET  /api/workflow-visualization/workflows
+     Response: {workflows: [{name, steps, description}, ...]}
+
+GET  /api/workflow-visualization/structure/{name}
+     Response: HTML file download
+
+GET  /api/workflow-visualization/executions
+     Response: {structures: [...], executions: [...], directory: "..."}
+
+GET  /api/workflow-visualization/executions/{filename}
+     Response: HTML file download
+
+POST /api/workflow-visualization/run-with-trace/{name}
+     Query params: query (chatbot), comment_id/comment_text (project), top_k
+     Response: {execution_id, workflow, trace_file, result: {...}}
+```
+
+### Visualization Storage:
+- Directory: `data/visualizations/`
+- Structure files: `{workflow}_structure.html`
+- Execution traces: `{workflow}_execution_{id}.html`
+
+### Usage Examples:
+
+**Generate workflow structure visualization:**
+```bash
+curl http://localhost:8008/api/workflow-visualization/structure/chatbot -o chatbot.html
+open chatbot.html
+```
+
+**Run chatbot with execution trace:**
+```bash
+curl -X POST "http://localhost:8008/api/workflow-visualization/run-with-trace/chatbot?query=AI%20projects"
+```
+
+---
+
+## Milestone 14: Project Bookmarking ✅ COMPLETE
+
+**Goal**: Add star/unstar functionality to projects with a filter to view bookmarked projects.
+
+### Backend Changes
+
+| File | Change |
+|------|--------|
+| `src/db_models.py` | Added `is_bookmarked` boolean column to `WaywoProjectDB` |
+| `src/models.py` | Added `is_bookmarked` field to `WaywoProject` and `WaywoProjectSummary` |
+| `src/db_client.py` | Added `toggle_bookmark()` and `get_bookmarked_count()` functions |
+| `src/db_client.py` | Added `is_bookmarked` filter to `get_all_projects()` |
+| `src/main.py` | Added `POST /api/waywo-projects/{id}/bookmark` endpoint |
+| `src/main.py` | Added `bookmarked` query param and `bookmarked_count` to `GET /api/waywo-projects` |
+| `src/migrate.py` | Added migration for `is_bookmarked` column |
+
+### Frontend Changes
+
+| File | Change |
+|------|--------|
+| `frontend/app/pages/projects/index.vue` | Added star button on project cards, filter tabs (All/Bookmarked) |
+| `frontend/app/pages/projects/[id].vue` | Added star button on project detail page |
+
+### API
+
+```
+POST /api/waywo-projects/{project_id}/bookmark
+     Response: { "is_bookmarked": true/false, "project_id": 123 }
+
+GET /api/waywo-projects?bookmarked=true
+     (existing endpoint, new filter param)
+     Response includes: bookmarked_count for badge display
+```
+
+### UI Features
+- Star icon on each project card (yellow when bookmarked)
+- Star icon on project detail page header
+- Filter tabs: "All Projects" | "Bookmarked" (with count badge)
+- Optimistic UI updates on toggle
+
+---
+
+## Milestone 15: Project Filtering UI
+
+**Goal**: Add a comprehensive filtering system for the Projects list page with tag multi-select, score range sliders, and date range picker, all synced to URL query parameters.
+
+### Backend Changes
+
+| File | Change |
+|------|--------|
+| `src/main.py` | Expose `date_from` and `date_to` query params in `GET /api/waywo-projects` |
+
+### Frontend Changes
+
+| File | Change |
+|------|--------|
+| `frontend/app/pages/projects/index.vue` | Add filter section UI and URL sync logic |
+
+### Filter Section UI
+
+**Layout**: Collapsible filter panel above the projects list with:
+
+1. **Tags Filter**
+   - Multi-select combobox with autocomplete
+   - Fetches options from `GET /api/waywo-projects/hashtags`
+   - Shows selected tags as removable chips
+
+2. **Score Range Sliders**
+   - Idea Score: Dual-handle slider (1-10)
+   - Complexity Score: Dual-handle slider (1-10)
+   - Show current range values
+
+3. **Date Range Picker**
+   - Start date input
+   - End date input
+
+4. **Filter Actions**
+   - "Clear All" button to reset filters
+   - Active filter count badge on the filter toggle
+
+### URL Query Parameter Sync
+
+| Filter | Query Param | Example |
+|--------|-------------|---------|
+| Tags | `tags` | `?tags=ai,llm,saas` |
+| Min Idea Score | `min_idea` | `?min_idea=5` |
+| Max Idea Score | `max_idea` | `?max_idea=10` |
+| Min Complexity | `min_complexity` | `?min_complexity=3` |
+| Max Complexity | `max_complexity` | `?max_complexity=8` |
+| Date From | `date_from` | `?date_from=2024-01-01` |
+| Date To | `date_to` | `?date_to=2024-12-31` |
+| Bookmarked | `bookmarked` | `?bookmarked=true` |
+
+**Behavior:**
+- On filter change: Update URL without page reload
+- On page load: Read URL params and apply filters
+- Shareable URLs with filter state
+
+### Tasks
+
+- [x] Expose `date_from` and `date_to` in API endpoint
+- [x] Create tag multi-select component with autocomplete
+- [x] Create score range slider components (dual-handle)
+- [x] Create date range picker inputs
+- [x] Implement URL param sync (read on mount, update on change)
+- [x] Add collapsible filter panel with active filter count
+- [x] Add "Clear All Filters" button
+- [x] Style filter section to match existing UI
+
+---
+
+## Milestone 16: Reranking for RAG
+
+**Goal**: Add a reranking step to semantic search and chatbot to dramatically improve result relevance using the Nemotron Reranker model.
+
+### Model
+- **llama-nemotron-rerank-1b-v2** - Cross-encoder fine-tuned for multilingual retrieval
+- Supports up to 8192 tokens per document
+- Available via NVIDIA NIM or self-hosted
+
+### Architecture
+```
+Query → Embedding Search (top 50) → Reranker (top 10) → Response
+```
+
+### Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `src/rerank_client.py` | **New** - HTTP client for reranker service |
+| `src/db_client.py` | Update `semantic_search()` to return more candidates |
+| `src/workflows/waywo_chatbot_workflow.py` | Add reranking step after retrieval |
+| `src/main.py` | Update search endpoint to use reranking |
+| `docker-compose.yml` | Add `RERANKER_URL` environment variable |
+
+### New API Behavior
+
+```
+POST /api/semantic-search
+     Body: {query: "...", limit: 10, use_rerank: true}
+     - Fetches top 50 by embedding similarity
+     - Reranks to top 10 by relevance score
+     - Returns reranked results with both scores
+
+POST /api/waywo-chatbot
+     - Automatically uses reranking for context retrieval
+     - Better answers due to more relevant context
+```
+
+### Tasks
+
+- [ ] Deploy/configure reranker model endpoint
+- [ ] Create `src/rerank_client.py` with retry logic
+- [ ] Update semantic search to fetch more candidates (50)
+- [ ] Add reranking step to search results
+- [ ] Update chatbot workflow with reranking
+- [ ] Add `use_rerank` toggle to search API
+- [ ] Add rerank scores to response
+- [ ] Test improvement in search quality
+
+---
+
+## Milestone 17: Project Screenshots
+
+**Goal**: Automatically capture screenshots of project URLs during processing and display them in the UI.
+
+### Approach
+- Use Playwright to capture homepage screenshots
+- Store as optimized images in `/data/screenshots/`
+- Display thumbnails on project cards and full images on detail pages
+
+### Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `src/screenshot_client.py` | **New** - Playwright screenshot capture service |
+| `src/db_models.py` | Add `screenshot_path` column to `WaywoProjectDB` |
+| `src/workflows/waywo_project_workflow.py` | Add screenshot capture step |
+| `src/main.py` | Add screenshot serving endpoint |
+| `src/migrate.py` | Add migration for screenshot column |
+| `frontend/app/pages/projects/index.vue` | Display thumbnail on cards |
+| `frontend/app/pages/projects/[id].vue` | Display full screenshot |
+
+### New API Endpoints
+
+```
+GET /api/waywo-projects/{id}/screenshot
+    Response: Image file (PNG/JPEG)
+    - Returns cached screenshot if available
+    - Returns placeholder if not captured
+
+POST /api/waywo-projects/{id}/capture-screenshot
+    Response: {status: "captured", path: "..."}
+    - Manually trigger screenshot capture
+```
+
+### Screenshot Configuration
+
+- Resolution: 1280x800 (desktop viewport)
+- Format: JPEG (optimized for size)
+- Thumbnail: 320x200 for cards
+- Timeout: 30 seconds per URL
+- Skip: URLs that fail to load, localhost, IP addresses
+
+### Tasks
+
+- [ ] Create `src/screenshot_client.py` with Playwright
+- [ ] Add screenshot capture to project workflow
+- [ ] Add database column and migration
+- [ ] Create screenshot serving endpoint
+- [ ] Add thumbnail generation
+- [ ] Update project cards with thumbnails
+- [ ] Update project detail page with full screenshot
+- [ ] Add manual capture button on detail page
+- [ ] Handle missing/failed screenshots gracefully
+
+---
+
+## Milestone 18: Similar Projects
+
+**Goal**: Add a "Similar Projects" section to the project detail page using existing embeddings.
+
+### Approach
+- Use vector similarity on existing `description_embedding`
+- Exclude current project from results
+- Show 3-5 most similar projects
+
+### Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `src/db_client.py` | Add `get_similar_projects()` function |
+| `src/main.py` | Add similar projects endpoint |
+| `frontend/app/pages/projects/[id].vue` | Add similar projects section |
+
+### New API Endpoint
+
+```
+GET /api/waywo-projects/{id}/similar
+    Query params: limit (default: 5)
+    Response: {
+      similar_projects: [
+        {project: {...}, similarity: 0.92},
+        ...
+      ],
+      project_id: 123
+    }
+```
+
+### Tasks
+
+- [ ] Add `get_similar_projects()` to db_client
+- [ ] Create API endpoint
+- [ ] Add "Similar Projects" card to detail page
+- [ ] Display similarity percentage
+- [ ] Handle projects without embeddings
+- [ ] Add loading state for similar projects
+
+---
+
+## Milestone 19: Voice Input (Speech-to-Text)
+
+**Goal**: Add voice input capability to the chatbot page using Nemotron speech models.
+
+### Models (Choose One)
+- **Parakeet TDT 0.6B v3** - Fast, multilingual ASR (25 languages)
+- **Canary-Qwen-2.5B** - Higher accuracy, translation support
+- **Nemotron Speech Streaming 0.6B** - Real-time streaming for low latency
+
+### Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `src/stt_client.py` | **New** - Speech-to-text client |
+| `src/main.py` | Add STT endpoint (WebSocket or REST) |
+| `docker-compose.yml` | Add `STT_URL` environment variable |
+| `frontend/app/pages/chat.vue` | Add microphone button and recording UI |
+| `frontend/app/composables/useVoiceInput.ts` | **New** - Voice recording composable |
+
+### API Options
+
+**Option A: REST (simpler)**
+```
+POST /api/speech-to-text
+     Body: Audio file (WAV/WebM)
+     Response: {text: "transcribed text", confidence: 0.95}
+```
+
+**Option B: WebSocket (real-time)**
+```
+WS /api/speech-to-text/stream
+   - Send audio chunks
+   - Receive partial transcriptions in real-time
+```
+
+### Frontend Features
+- Microphone button on chat input
+- Visual feedback during recording (waveform)
+- Auto-stop on silence detection
+- Transcribed text populates input field
+
+### Tasks
+
+- [ ] Deploy/configure STT model endpoint
+- [ ] Create `src/stt_client.py`
+- [ ] Add STT API endpoint (REST or WebSocket)
+- [ ] Create voice input composable
+- [ ] Add microphone button to chat UI
+- [ ] Add recording visualization
+- [ ] Handle browser permissions
+- [ ] Add silence detection / auto-stop
+- [ ] Test with various accents/environments
+
+---
+
+## Milestone 20: Voice Output (Text-to-Speech)
+
+**Goal**: Add voice output to read chatbot responses aloud using Nemotron TTS models.
+
+### Model
+- **NeMo TTS** - High-quality speech synthesis
+
+### Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `src/tts_client.py` | **New** - Text-to-speech client |
+| `src/main.py` | Add TTS endpoint |
+| `docker-compose.yml` | Add `TTS_URL` environment variable |
+| `frontend/app/pages/chat.vue` | Add speaker button on responses |
+| `frontend/app/composables/useVoiceOutput.ts` | **New** - Audio playback composable |
+
+### New API Endpoint
+
+```
+POST /api/text-to-speech
+     Body: {text: "...", voice: "default"}
+     Response: Audio stream (WAV/MP3)
+```
+
+### Frontend Features
+- Speaker icon on each chatbot response
+- Play/pause/stop controls
+- Voice selection (if multiple voices available)
+- Visual indicator while speaking
+
+### Tasks
+
+- [ ] Deploy/configure TTS model endpoint
+- [ ] Create `src/tts_client.py`
+- [ ] Add TTS API endpoint
+- [ ] Create voice output composable
+- [ ] Add speaker button to chat responses
+- [ ] Add audio playback controls
+- [ ] Cache generated audio for replay
+- [ ] Add voice selection UI (optional)
+
+---
+
+## Milestone 21: Safety & Content Moderation
+
+**Goal**: Add content safety checks using Nemotron Safety model to filter inappropriate content and protect against jailbreak attempts.
+
+### Model
+- **Nemotron Safety** - Jailbreak detection, content safety, privacy detection
+
+### Features
+- Filter spam/inappropriate comments before processing
+- Detect jailbreak attempts in chatbot queries
+- Flag projects with potentially sensitive content
+- Add safety scores to projects
+
+### Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `src/safety_client.py` | **New** - Safety model client |
+| `src/models.py` | Add safety fields to WaywoProject |
+| `src/db_models.py` | Add `safety_score`, `safety_flags` columns |
+| `src/workflows/waywo_project_workflow.py` | Add safety check step |
+| `src/workflows/waywo_chatbot_workflow.py` | Add input validation |
+| `src/main.py` | Add safety check to chatbot endpoint |
+| `src/migrate.py` | Add migration for safety columns |
+| `frontend/app/pages/projects/[id].vue` | Display safety warnings |
+
+### Safety Check Types
+
+| Check | Description |
+|-------|-------------|
+| `jailbreak` | Detect prompt injection attempts |
+| `toxicity` | Harmful or offensive content |
+| `privacy` | PII or sensitive data exposure |
+| `spam` | Low-quality or promotional content |
+
+### New API Behavior
+
+```
+POST /api/waywo-chatbot
+     - Validates query against jailbreak patterns
+     - Returns error if query is flagged
+     - Logs flagged attempts for review
+
+GET /api/waywo-projects/{id}
+     Response includes: safety_score, safety_flags[]
+```
+
+### Tasks
+
+- [ ] Deploy/configure safety model endpoint
+- [ ] Create `src/safety_client.py`
+- [ ] Add safety check to project workflow
+- [ ] Add jailbreak detection to chatbot
+- [ ] Add database columns and migration
+- [ ] Display safety warnings in UI
+- [ ] Add admin view for flagged content
+- [ ] Configure safety thresholds
+
+---
+
+## Milestone 22: Vision-Language Screenshot Analysis
+
+**Goal**: Use Nemotron Nano VL to analyze project screenshots and auto-generate descriptions, detect project types, and validate content.
+
+### Model
+- **Nemotron Nano VL 12B** - Vision-language model for document intelligence
+
+### Features
+- Analyze screenshots to generate descriptions
+- Detect project type (SaaS, mobile app, CLI, library, etc.)
+- Extract visible text/features from landing pages
+- Validate if screenshot matches project description
+
+### Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `src/vl_client.py` | **New** - Vision-language model client |
+| `src/models.py` | Add VL analysis fields |
+| `src/db_models.py` | Add `vl_description`, `detected_type`, `vl_features` |
+| `src/workflows/waywo_project_workflow.py` | Add VL analysis step (after screenshot) |
+| `src/main.py` | Add VL analysis endpoint |
+| `src/migrate.py` | Add migration for VL columns |
+| `frontend/app/pages/projects/[id].vue` | Display VL insights |
+
+### VL Analysis Output
+
+```json
+{
+  "detected_type": "saas_dashboard",
+  "vl_description": "A dark-themed analytics dashboard showing...",
+  "features": ["charts", "sidebar_navigation", "data_tables"],
+  "technologies": ["react", "tailwind"],
+  "confidence": 0.87
+}
+```
+
+### Project Type Categories
+- `saas_dashboard` - Web application with dashboard UI
+- `mobile_app` - Mobile application screenshot
+- `landing_page` - Marketing/landing page
+- `cli_tool` - Terminal/command-line interface
+- `library_docs` - Documentation site
+- `api_docs` - API documentation
+- `portfolio` - Personal portfolio/blog
+- `ecommerce` - E-commerce site
+- `other` - Uncategorized
+
+### Tasks
+
+- [ ] Deploy/configure VL model endpoint
+- [ ] Create `src/vl_client.py`
+- [ ] Add VL analysis step to workflow (depends on Milestone 17)
+- [ ] Add database columns and migration
+- [ ] Create analysis prompts for different aspects
+- [ ] Display VL insights on project detail page
+- [ ] Add project type badges/filters
+- [ ] Use VL description as fallback when scraping fails
+
+---
+
+## Milestone 23: Multimodal Visual Search
+
+**Goal**: Enable searching projects by visual description using the multimodal reranker model.
+
+### Model
+- **llama-nemotron-rerank-vl-1b-v2** - Vision-language cross-encoder
+
+### Features
+- Search by visual description: "dark mode dashboard with charts"
+- Combine text embeddings + screenshot analysis
+- Visual similarity between projects
+
+### Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `src/vl_rerank_client.py` | **New** - Multimodal reranker client |
+| `src/db_client.py` | Add `visual_search()` function |
+| `src/main.py` | Add visual search endpoint |
+| `frontend/app/pages/search.vue` | Add visual search mode toggle |
+
+### New API Endpoint
+
+```
+POST /api/visual-search
+     Body: {
+       query: "minimalist landing page with hero section",
+       limit: 10
+     }
+     Response: {
+       results: [
+         {project: {...}, visual_score: 0.89, text_score: 0.76},
+         ...
+       ]
+     }
+```
+
+### Search Modes
+- **Text Only**: Current semantic search (embeddings)
+- **Visual Only**: Match query against screenshot analysis
+- **Combined**: Weighted combination of both scores
+
+### Tasks
+
+- [ ] Deploy/configure VL reranker endpoint
+- [ ] Create `src/vl_rerank_client.py`
+- [ ] Implement visual search function
+- [ ] Add visual search API endpoint
+- [ ] Update search page with mode toggle
+- [ ] Display visual match scores
+- [ ] Add visual search examples/suggestions
+
+---
+
+## Milestone 24: Upgraded LLM & Tag Improvements
+
+**Goal**: Improve extraction quality with larger Nemotron model and standardize tag generation.
+
+### Models
+- **Llama Nemotron Super 49B v1.5** - Higher accuracy for complex comments
+- Keep Nano for speed, use Super for re-processing or complex cases
+
+### Tag Improvements
+- Standardize similar tags (ml → machine-learning)
+- Create tag hierarchy (category → subcategory)
+- Detect technology stack from URLs/descriptions
+- Limit to curated tag vocabulary
+
+### Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `src/llm_config.py` | Add Super model configuration |
+| `src/tag_normalizer.py` | **New** - Tag standardization logic |
+| `data/tag_vocabulary.yml` | **New** - Curated tag list with aliases |
+| `src/workflows/prompts.py` | Update prompts for better tag generation |
+| `src/workflows/waywo_project_workflow.py` | Add tag normalization step |
+| `src/main.py` | Add re-process with upgraded model option |
+
+### Tag Vocabulary Example
+
+```yaml
+categories:
+  ai:
+    canonical: "artificial-intelligence"
+    aliases: ["ai", "ml", "machine-learning", "deep-learning"]
+    subcategories: ["nlp", "computer-vision", "llm"]
+
+  web:
+    canonical: "web-development"
+    aliases: ["web", "frontend", "backend", "fullstack"]
+    subcategories: ["react", "vue", "nextjs", "nuxt"]
+```
+
+### New API Features
+
+```
+POST /api/waywo-comments/{id}/process
+     Query params: model=super (use upgraded model)
+
+GET /api/waywo-projects/tags/suggest
+     Body: {text: "..."}
+     Response: {suggested_tags: [...]}
+```
+
+### Tasks
+
+- [ ] Deploy/configure Super model endpoint
+- [ ] Create tag vocabulary file
+- [ ] Implement tag normalizer
+- [ ] Update workflow with normalization step
+- [ ] Add model selection to process endpoint
+- [ ] Create tag suggestion endpoint
+- [ ] Migrate existing tags to normalized form
+- [ ] Add tag management admin UI (optional)
+
+---
+
+## Milestone 25: Audio Summaries / Podcast Generation
+
+**Goal**: Generate audio summaries of trending projects as shareable podcast-style content.
+
+### Features
+- Weekly digest: "Top 10 projects this month"
+- Individual project audio summaries
+- Shareable audio clips
+- RSS feed for podcast apps
+
+### Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `src/podcast_generator.py` | **New** - Summary generation and TTS orchestration |
+| `src/main.py` | Add podcast endpoints |
+| `data/podcasts/` | **New** - Generated audio storage |
+| `frontend/app/pages/podcast.vue` | **New** - Podcast/audio page |
+| `templates/podcast_script.txt` | **New** - Script template for summaries |
+
+### New API Endpoints
+
+```
+GET /api/podcast/weekly
+    Response: {
+      title: "Week of Jan 15, 2026",
+      audio_url: "/api/podcast/weekly/2026-01-15.mp3",
+      duration: 180,
+      projects: [...]
+    }
+
+GET /api/podcast/project/{id}
+    Response: Audio summary of single project
+
+GET /api/podcast/feed.xml
+    Response: RSS feed for podcast apps
+```
+
+### Podcast Script Template
+
+```
+Welcome to Waywo Weekly, your digest of the most interesting projects
+from Hacker News "What are you working on" threads.
+
+This week's top project is {title} by {author}.
+{short_description}.
+The community rated it {idea_score} out of 10 for idea quality.
+
+[Continue for each project...]
+```
+
+### Tasks
+
+- [ ] Create podcast script templates
+- [ ] Implement summary text generation (LLM)
+- [ ] Integrate TTS for audio generation (depends on Milestone 20)
+- [ ] Create audio storage and serving
+- [ ] Build weekly digest generation (Celery scheduled task)
+- [ ] Create podcast page with audio player
+- [ ] Generate RSS feed
+- [ ] Add share buttons for audio clips
+- [ ] Schedule automatic weekly generation
+
+---
+
 ## Future Enhancements (Not Yet Implemented)
 
-- [ ] Tag-based filtering UI (autocomplete, multi-select)
-- [ ] Score range sliders for filtering
-- [ ] Date range picker for filtering
-- [ ] Bulk delete projects
 - [ ] Re-process project button
 - [ ] Export projects to CSV/JSON
+- [ ] Project comparison view
+- [ ] User accounts and personal bookmarks
+- [ ] Email notifications for new projects matching criteria
+- [ ] Public API with rate limiting
+- [ ] Mobile app (React Native / Flutter)
 - [x] Search functionality across projects (semantic search implemented)
 - [x] Jupyter Lab for interactive development
-- [ ] Project bookmarking/favorites
-- [ ] Backfill embeddings for existing projects
+- [x] Workflow visualization and debugging
+- [x] Project bookmarking/favorites

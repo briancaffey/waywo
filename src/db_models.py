@@ -6,7 +6,16 @@ import json
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, LargeBinary, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
@@ -52,9 +61,7 @@ class WaywoPostDB(Base):
         "WaywoCommentDB", back_populates="parent_post"
     )
 
-    __table_args__ = (
-        Index("ix_waywo_posts_year_month", "year", "month"),
-    )
+    __table_args__ = (Index("ix_waywo_posts_year_month", "year", "month"),)
 
     def get_kids_list(self) -> list[int]:
         """Parse kids JSON string to list of integers."""
@@ -140,7 +147,9 @@ class WaywoProjectDB(Base):
     )
 
     # Validation status
-    is_valid_project: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_valid_project: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
     invalid_reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Core metadata
@@ -150,20 +159,29 @@ class WaywoProjectDB(Base):
     hashtags: Mapped[str] = mapped_column(Text, nullable=False)  # JSON array
 
     # URLs and scraped content
-    project_urls: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array
-    url_summaries: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON dict
+    project_urls: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # JSON array
+    url_summaries: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # JSON dict
 
     # Scores (1-10)
     idea_score: Mapped[int] = mapped_column(Integer, nullable=False)
     complexity_score: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Workflow metadata
-    workflow_logs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array
+    workflow_logs: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # JSON array
 
     # Vector embedding for semantic search
     description_embedding: Mapped[Optional[bytes]] = mapped_column(
         LargeBinary, nullable=True
     )  # FLOAT32 vector blob
+
+    # Bookmarking
+    is_bookmarked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

@@ -78,7 +78,9 @@ async def get_embeddings(
             if attempt < max_retries - 1:
                 await asyncio.sleep(2**attempt)  # Exponential backoff
             else:
-                raise EmbeddingError(f"Embedding request timed out after {max_retries} attempts")
+                raise EmbeddingError(
+                    f"Embedding request timed out after {max_retries} attempts"
+                )
 
         except httpx.HTTPStatusError as e:
             logger.error(f"❌ Embedding service HTTP error: {e.response.status_code}")

@@ -112,7 +112,9 @@ def init_vector_search():
                 )
             )
             session.commit()
-            logger.info("✅ Vector search initialized for waywo_projects.description_embedding")
+            logger.info(
+                "✅ Vector search initialized for waywo_projects.description_embedding"
+            )
     except Exception as e:
         logger.warning(f"⚠️ Could not initialize vector search: {e}")
 
@@ -128,7 +130,9 @@ def build_vector_index():
         with SessionLocal() as session:
             # Check if there are any embeddings to index
             result = session.execute(
-                text("SELECT COUNT(*) FROM waywo_projects WHERE description_embedding IS NOT NULL")
+                text(
+                    "SELECT COUNT(*) FROM waywo_projects WHERE description_embedding IS NOT NULL"
+                )
             )
             count = result.scalar()
 
@@ -138,9 +142,13 @@ def build_vector_index():
 
             # Build the quantization index
             # This enables fast approximate nearest neighbor search
-            logger.info(f"🔨 Building vector quantization index for {count} embeddings...")
+            logger.info(
+                f"🔨 Building vector quantization index for {count} embeddings..."
+            )
             session.execute(
-                text("SELECT vector_quantize('waywo_projects', 'description_embedding')")
+                text(
+                    "SELECT vector_quantize('waywo_projects', 'description_embedding')"
+                )
             )
             session.commit()
             logger.info(f"✅ Vector quantization index built for {count} embeddings")

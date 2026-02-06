@@ -40,6 +40,7 @@ celery_app.conf.beat_schedule = beat_schedule
 def init_worker_tracing(**kwargs):
     """Initialize tracing when a Celery worker process starts."""
     from src.tracing import init_tracing
+
     init_tracing(service_name="waywo-worker")
 
 

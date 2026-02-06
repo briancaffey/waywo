@@ -21,6 +21,7 @@ from src.db_client import (
     get_all_hashtags,
     get_all_post_ids,
     get_all_projects,
+    get_bookmarked_count,
     get_comment,
     get_comment_count_for_post,
     get_comments_for_post,
@@ -33,6 +34,7 @@ from src.db_client import (
     get_total_project_count,
     reset_all_data,
     semantic_search,
+    toggle_bookmark,
 )
 from src.models import (
     NatQueryRequest,
@@ -374,6 +376,9 @@ async def list_waywo_projects(
     min_complexity_score: Optional[int] = Query(None, ge=1, le=10),
     max_complexity_score: Optional[int] = Query(None, ge=1, le=10),
     is_valid: Optional[bool] = None,
+    bookmarked: Optional[bool] = Query(None, description="Filter by bookmark status"),
+    date_from: Optional[datetime] = Query(None, description="Filter projects created on or after this date (ISO format)"),
+    date_to: Optional[datetime] = Query(None, description="Filter projects created on or before this date (ISO format)"),
 ):
     """
     List all WaywoProject entries with pagination and filtering.
@@ -384,6 +389,8 @@ async def list_waywo_projects(
     - min/max_idea_score: Filter by idea score range
     - min/max_complexity_score: Filter by complexity score range
     - is_valid: Filter by validity status
+    - bookmarked: Filter by bookmark status (true/false)
+    - date_from/date_to: Filter by creation date range (ISO format)
     """
     # Parse tags if provided
     tag_list = None
@@ -404,12 +411,19 @@ async def list_waywo_projects(
             min_complexity_score=min_complexity_score,
             max_complexity_score=max_complexity_score,
             is_valid=is_valid,
+            is_bookmarked=bookmarked,
+            date_from=date_from,
+            date_to=date_to,
         )
         total = get_total_project_count(is_valid=is_valid)
+
+    # Get bookmarked count for the response
+    bookmarked_count = get_bookmarked_count()
 
     return {
         "projects": [p.model_dump() for p in projects],
         "total": total,
+        "bookmarked_count": bookmarked_count,
         "limit": limit,
         "offset": offset,
         "filters": {
@@ -420,6 +434,7 @@ async def list_waywo_projects(
             "min_complexity_score": min_complexity_score,
             "max_complexity_score": max_complexity_score,
             "is_valid": is_valid,
+            "bookmarked": bookmarked,
         },
     }
 
@@ -481,6 +496,25 @@ async def delete_waywo_project(project_id: int):
     )
 
 
+@app.post("/api/waywo-projects/{project_id}/bookmark", tags=["projects"])
+async def toggle_project_bookmark(project_id: int):
+    """
+    Toggle bookmark status for a project.
+
+    Returns the new bookmark status.
+    """
+    new_status = toggle_bookmark(project_id)
+    if new_status is None:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+
+    return JSONResponse(
+        content={
+            "is_bookmarked": new_status,
+            "project_id": project_id,
+        }
+    )
+
+
 # =============================================================================
 # Semantic Search & RAG Chatbot API
 # =============================================================================
@@ -497,7 +531,9 @@ class ChatbotRequest(BaseModel):
     """Request body for chatbot query."""
 
     query: str = Field(..., min_length=1, description="User's question or message")
-    top_k: int = Field(default=5, ge=1, le=20, description="Number of projects for context")
+    top_k: int = Field(
+        default=5, ge=1, le=20, description="Number of projects for context"
+    )
 
 
 @app.get("/api/embedding/health", tags=["semantic"])
@@ -858,4 +894,197 @@ async def rebuild_vector_index():
         raise HTTPException(
             status_code=500,
             detail=f"Failed to rebuild vector index: {str(e)}",
+        )
+
+
+# =============================================================================
+# Workflow Visualization API
+# =============================================================================
+
+
+class RunWithTraceRequest(BaseModel):
+    """Request body for running a workflow with trace capture."""
+
+    # Project workflow params
+    comment_id: Optional[int] = None
+    comment_text: Optional[str] = None
+    comment_author: Optional[str] = None
+
+    # Chatbot workflow params
+    query: Optional[str] = None
+    top_k: int = 5
+
+
+@app.get("/api/workflow-visualization/workflows", tags=["workflow"])
+async def list_available_workflows():
+    """
+    List available workflows that can be visualized.
+    """
+    from src.workflow_server import WORKFLOW_METADATA
+
+    return {
+        "workflows": list(WORKFLOW_METADATA.values()),
+    }
+
+
+@app.get("/api/workflow-visualization/structure/{name}", tags=["workflow"])
+async def get_workflow_structure(name: str):
+    """
+    Generate and download a static HTML visualization of workflow structure.
+
+    Shows all possible paths through the workflow.
+    """
+    from fastapi.responses import FileResponse
+
+    from src.visualization import generate_workflow_structure
+    from src.workflow_server import WORKFLOWS
+
+    if name not in WORKFLOWS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Workflow '{name}' not found. Available: {list(WORKFLOWS.keys())}",
+        )
+
+    try:
+        filepath = generate_workflow_structure(WORKFLOWS[name], name)
+        return FileResponse(
+            filepath,
+            media_type="text/html",
+            filename=f"{name}_structure.html",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate workflow structure: {str(e)}",
+        )
+
+
+@app.get("/api/workflow-visualization/executions", tags=["workflow"])
+async def list_execution_traces():
+    """
+    List all saved execution trace visualizations.
+    """
+    from src.visualization import list_visualizations
+
+    return list_visualizations()
+
+
+@app.get("/api/workflow-visualization/executions/{filename}", tags=["workflow"])
+async def get_execution_trace(filename: str):
+    """
+    Download a saved execution trace HTML file.
+    """
+    from fastapi.responses import FileResponse
+
+    from src.visualization import get_visualization_path
+
+    filepath = get_visualization_path(filename)
+
+    if filepath is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Execution trace '{filename}' not found",
+        )
+
+    return FileResponse(
+        filepath,
+        media_type="text/html",
+        filename=filename,
+    )
+
+
+@app.post("/api/workflow-visualization/run-with-trace/{name}", tags=["workflow"])
+async def run_workflow_with_trace(
+    name: str,
+    query: Optional[str] = Query(None, description="Chat query for chatbot workflow"),
+    comment_id: Optional[int] = Query(
+        None, description="Comment ID for project workflow"
+    ),
+    comment_text: Optional[str] = Query(
+        None, description="Comment text for project workflow"
+    ),
+    top_k: int = Query(5, description="Number of results for chatbot"),
+):
+    """
+    Run a workflow and capture its execution trace.
+
+    For chatbot workflow, provide 'query' parameter.
+    For project workflow, provide 'comment_id' and 'comment_text' parameters.
+    """
+    import uuid
+
+    from src.visualization import save_execution_trace
+    from src.workflow_server import create_chatbot_workflow, create_project_workflow
+
+    execution_id = str(uuid.uuid4())[:8]
+
+    if name == "chatbot":
+        if not query:
+            raise HTTPException(
+                status_code=400,
+                detail="Query parameter required for chatbot workflow",
+            )
+
+        workflow = create_chatbot_workflow()
+
+        try:
+            # Run the workflow
+            handler = workflow.run(query=query, top_k=top_k)
+            result = await handler
+
+            # Save execution trace
+            trace_file = save_execution_trace(handler, name, execution_id)
+
+            return {
+                "execution_id": execution_id,
+                "workflow": name,
+                "trace_file": trace_file,
+                "result": {
+                    "response": result.response,
+                    "source_projects": result.source_projects,
+                    "projects_found": result.projects_found,
+                },
+            }
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Workflow execution failed: {str(e)}",
+            )
+
+    elif name == "project":
+        if not comment_id or not comment_text:
+            raise HTTPException(
+                status_code=400,
+                detail="comment_id and comment_text parameters required for project workflow",
+            )
+
+        workflow = create_project_workflow()
+
+        try:
+            # Run the workflow
+            handler = workflow.run(
+                comment_id=comment_id,
+                comment_text=comment_text,
+            )
+            result = await handler
+
+            # Save execution trace
+            trace_file = save_execution_trace(handler, name, execution_id)
+
+            return {
+                "execution_id": execution_id,
+                "workflow": name,
+                "trace_file": trace_file,
+                "result": result,
+            }
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Workflow execution failed: {str(e)}",
+            )
+
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Workflow '{name}' not found. Available: project, chatbot",
         )

@@ -29,13 +29,33 @@ def run_migrations():
         build_vector_index,
         init_db,
         init_vector_search,
+        engine,
     )
+    from sqlalchemy import text
 
     logger.info(f"Database path: {DATABASE_PATH}")
 
     # Initialize database tables
     logger.info("Creating database tables...")
     init_db()
+
+    # Run column migrations for existing tables
+    logger.info("Running column migrations...")
+    with engine.connect() as conn:
+        # Add is_bookmarked column to waywo_projects if it doesn't exist
+        try:
+            conn.execute(
+                text(
+                    "ALTER TABLE waywo_projects ADD COLUMN is_bookmarked BOOLEAN NOT NULL DEFAULT 0"
+                )
+            )
+            conn.commit()
+            logger.info("Added is_bookmarked column to waywo_projects")
+        except Exception as e:
+            if "duplicate column name" in str(e).lower():
+                logger.info("is_bookmarked column already exists")
+            else:
+                logger.warning(f"Could not add is_bookmarked column: {e}")
 
     # Explicitly re-run vector search init to ensure it's set up
     # This is idempotent - safe to run multiple times

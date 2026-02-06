@@ -188,7 +188,9 @@ def process_waywo_comment(self, comment_id: int) -> dict:
     # Delete existing projects for this comment (allows reprocessing)
     deleted_count = delete_projects_for_comment(comment_id)
     if deleted_count > 0:
-        print(f"🗑️ Deleted {deleted_count} existing project(s) for comment {comment_id}")
+        print(
+            f"🗑️ Deleted {deleted_count} existing project(s) for comment {comment_id}"
+        )
 
     # Get service URLs from environment
     firecrawl_url = os.environ.get("FIRECRAWL_URL", "http://localhost:3002")
@@ -210,13 +212,15 @@ def process_waywo_comment(self, comment_id: int) -> dict:
     except Exception as e:
         print(f"❌ Workflow failed for comment {comment_id}: {e}")
         # Retry with exponential backoff
-        raise self.retry(exc=e, countdown=2 ** self.request.retries)
+        raise self.retry(exc=e, countdown=2**self.request.retries)
 
     # Extract projects from result
     projects_data = result.get("projects", [])
     logs = result.get("logs", [])
 
-    print(f"✅ Workflow completed for comment {comment_id}, found {len(projects_data)} project(s)")
+    print(
+        f"✅ Workflow completed for comment {comment_id}, found {len(projects_data)} project(s)"
+    )
 
     # Save only valid projects to database
     saved_project_ids = []
@@ -225,7 +229,9 @@ def process_waywo_comment(self, comment_id: int) -> dict:
         # Skip invalid projects - don't create records for them
         if not proj_data.get("is_valid", False):
             invalid_reason = proj_data.get("invalid_reason", "unknown")
-            print(f"⏭️ Skipping invalid project for comment {comment_id}: {invalid_reason}")
+            print(
+                f"⏭️ Skipping invalid project for comment {comment_id}: {invalid_reason}"
+            )
             skipped_invalid += 1
             continue
 

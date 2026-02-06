@@ -188,9 +188,7 @@ def comment_exists(comment_id: int) -> bool:
     """Check if a comment exists in the database."""
     db = get_db_session()
     try:
-        count = (
-            db.query(WaywoCommentDB).filter(WaywoCommentDB.id == comment_id).count()
-        )
+        count = db.query(WaywoCommentDB).filter(WaywoCommentDB.id == comment_id).count()
         return count > 0
     finally:
         db.close()
@@ -229,9 +227,7 @@ def get_comment_count_for_post(post_id: int) -> int:
     db = get_db_session()
     try:
         count = (
-            db.query(WaywoCommentDB)
-            .filter(WaywoCommentDB.id.in_(post.kids))
-            .count()
+            db.query(WaywoCommentDB).filter(WaywoCommentDB.id.in_(post.kids)).count()
         )
         return count
     finally:
@@ -374,11 +370,17 @@ def save_project(project: WaywoProject, embedding: list[float] | None = None) ->
             short_description=project.short_description,
             description=project.description,
             hashtags=json.dumps(project.hashtags),
-            project_urls=json.dumps(project.project_urls) if project.project_urls else None,
-            url_summaries=json.dumps(project.url_summaries) if project.url_summaries else None,
+            project_urls=(
+                json.dumps(project.project_urls) if project.project_urls else None
+            ),
+            url_summaries=(
+                json.dumps(project.url_summaries) if project.url_summaries else None
+            ),
             idea_score=project.idea_score,
             complexity_score=project.complexity_score,
-            workflow_logs=json.dumps(project.workflow_logs) if project.workflow_logs else None,
+            workflow_logs=(
+                json.dumps(project.workflow_logs) if project.workflow_logs else None
+            ),
             description_embedding=embedding_blob,
             created_at=project.created_at,
             processed_at=project.processed_at,
@@ -410,13 +412,20 @@ def get_project(project_id: int) -> WaywoProject | None:
             short_description=db_project.short_description,
             description=db_project.description,
             hashtags=json.loads(db_project.hashtags) if db_project.hashtags else [],
-            project_urls=json.loads(db_project.project_urls) if db_project.project_urls else [],
-            url_summaries=json.loads(db_project.url_summaries) if db_project.url_summaries else {},
+            project_urls=(
+                json.loads(db_project.project_urls) if db_project.project_urls else []
+            ),
+            url_summaries=(
+                json.loads(db_project.url_summaries) if db_project.url_summaries else {}
+            ),
             idea_score=db_project.idea_score,
             complexity_score=db_project.complexity_score,
-            workflow_logs=json.loads(db_project.workflow_logs) if db_project.workflow_logs else [],
+            workflow_logs=(
+                json.loads(db_project.workflow_logs) if db_project.workflow_logs else []
+            ),
             created_at=db_project.created_at,
             processed_at=db_project.processed_at,
+            is_bookmarked=db_project.is_bookmarked,
         )
     finally:
         db.close()
@@ -449,6 +458,7 @@ def get_projects_for_comment(comment_id: int) -> list[WaywoProject]:
                 workflow_logs=json.loads(p.workflow_logs) if p.workflow_logs else [],
                 created_at=p.created_at,
                 processed_at=p.processed_at,
+                is_bookmarked=p.is_bookmarked,
             )
             for p in db_projects
         ]
@@ -476,12 +486,39 @@ def delete_project(project_id: int) -> bool:
     db = get_db_session()
     try:
         count = (
-            db.query(WaywoProjectDB)
-            .filter(WaywoProjectDB.id == project_id)
-            .delete()
+            db.query(WaywoProjectDB).filter(WaywoProjectDB.id == project_id).delete()
         )
         db.commit()
         return count > 0
+    finally:
+        db.close()
+
+
+def toggle_bookmark(project_id: int) -> bool | None:
+    """Toggle bookmark status for a project. Returns new status, or None if not found."""
+    db = get_db_session()
+    try:
+        db_project = (
+            db.query(WaywoProjectDB).filter(WaywoProjectDB.id == project_id).first()
+        )
+        if db_project is None:
+            return None
+        db_project.is_bookmarked = not db_project.is_bookmarked
+        db.commit()
+        return db_project.is_bookmarked
+    finally:
+        db.close()
+
+
+def get_bookmarked_count() -> int:
+    """Get count of bookmarked projects."""
+    db = get_db_session()
+    try:
+        return (
+            db.query(WaywoProjectDB)
+            .filter(WaywoProjectDB.is_bookmarked == True)
+            .count()
+        )
     finally:
         db.close()
 
@@ -497,6 +534,7 @@ def get_all_projects(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     is_valid: bool | None = None,
+    is_bookmarked: bool | None = None,
 ) -> list[WaywoProject]:
     """Get all projects with optional filtering."""
     db = get_db_session()
@@ -514,10 +552,14 @@ def get_all_projects(
             query = query.filter(WaywoProjectDB.idea_score <= max_idea_score)
 
         if min_complexity_score is not None:
-            query = query.filter(WaywoProjectDB.complexity_score >= min_complexity_score)
+            query = query.filter(
+                WaywoProjectDB.complexity_score >= min_complexity_score
+            )
 
         if max_complexity_score is not None:
-            query = query.filter(WaywoProjectDB.complexity_score <= max_complexity_score)
+            query = query.filter(
+                WaywoProjectDB.complexity_score <= max_complexity_score
+            )
 
         if date_from is not None:
             query = query.filter(WaywoProjectDB.created_at >= date_from)
@@ -525,14 +567,15 @@ def get_all_projects(
         if date_to is not None:
             query = query.filter(WaywoProjectDB.created_at <= date_to)
 
+        if is_bookmarked is not None:
+            query = query.filter(WaywoProjectDB.is_bookmarked == is_bookmarked)
+
         # Tag filtering (search in JSON array)
         if tags:
             # SQLite JSON search - check if any tag is contained in hashtags
             tag_conditions = []
             for tag in tags:
-                tag_conditions.append(
-                    WaywoProjectDB.hashtags.like(f'%"{tag}"%')
-                )
+                tag_conditions.append(WaywoProjectDB.hashtags.like(f'%"{tag}"%'))
             query = query.filter(or_(*tag_conditions))
 
         # Order and paginate
@@ -562,6 +605,7 @@ def get_all_projects(
                 workflow_logs=json.loads(p.workflow_logs) if p.workflow_logs else [],
                 created_at=p.created_at,
                 processed_at=p.processed_at,
+                is_bookmarked=p.is_bookmarked,
             )
             for p in db_projects
         ]
@@ -639,8 +683,7 @@ def semantic_search(
                 ORDER BY v.distance ASC
             """)
             result = db.execute(
-                sql,
-                {"query": query_blob, "limit": limit * 2, "is_valid": is_valid}
+                sql, {"query": query_blob, "limit": limit * 2, "is_valid": is_valid}
             )
         else:
             sql = text("""
@@ -648,10 +691,7 @@ def semantic_search(
                 FROM vector_full_scan('waywo_projects', 'description_embedding', :query, :limit) AS v
                 ORDER BY v.distance ASC
             """)
-            result = db.execute(
-                sql,
-                {"query": query_blob, "limit": limit}
-            )
+            result = db.execute(sql, {"query": query_blob, "limit": limit})
 
         # Fetch projects and convert distances to similarity scores
         results = []
@@ -670,6 +710,7 @@ def semantic_search(
     except Exception as e:
         # If vector search fails (e.g., not initialized), return empty
         import logging
+
         logging.getLogger(__name__).warning(f"Semantic search failed: {e}")
         return []
     finally:
@@ -732,15 +773,15 @@ def get_database_stats() -> dict[str, int]:
             "posts_count": db.query(WaywoPostDB).count(),
             "comments_count": db.query(WaywoCommentDB).count(),
             "projects_count": db.query(WaywoProjectDB).count(),
-            "processed_comments_count": db.query(WaywoCommentDB).filter(
-                WaywoCommentDB.processed == True
-            ).count(),
-            "valid_projects_count": db.query(WaywoProjectDB).filter(
-                WaywoProjectDB.is_valid_project == True
-            ).count(),
-            "projects_with_embeddings_count": db.query(WaywoProjectDB).filter(
-                WaywoProjectDB.description_embedding.isnot(None)
-            ).count(),
+            "processed_comments_count": db.query(WaywoCommentDB)
+            .filter(WaywoCommentDB.processed == True)
+            .count(),
+            "valid_projects_count": db.query(WaywoProjectDB)
+            .filter(WaywoProjectDB.is_valid_project == True)
+            .count(),
+            "projects_with_embeddings_count": db.query(WaywoProjectDB)
+            .filter(WaywoProjectDB.description_embedding.isnot(None))
+            .count(),
         }
     finally:
         db.close()

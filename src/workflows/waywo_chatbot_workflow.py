@@ -3,27 +3,43 @@ LlamaIndex RAG workflow for the Waywo chatbot.
 
 This workflow provides conversational access to project data using
 vector similarity search and LLM-powered response generation.
+
+Workflow Steps:
+1. start -> ChatQueryEvent
+2. generate_query_embedding -> QueryEmbeddingEvent
+3. retrieve_projects -> ProjectsRetrievedEvent
+4. generate_response -> StopEvent(ChatbotResult)
 """
 
 import logging
 from dataclasses import dataclass
 from typing import Any
 
-from llama_index.core import Document, Settings, VectorStoreIndex
-from llama_index.core.base.base_query_engine import BaseQueryEngine
-from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.schema import NodeWithScore, TextNode
+from llama_index.core import Settings
+from llama_index.core.schema import TextNode
 from llama_index.core.vector_stores.types import (
     BasePydanticVectorStore,
     VectorStoreQuery,
     VectorStoreQueryResult,
 )
+from llama_index.core.workflow import (
+    Context,
+    StartEvent,
+    StopEvent,
+    Workflow,
+    step,
+)
 
-from src.db_client import get_all_projects, semantic_search
+from src.db_client import semantic_search
 from src.embedding_client import get_single_embedding
 from src.llm_config import get_llm
 from src.models import WaywoProject
-from src.workflows.prompts import CHATBOT_SYSTEM_PROMPT as WAYWO_SYSTEM_PROMPT
+from src.workflows.events import (
+    ChatQueryEvent,
+    ChatResponseEvent,
+    ProjectsRetrievedEvent,
+    QueryEmbeddingEvent,
+)
 from src.workflows.prompts import chatbot_response_prompt
 
 logger = logging.getLogger(__name__)
@@ -81,8 +97,6 @@ class WaywoVectorStore(BasePydanticVectorStore):
         Returns:
             VectorStoreQueryResult with matching nodes and similarities
         """
-        import asyncio
-
         if query.query_embedding is None:
             return VectorStoreQueryResult(nodes=[], similarities=[], ids=[])
 
@@ -133,18 +147,24 @@ Idea Score: {project.idea_score}/10
 Complexity Score: {project.complexity_score}/10"""
 
 
-class WaywoChatbotWorkflow:
+class WaywoChatbotWorkflow(Workflow):
     """
     RAG workflow for conversational access to Waywo projects.
 
-    Uses LlamaIndex VectorStoreIndex with a custom vector store that
-    queries our SQLite database with sqlite-vector.
+    Uses LlamaIndex Workflow with @step decorators to process
+    chat queries through semantic search and LLM response generation.
+
+    Workflow Flow:
+        StartEvent -> ChatQueryEvent -> QueryEmbeddingEvent ->
+        ProjectsRetrievedEvent -> StopEvent(ChatbotResult)
     """
 
     def __init__(
         self,
+        *args,
         embedding_url: str = "http://192.168.5.96:8000",
         top_k: int = 5,
+        **kwargs,
     ):
         """
         Initialize the chatbot workflow.
@@ -153,6 +173,7 @@ class WaywoChatbotWorkflow:
             embedding_url: URL of the embedding service
             top_k: Number of similar projects to retrieve for context
         """
+        super().__init__(*args, **kwargs)
         self.embedding_url = embedding_url
         self.top_k = top_k
         self.llm = get_llm()
@@ -161,38 +182,85 @@ class WaywoChatbotWorkflow:
         Settings.llm = self.llm
         Settings.embed_model = None  # We use our own embedding service
 
-        # Create the vector store and index
+        # Create the vector store
         self.vector_store = WaywoVectorStore(embedding_url=embedding_url)
 
-    async def _get_query_embedding(self, query: str) -> list[float]:
-        """Get embedding for the user's query."""
-        return await get_single_embedding(
-            text=query,
-            embedding_url=self.embedding_url,
-        )
+    @step
+    async def start(self, ctx: Context, ev: StartEvent) -> ChatQueryEvent:
+        """
+        Initialize the chatbot workflow with query data.
 
-    async def _retrieve_projects(
-        self, query_embedding: list[float]
-    ) -> list[tuple[WaywoProject, float]]:
-        """Retrieve relevant projects using semantic search."""
-        return semantic_search(
-            query_embedding=query_embedding,
-            limit=self.top_k,
-            is_valid=True,
-        )
+        Extracts query and top_k from StartEvent and emits ChatQueryEvent.
+        """
+        query = ev.query
+        top_k = ev.get("top_k", self.top_k)
 
-    def _build_context(
-        self, projects: list[tuple[WaywoProject, float]]
-    ) -> str:
-        """Build context string from retrieved projects."""
-        if not projects:
-            return "No relevant projects found in the database."
+        logger.info(f"🤖 Starting chatbot workflow for query: {query[:50]}...")
 
-        context_parts = ["Here are the most relevant projects:\n"]
+        # Store query in context for logging
+        await ctx.store.set("query", query)
 
-        for i, (project, similarity) in enumerate(projects, 1):
-            hashtags_str = ", ".join(f"#{tag}" for tag in project.hashtags)
-            context_parts.append(f"""
+        return ChatQueryEvent(query=query, top_k=top_k)
+
+    @step
+    async def generate_query_embedding(
+        self, ctx: Context, ev: ChatQueryEvent
+    ) -> QueryEmbeddingEvent:
+        """
+        Generate embedding for the user's query.
+        """
+        logger.info(f"🧠 Generating query embedding...")
+
+        try:
+            query_embedding = await get_single_embedding(
+                text=ev.query,
+                embedding_url=self.embedding_url,
+            )
+            logger.info(f"✅ Got query embedding ({len(query_embedding)} dims)")
+
+            return QueryEmbeddingEvent(
+                query=ev.query,
+                top_k=ev.top_k,
+                query_embedding=query_embedding,
+            )
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get query embedding: {e}")
+            # Return empty embedding - will result in no results
+            return QueryEmbeddingEvent(
+                query=ev.query,
+                top_k=ev.top_k,
+                query_embedding=[],
+            )
+
+    @step
+    async def retrieve_projects(
+        self, ctx: Context, ev: QueryEmbeddingEvent
+    ) -> ProjectsRetrievedEvent:
+        """
+        Retrieve relevant projects using semantic search.
+        """
+        logger.info(f"📚 Retrieving projects with top_k={ev.top_k}...")
+
+        projects: list[dict] = []
+        context = "No relevant projects found in the database."
+
+        if ev.query_embedding:
+            try:
+                results = semantic_search(
+                    query_embedding=ev.query_embedding,
+                    limit=ev.top_k,
+                    is_valid=True,
+                )
+                logger.info(f"📚 Retrieved {len(results)} relevant projects")
+
+                # Build context and project list
+                if results:
+                    context_parts = ["Here are the most relevant projects:\n"]
+
+                    for i, (project, similarity) in enumerate(results, 1):
+                        hashtags_str = ", ".join(f"#{tag}" for tag in project.hashtags)
+                        context_parts.append(f"""
 ---
 Project {i}: {project.title}
 Relevance: {similarity:.0%}
@@ -201,78 +269,73 @@ Tags: {hashtags_str}
 Idea Score: {project.idea_score}/10 | Complexity Score: {project.complexity_score}/10
 ---""")
 
-        return "\n".join(context_parts)
+                        projects.append(
+                            {
+                                "id": project.id,
+                                "title": project.title,
+                                "short_description": project.short_description,
+                                "similarity": round(similarity, 4),
+                                "hashtags": project.hashtags,
+                                "idea_score": project.idea_score,
+                                "complexity_score": project.complexity_score,
+                            }
+                        )
 
-    async def _generate_response(self, query: str, context: str) -> str:
-        """Generate a response using the LLM with context."""
-        prompt = chatbot_response_prompt(query=query, context=context)
-        response = await self.llm.acomplete(prompt)
-        return str(response)
+                    context = "\n".join(context_parts)
 
-    async def chat(self, query: str) -> ChatbotResult:
+            except Exception as e:
+                logger.error(f"❌ Failed to retrieve projects: {e}")
+
+        return ProjectsRetrievedEvent(
+            query=ev.query,
+            projects=projects,
+            context=context,
+        )
+
+    @step
+    async def generate_response(
+        self, ctx: Context, ev: ProjectsRetrievedEvent
+    ) -> StopEvent:
         """
-        Process a chat message and return a response.
+        Generate a response using the LLM with context from retrieved projects.
+        """
+        logger.info(f"💬 Generating response...")
+
+        try:
+            prompt = chatbot_response_prompt(query=ev.query, context=ev.context)
+            response = await self.llm.acomplete(prompt)
+            response_text = str(response)
+            logger.info("✅ Generated response")
+
+        except Exception as e:
+            logger.error(f"❌ Failed to generate response: {e}")
+            response_text = "I'm sorry, I couldn't generate a response due to an error."
+
+        result = ChatbotResult(
+            response=response_text,
+            source_projects=ev.projects,
+            query=ev.query,
+            projects_found=len(ev.projects),
+        )
+
+        return StopEvent(result=result)
+
+    async def chat(self, query: str, top_k: int = None) -> ChatbotResult:
+        """
+        Convenience method to run a chat query.
 
         Args:
             query: The user's question or message
+            top_k: Override the default top_k value
 
         Returns:
             ChatbotResult with response and source projects
         """
-        logger.info(f"🤖 Processing chat query: {query[:50]}...")
+        if top_k is None:
+            top_k = self.top_k
 
-        # Step 1: Get query embedding
-        try:
-            query_embedding = await self._get_query_embedding(query)
-            logger.info(f"✅ Got query embedding ({len(query_embedding)} dims)")
-        except Exception as e:
-            logger.error(f"❌ Failed to get query embedding: {e}")
-            return ChatbotResult(
-                response="I'm sorry, I couldn't process your question due to an embedding service error.",
-                source_projects=[],
-                query=query,
-                projects_found=0,
-            )
-
-        # Step 2: Retrieve relevant projects
-        try:
-            results = await self._retrieve_projects(query_embedding)
-            logger.info(f"📚 Retrieved {len(results)} relevant projects")
-        except Exception as e:
-            logger.error(f"❌ Failed to retrieve projects: {e}")
-            results = []
-
-        # Step 3: Build context
-        context = self._build_context(results)
-
-        # Step 4: Generate response
-        try:
-            response = await self._generate_response(query, context)
-            logger.info("✅ Generated response")
-        except Exception as e:
-            logger.error(f"❌ Failed to generate response: {e}")
-            response = "I'm sorry, I couldn't generate a response due to an error."
-
-        # Build source projects list for the response
-        source_projects = [
-            {
-                "id": project.id,
-                "title": project.title,
-                "short_description": project.short_description,
-                "similarity": round(similarity, 4),
-                "hashtags": project.hashtags,
-                "idea_score": project.idea_score,
-                "complexity_score": project.complexity_score,
-            }
-            for project, similarity in results
-        ]
-
-        return ChatbotResult(
-            response=response,
-            source_projects=source_projects,
-            query=query,
-            projects_found=len(results),
-        )
+        result = await self.run(query=query, top_k=top_k)
+        return result
 
 
 async def run_chatbot_query(
@@ -294,5 +357,6 @@ async def run_chatbot_query(
     chatbot = WaywoChatbotWorkflow(
         embedding_url=embedding_url,
         top_k=top_k,
+        timeout=120,
     )
     return await chatbot.chat(query)

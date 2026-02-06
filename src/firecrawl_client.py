@@ -220,9 +220,7 @@ async def scrape_url(
                             + "\n\n[Content truncated...]"
                         )
 
-                    logger.info(
-                        f"✅ Fetched {len(content)} chars from {url[:40]}..."
-                    )
+                    logger.info(f"✅ Fetched {len(content)} chars from {url[:40]}...")
 
                     return ScrapeResult(
                         url=url,
@@ -258,7 +256,7 @@ async def scrape_url(
 
         # Exponential backoff before retry
         if attempt < max_retries - 1:
-            wait_time = 2 ** attempt  # 1, 2, 4 seconds
+            wait_time = 2**attempt  # 1, 2, 4 seconds
             logger.info(f"⏳ Waiting {wait_time}s before retry...")
             await asyncio.sleep(wait_time)
 

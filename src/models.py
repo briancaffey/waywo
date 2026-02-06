@@ -100,6 +100,9 @@ class WaywoProject(BaseModel):
     # Workflow metadata
     workflow_logs: list[str] = Field(default_factory=list)
 
+    # Bookmarking
+    is_bookmarked: bool = False
+
 
 class WaywoProjectSummary(BaseModel):
     """Summary of a WaywoProject for list views."""
@@ -112,6 +115,7 @@ class WaywoProjectSummary(BaseModel):
     idea_score: int
     complexity_score: int
     is_valid_project: bool
+    is_bookmarked: bool
     created_at: datetime
 
 

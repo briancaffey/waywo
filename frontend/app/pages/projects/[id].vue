@@ -31,6 +31,21 @@
           <div class="flex items-start justify-between mb-4">
             <div>
               <div class="flex items-center gap-3 mb-2">
+                <button
+                  @click="toggleBookmark"
+                  :disabled="isTogglingBookmark"
+                  class="hover:scale-110 transition-transform"
+                  :title="project.is_bookmarked ? 'Remove bookmark' : 'Add bookmark'"
+                >
+                  <Icon
+                    name="lucide:star"
+                    :class="[
+                      'h-7 w-7 transition-colors',
+                      project.is_bookmarked ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground hover:text-yellow-500',
+                      isTogglingBookmark ? 'animate-pulse' : ''
+                    ]"
+                  />
+                </button>
                 <h1 class="text-3xl font-bold">{{ project.title }}</h1>
                 <Badge v-if="!project.is_valid_project" variant="destructive">
                   Invalid
@@ -228,6 +243,7 @@ interface WaywoProject {
   url_summaries: Record<string, string>
   idea_score: number
   complexity_score: number
+  is_bookmarked: boolean
   created_at: string
   processed_at: string
   workflow_logs: string[]
@@ -272,6 +288,7 @@ const parentPost = ref<WaywoPost | null>(null)
 const isLoading = ref(false)
 const fetchError = ref<string | null>(null)
 const isDeleting = ref(false)
+const isTogglingBookmark = ref(false)
 
 // Format date
 function formatDate(dateStr: string): string {
@@ -341,6 +358,25 @@ async function deleteProject() {
     console.error('Failed to delete project:', err)
     alert('Failed to delete project. Please try again.')
     isDeleting.value = false
+  }
+}
+
+// Toggle bookmark
+async function toggleBookmark() {
+  if (isTogglingBookmark.value || !project.value) return
+
+  isTogglingBookmark.value = true
+
+  try {
+    const response = await $fetch<{ is_bookmarked: boolean; project_id: number }>(
+      `${config.public.apiBase}/api/waywo-projects/${projectId.value}/bookmark`,
+      { method: 'POST' }
+    )
+    project.value.is_bookmarked = response.is_bookmarked
+  } catch (err) {
+    console.error('Failed to toggle bookmark:', err)
+  } finally {
+    isTogglingBookmark.value = false
   }
 }
 

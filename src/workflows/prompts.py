@@ -6,7 +6,6 @@ the formatted string. The WORKFLOW_STEPS registry makes every step and its
 prompt inspectable via the API.
 """
 
-
 # ---------------------------------------------------------------------------
 # 1. Project Extraction
 # ---------------------------------------------------------------------------

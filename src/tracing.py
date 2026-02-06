@@ -70,8 +70,12 @@ def init_tracing(service_name: str = "waywo") -> None:
         _initialized = True
         logger.info("✅ Tracing initialized successfully")
         logger.info(f"🌐 View traces at http://{phoenix_host}:{phoenix_port}")
-        print(f"🔭 Tracing initialized - sending traces to http://{phoenix_host}:{phoenix_port}")
+        print(
+            f"🔭 Tracing initialized - sending traces to http://{phoenix_host}:{phoenix_port}"
+        )
 
     except Exception as e:
         logger.warning(f"⚠️ Failed to initialize tracing: {e}")
-        logger.warning("Continuing without tracing - LlamaIndex will still work normally")
+        logger.warning(
+            "Continuing without tracing - LlamaIndex will still work normally"
+        )

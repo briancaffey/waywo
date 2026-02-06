@@ -108,7 +108,9 @@ class WaywoProjectWorkflow(Workflow):
         )
 
     @step
-    async def extract_projects(self, ctx: Context, ev: CommentInputEvent) -> ExtractedProjectEvent:
+    async def extract_projects(
+        self, ctx: Context, ev: CommentInputEvent
+    ) -> ExtractedProjectEvent:
         """
         Extract individual project(s) from the comment text.
 
@@ -149,7 +151,9 @@ class WaywoProjectWorkflow(Workflow):
                 projects = [comment_text]
 
         except (json.JSONDecodeError, Exception) as e:
-            await self._log(ctx, "⚠️", f"Failed to parse projects, using full text: {e}")
+            await self._log(
+                ctx, "⚠️", f"Failed to parse projects, using full text: {e}"
+            )
             projects = [comment_text]
 
         await self._log(ctx, "📊", f"Found {len(projects)} project(s) in comment")
@@ -177,7 +181,9 @@ class WaywoProjectWorkflow(Workflow):
         )
 
     @step
-    async def validate_project(self, ctx: Context, ev: ExtractedProjectEvent) -> ValidatedProjectEvent:
+    async def validate_project(
+        self, ctx: Context, ev: ExtractedProjectEvent
+    ) -> ValidatedProjectEvent:
         """
         Validate whether the extracted text represents a valid project/product.
 
@@ -187,7 +193,9 @@ class WaywoProjectWorkflow(Workflow):
         - Study/learning activities ("studying C#")
         - General discussions without a concrete project
         """
-        await self._log(ctx, "✓", f"Validating project {ev.project_index + 1}/{ev.total_projects}")
+        await self._log(
+            ctx, "✓", f"Validating project {ev.project_index + 1}/{ev.total_projects}"
+        )
 
         raw_text = ev.raw_text.strip()
 
@@ -242,11 +250,15 @@ class WaywoProjectWorkflow(Workflow):
             )
 
     @step
-    async def fetch_urls(self, ctx: Context, ev: ValidatedProjectEvent) -> URLsFetchedEvent:
+    async def fetch_urls(
+        self, ctx: Context, ev: ValidatedProjectEvent
+    ) -> URLsFetchedEvent:
         """
         Extract URLs from the project text and fetch their content via Firecrawl.
         """
-        await self._log(ctx, "🔗", f"Extracting URLs from project {ev.project_index + 1}")
+        await self._log(
+            ctx, "🔗", f"Extracting URLs from project {ev.project_index + 1}"
+        )
 
         # Extract URLs using firecrawl_client (handles validation and deduplication)
         cleaned_urls = extract_urls_from_text(ev.raw_text)
@@ -269,11 +281,15 @@ class WaywoProjectWorkflow(Workflow):
                 if result.success and result.content:
                     url_contents[result.url] = result.content
                     await self._log(
-                        ctx, "✅", f"Fetched {len(result.content)} chars from {result.url[:40]}..."
+                        ctx,
+                        "✅",
+                        f"Fetched {len(result.content)} chars from {result.url[:40]}...",
                     )
                 elif result.error:
                     url_errors[result.url] = result.error
-                    await self._log(ctx, "⚠️", f"Failed: {result.url[:40]}: {result.error}")
+                    await self._log(
+                        ctx, "⚠️", f"Failed: {result.url[:40]}: {result.error}"
+                    )
 
         return URLsFetchedEvent(
             comment_id=ev.comment_id,
@@ -289,11 +305,15 @@ class WaywoProjectWorkflow(Workflow):
         )
 
     @step
-    async def generate_metadata(self, ctx: Context, ev: URLsFetchedEvent) -> MetadataGeneratedEvent:
+    async def generate_metadata(
+        self, ctx: Context, ev: URLsFetchedEvent
+    ) -> MetadataGeneratedEvent:
         """
         Generate metadata: title, descriptions, hashtags, and URL summaries.
         """
-        await self._log(ctx, "📝", f"Generating metadata for project {ev.project_index + 1}")
+        await self._log(
+            ctx, "📝", f"Generating metadata for project {ev.project_index + 1}"
+        )
 
         # Default values for invalid projects
         if not ev.is_valid:
@@ -301,7 +321,8 @@ class WaywoProjectWorkflow(Workflow):
                 **ev.model_dump(),
                 title="[Invalid Project]",
                 short_description="Not a valid project",
-                description=ev.invalid_reason or "This comment does not describe a valid project.",
+                description=ev.invalid_reason
+                or "This comment does not describe a valid project.",
                 hashtags=[],
                 url_summaries={},
             )
@@ -364,11 +385,15 @@ class WaywoProjectWorkflow(Workflow):
             )
 
     @step
-    async def score_project(self, ctx: Context, ev: MetadataGeneratedEvent) -> ScoredProjectEvent:
+    async def score_project(
+        self, ctx: Context, ev: MetadataGeneratedEvent
+    ) -> ScoredProjectEvent:
         """
         Score the project on idea quality and complexity.
         """
-        await self._log(ctx, "📊", f"Scoring project {ev.project_index + 1}: {ev.title}")
+        await self._log(
+            ctx, "📊", f"Scoring project {ev.project_index + 1}: {ev.title}"
+        )
 
         # Default scores for invalid projects
         if not ev.is_valid:
@@ -421,7 +446,9 @@ class WaywoProjectWorkflow(Workflow):
         Generate embedding for semantic search using the embedding service.
         Combines title + description + hashtags for richer semantic representation.
         """
-        await self._log(ctx, "🧠", f"Generating embedding for project {ev.project_index + 1}")
+        await self._log(
+            ctx, "🧠", f"Generating embedding for project {ev.project_index + 1}"
+        )
 
         embedding: list[float] | None = None
 
@@ -461,7 +488,9 @@ class WaywoProjectWorkflow(Workflow):
         )
 
     @step
-    async def finalize(self, ctx: Context, ev: EmbeddingGeneratedEvent) -> StopEvent | None:
+    async def finalize(
+        self, ctx: Context, ev: EmbeddingGeneratedEvent
+    ) -> StopEvent | None:
         """
         Finalize the project and collect results.
         """
