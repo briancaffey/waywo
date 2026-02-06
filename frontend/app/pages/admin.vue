@@ -153,6 +153,21 @@
       <!-- Maintenance Actions -->
       <Card class="p-6 mb-8">
         <h2 class="text-xl font-semibold mb-4">Maintenance</h2>
+
+        <!-- View Workflow Prompts -->
+        <a href="/prompts" class="flex items-center justify-between p-4 border rounded-lg mb-4 hover:bg-accent transition-colors">
+          <div class="flex items-center gap-3">
+            <Icon name="lucide:file-text" class="h-5 w-5 text-muted-foreground" />
+            <div>
+              <h3 class="font-medium">Workflow Prompts</h3>
+              <p class="text-sm text-muted-foreground">
+                View and inspect all prompt templates used in the processing pipeline
+              </p>
+            </div>
+          </div>
+          <Icon name="lucide:arrow-right" class="h-5 w-5 text-muted-foreground" />
+        </a>
+
         <div class="flex items-center justify-between p-4 border rounded-lg">
           <div class="flex items-center gap-3">
             <Icon name="lucide:search" class="h-5 w-5 text-muted-foreground" />

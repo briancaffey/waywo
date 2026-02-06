@@ -1,5 +1,6 @@
 import os
 from celery import Celery
+from celery.signals import worker_process_init
 
 # Create Celery app instance
 celery_app = Celery(
@@ -33,6 +34,13 @@ from src.celery_beat import beat_schedule
 
 # Apply beat schedule
 celery_app.conf.beat_schedule = beat_schedule
+
+
+@worker_process_init.connect
+def init_worker_tracing(**kwargs):
+    """Initialize tracing when a Celery worker process starts."""
+    from src.tracing import init_tracing
+    init_tracing(service_name="waywo-worker")
 
 
 @celery_app.task(name="debug_task")

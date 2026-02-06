@@ -42,6 +42,12 @@ from src.workflows.events import (
     URLsFetchedEvent,
     ValidatedProjectEvent,
 )
+from src.workflows.prompts import (
+    extract_projects_prompt,
+    generate_metadata_prompt,
+    score_project_prompt,
+    validate_project_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -112,9 +118,9 @@ class WaywoProjectWorkflow(Workflow):
 
         comment_text = ev.comment_text or ""
 
-        # Quick check for deleted/removed comments
-        if comment_text.strip() in ["[deleted]", "[removed]", ""]:
-            await self._log(ctx, "❌", "Comment is deleted/removed")
+        # Quick check for deleted/removed/dead comments
+        if comment_text.strip() in ["[deleted]", "[removed]", "[dead]", ""]:
+            await self._log(ctx, "❌", "Comment is deleted/removed/dead, skipping")
             await ctx.store.set("total_projects", 1)
             return ExtractedProjectEvent(
                 comment_id=ev.comment_id,
@@ -125,22 +131,7 @@ class WaywoProjectWorkflow(Workflow):
             )
 
         # Use LLM to identify and split projects
-        prompt = f"""Analyze this Hacker News comment and identify distinct projects or products being discussed.
-
-Comment:
-{comment_text}
-
-Instructions:
-1. If the comment describes ONE project/product, return a JSON array with one element containing the full text.
-2. If the comment lists MULTIPLE distinct projects (e.g., "Project A: ..., Project B: ..."), split them and return each as a separate element.
-3. Each element should contain enough context to understand the project independently.
-4. If it's not about any project/product (e.g., just a question, greeting, or off-topic), return a single element with the original text.
-
-Return ONLY a valid JSON array of strings, nothing else. Example:
-["First project description...", "Second project description..."]
-
-If there's only one project or it's not a project at all:
-["The complete text..."]"""
+        prompt = extract_projects_prompt(comment_text)
 
         try:
             response = await self.llm.acomplete(prompt)
@@ -216,35 +207,7 @@ If there's only one project or it's not a project at all:
             )
 
         # Use LLM to validate
-        prompt = f"""Analyze this text from a Hacker News "What are you working on?" thread.
-
-Text:
-{raw_text}
-
-Determine if this describes a VALID PROJECT or PRODUCT.
-
-A VALID project is:
-- A software application, website, tool, or service being built
-- A hardware product or physical invention
-- A creative work (game, book, course, art project) with tangible output
-- An open source library or framework
-- A startup or business venture
-- A technical craft or specialized skill project
-
-NOT valid (should be filtered):
-- Personal life activities ("cleaning garage", "moving house")
-- General learning/studying without building something ("studying Python", "reading about ML")
-- Just asking questions or making comments
-- Job hunting or career discussions
-- Vague statements without concrete deliverables
-
-Return a JSON object with exactly these fields:
-{{
-  "is_valid": true/false,
-  "reason": "brief explanation"
-}}
-
-Return ONLY the JSON, nothing else."""
+        prompt = validate_project_prompt(raw_text)
 
         try:
             response = await self.llm_structured.acomplete(prompt)
@@ -352,32 +315,7 @@ Return ONLY the JSON, nothing else."""
                 truncated = content[:2000] if len(content) > 2000 else content
                 url_context += f"\n--- {url} ---\n{truncated}\n"
 
-        prompt = f"""Analyze this project from a Hacker News "What are you working on?" thread and generate metadata.
-
-Project text:
-{ev.raw_text}
-{url_context}
-
-Generate the following metadata as a JSON object:
-
-1. "title": The project/product name. If not explicitly stated, create a concise descriptive title (3-7 words).
-
-2. "short_description": A very brief description in 5-10 words that captures what it is.
-
-3. "description": A 1-2 sentence description explaining what the project is and what it does. Start with the type of thing it is.
-
-4. "hashtags": An array of 3-5 single-word tags or common acronyms (lowercase) that describe the project. Examples: ["ai", "python", "productivity", "saas", "opensource"]
-
-5. "url_summaries": An object mapping each URL to a brief (1-2 sentence) summary of what that page contains. Only include URLs that were successfully fetched.
-
-Return ONLY valid JSON matching this structure:
-{{
-  "title": "Project Name",
-  "short_description": "Brief 5-10 word description",
-  "description": "One or two sentences describing the project.",
-  "hashtags": ["tag1", "tag2", "tag3"],
-  "url_summaries": {{"https://example.com": "Summary of the page content"}}
-}}"""
+        prompt = generate_metadata_prompt(ev.raw_text, url_context)
 
         try:
             response = await self.llm_structured.acomplete(prompt)
@@ -440,39 +378,7 @@ Return ONLY valid JSON matching this structure:
                 complexity_score=1,
             )
 
-        prompt = f"""Rate this project on two dimensions. Be fair but critical.
-
-Project: {ev.title}
-Description: {ev.description}
-Original text: {ev.raw_text[:500]}
-
-Rate from 1-10 on:
-
-1. **Idea Score** (how good/promising is the idea):
-   - 1-2: Very weak idea, no clear value proposition
-   - 3-4: Basic idea, nothing particularly novel or useful
-   - 5-6: Decent idea with some merit, addresses a real need
-   - 7-8: Good idea with clear value, interesting approach
-   - 9-10: Excellent idea, innovative, strong market potential
-
-Consider: Market need, uniqueness, potential impact, target audience clarity
-
-2. **Complexity Score** (technical/implementation complexity):
-   - 1-2: Very simple, could be built in a day
-   - 3-4: Simple project, basic features
-   - 5-6: Moderate complexity, multiple components
-   - 7-8: Complex project, significant engineering
-   - 9-10: Highly complex, cutting-edge technology
-
-Consider: Technical stack, features mentioned, scale, integrations
-
-Return ONLY a JSON object:
-{{
-  "idea_score": <number 1-10>,
-  "complexity_score": <number 1-10>,
-  "idea_reasoning": "brief explanation",
-  "complexity_reasoning": "brief explanation"
-}}"""
+        prompt = score_project_prompt(ev.title, ev.description, ev.raw_text[:500])
 
         try:
             response = await self.llm_structured.acomplete(prompt)

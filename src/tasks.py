@@ -218,14 +218,22 @@ def process_waywo_comment(self, comment_id: int) -> dict:
 
     print(f"✅ Workflow completed for comment {comment_id}, found {len(projects_data)} project(s)")
 
-    # Save projects to database
+    # Save only valid projects to database
     saved_project_ids = []
+    skipped_invalid = 0
     for proj_data in projects_data:
+        # Skip invalid projects - don't create records for them
+        if not proj_data.get("is_valid", False):
+            invalid_reason = proj_data.get("invalid_reason", "unknown")
+            print(f"⏭️ Skipping invalid project for comment {comment_id}: {invalid_reason}")
+            skipped_invalid += 1
+            continue
+
         project = WaywoProject(
             id=0,  # Will be assigned by database
             source_comment_id=comment_id,
-            is_valid_project=proj_data.get("is_valid", False),
-            invalid_reason=proj_data.get("invalid_reason"),
+            is_valid_project=True,
+            invalid_reason=None,
             title=proj_data.get("title", "Untitled"),
             short_description=proj_data.get("short_description", ""),
             description=proj_data.get("description", ""),
@@ -253,7 +261,8 @@ def process_waywo_comment(self, comment_id: int) -> dict:
         "comment_id": comment_id,
         "projects_extracted": len(projects_data),
         "project_ids": saved_project_ids,
-        "valid_projects": sum(1 for p in projects_data if p.get("is_valid", False)),
+        "valid_projects": len(saved_project_ids),
+        "invalid_skipped": skipped_invalid,
     }
 
 

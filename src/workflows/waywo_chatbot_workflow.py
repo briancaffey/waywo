@@ -23,21 +23,10 @@ from src.db_client import get_all_projects, semantic_search
 from src.embedding_client import get_single_embedding
 from src.llm_config import get_llm
 from src.models import WaywoProject
+from src.workflows.prompts import CHATBOT_SYSTEM_PROMPT as WAYWO_SYSTEM_PROMPT
+from src.workflows.prompts import chatbot_response_prompt
 
 logger = logging.getLogger(__name__)
-
-# System prompt for the chatbot
-WAYWO_SYSTEM_PROMPT = """You are an AI assistant that helps users explore projects from Hacker News "What are you working on?" threads.
-
-You have access to a database of projects that people have shared. When answering questions:
-
-1. Base your answers on the provided project context
-2. If relevant projects are found, mention specific projects by name
-3. Include relevant details like descriptions, tags, and scores when helpful
-4. If no relevant projects are found, say so honestly
-5. Be helpful and conversational
-
-The projects come from monthly "What are you working on?" threads on Hacker News where developers share what they're building."""
 
 
 @dataclass
@@ -216,15 +205,7 @@ Idea Score: {project.idea_score}/10 | Complexity Score: {project.complexity_scor
 
     async def _generate_response(self, query: str, context: str) -> str:
         """Generate a response using the LLM with context."""
-        prompt = f"""{WAYWO_SYSTEM_PROMPT}
-
-Context from project database:
-{context}
-
-User question: {query}
-
-Please provide a helpful response based on the project context above."""
-
+        prompt = chatbot_response_prompt(query=query, context=context)
         response = await self.llm.acomplete(prompt)
         return str(response)
 

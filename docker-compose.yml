@@ -9,6 +9,9 @@ x-common-env: &common-env
   LLM_MODEL_NAME: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
   DATA_DIR: /app/data
   LOG_LEVEL: DEBUG
+  # Phoenix observability
+  PHOENIX_HOST: phoenix
+  PHOENIX_PORT: "6006"
 
 x-common-volumes: &common-volumes
   - ./src:/app/src
@@ -88,7 +91,7 @@ services:
     environment:
       <<: *common-env
     volumes: *common-volumes
-    command: /app/.venv/bin/watchmedo auto-restart --directory=/app/src --pattern=*.py --recursive -- /app/.venv/bin/celery -A src.celery_app worker --loglevel=info --queues=waywo --concurrency=4
+    command: /app/.venv/bin/watchmedo auto-restart --directory=/app/src --pattern=*.py --recursive -- /app/.venv/bin/celery -A src.celery_app worker --loglevel=info --queues=waywo --concurrency=1
     depends_on:
       redis:
         condition: service_healthy
@@ -206,9 +209,39 @@ services:
 
   phoenix:
     image: arizephoenix/phoenix:latest
+    container_name: waywo-phoenix
     ports:
       - "6006:6006" # UI and OTLP HTTP collector
       - "4317:4317" # OTLP gRPC collector
+    networks:
+      - waywo-network
+    restart: unless-stopped
+
+  jupyter:
+    build: .
+    container_name: waywo-jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      <<: *common-env
+    volumes:
+      - ./src:/app/src
+      - ./media:/app/media
+      - ./data:/app/data
+      - ./notebooks:/app/notebooks
+      - ./waywo.yml:/app/waywo.yml:ro
+      - /app/.venv
+    command: /app/.venv/bin/python -m jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --NotebookApp.token='' --NotebookApp.password='' --notebook-dir=/app/notebooks --allow-root
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - waywo-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
 
 networks:
   waywo-network:

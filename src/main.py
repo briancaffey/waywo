@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from src.celery_app import debug_task
 from src.database import init_db
+from src.tracing import init_tracing
 from src.embedding_client import (
     EmbeddingError,
     check_embedding_service_health,
@@ -65,6 +66,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     init_db()
+    init_tracing(service_name="waywo-backend")
     print("✅ FastAPI application has started")
 
 
@@ -816,6 +818,22 @@ async def reset_all_databases():
             "results": results,
         }
     )
+
+
+@app.get("/api/workflow-prompts", tags=["workflow"])
+async def get_workflow_prompts():
+    """
+    Return every workflow step and its associated prompt template.
+
+    Useful for inspecting and iterating on the prompts used during
+    the comment-processing and chatbot pipelines.
+    """
+    from src.workflows.prompts import WORKFLOW_STEPS
+
+    return {
+        "steps": WORKFLOW_STEPS,
+        "total": len(WORKFLOW_STEPS),
+    }
 
 
 @app.post("/api/admin/rebuild-vector-index", tags=["admin"])

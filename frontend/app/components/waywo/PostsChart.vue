@@ -39,7 +39,7 @@
         :data="chartData"
         index="tooltip_title"
         :categories="['comment_count']"
-        :colors="['hsl(var(--primary))']"
+        :colors="['var(--primary)']"
         :x-formatter="(_v: number, i: number) => chartData[i]?.label ?? ''"
         :y-formatter="(value: number) => value.toLocaleString()"
         :show-legend="false"

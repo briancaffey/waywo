@@ -35,10 +35,11 @@ COPY --chown=app:app src/ ./src
 
 COPY --chown=app:app src/healthcheck.py /app/healthcheck.py
 
-# Install your package + dev extras in editable mode
+# Install your package + dev extras + notebook in editable mode
 RUN . .venv/bin/activate && \
     uv pip install -e . && \
-    uv pip install -e ".[dev]"
+    uv pip install -e ".[dev]" && \
+    uv pip install -e ".[notebook]"
 
 # Create directories for celery and media with proper permissions
 # Do this after copying source code to ensure directories exist

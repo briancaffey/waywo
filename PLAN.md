@@ -14,7 +14,7 @@
 - [x] LlamaIndex workflows for project extraction
 - [x] sqlite-vector for semantic search
 - [x] RAG chatbot with LlamaIndex
-- [ ] IPython Notebooks for demonstrating functionality
+- [x] Jupyter Lab for interactive development
 
 ---
 
@@ -337,7 +337,8 @@ GET  /api/waywo-projects/hashtags
 | **Phase 1** | 1, 2 | Database foundation & workflow setup | ✅ Complete |
 | **Phase 2** | 3, 4, 5 | Workflow implementation & Celery | ✅ Complete |
 | **Phase 3** | 6, 7, 8, 9 | API & Frontend | ✅ Complete |
-| **Phase 4** | 10 | Vector Embeddings & RAG | ✅ Complete |
+| **Phase 4** | 10, 11 | Vector Embeddings, RAG & Observability | ✅ Complete |
+| **Phase 5** | 12 | Jupyter Lab Integration | ✅ Complete |
 
 ---
 
@@ -425,9 +426,99 @@ vector_init('waywo_projects', 'description_embedding',
 
 ---
 
+## Milestone 11: LLM Observability with Phoenix
+
+**Goal**: Add OpenTelemetry-based tracing to LlamaIndex workflows, sending traces to Arize Phoenix for visualization and debugging.
+
+### Dependencies to Add:
+| Package | Purpose |
+|---------|---------|
+| `openinference-instrumentation-llama-index` | Auto-instruments LlamaIndex LLM/embedding calls |
+| `opentelemetry-sdk` | OpenTelemetry SDK for trace management |
+| `opentelemetry-exporter-otlp-proto-http` | OTLP HTTP exporter to send traces to Phoenix |
+
+### Files to Create/Modify:
+| File | Action |
+|------|--------|
+| `pyproject.toml` | Add OpenTelemetry and OpenInference packages |
+| `src/tracing.py` | **New** - Tracing setup and initialization |
+| `src/main.py` | Initialize tracing on FastAPI startup |
+| `src/celery_app.py` | Initialize tracing for Celery workers |
+| `docker-compose.yml` | Add `PHOENIX_HOST` env var for backend/worker services |
+
+### Implementation Details:
+
+**Tracing Configuration:**
+- Phoenix endpoint: `http://phoenix:6006/v1/traces` (HTTP OTLP)
+- Service name: `waywo-backend` / `waywo-worker`
+- Auto-instruments: LLM calls, embedding calls, workflow steps
+
+**What Gets Traced:**
+- All `llm.acomplete()` calls (prompts, responses, latency)
+- Embedding service calls
+- Workflow step execution
+- Token usage and model info
+
+**Phoenix UI Access:**
+- URL: `http://localhost:6006`
+- Shows trace waterfall, LLM inputs/outputs, latency breakdown
+
+### Tasks:
+- [x] Add OpenTelemetry packages to pyproject.toml
+- [x] Create `src/tracing.py` with initialization function
+- [x] Initialize tracing in FastAPI startup
+- [x] Initialize tracing in Celery worker
+- [x] Add PHOENIX_HOST to docker-compose.yml
+- [x] Test traces appear in Phoenix UI
+
+---
+
+## Milestone 12: Jupyter Lab Integration
+
+**Goal**: Add Jupyter Lab as a development/exploration tool with full access to the application's dependencies.
+
+### Dependencies Added:
+| Package | Purpose |
+|---------|---------|
+| `jupyterlab>=4.0.0` | Interactive notebook environment |
+
+### Files Created/Modified:
+| File | Action |
+|------|--------|
+| `pyproject.toml` | Added `notebook` optional dependency group with `jupyterlab` |
+| `Dockerfile` | Added `.[notebook]` to pip install |
+| `docker-compose.yml` | Added `jupyter` service |
+| `notebooks/getting_started.ipynb` | **New** - Sample notebook with project examples |
+
+### Docker Service Configuration:
+- Container: `waywo-jupyter`
+- Port: `8888` (http://localhost:8888)
+- Authentication: Disabled (development only)
+- Notebook directory: `/app/notebooks`
+- Depends on: `redis` (healthy), `migrate` (completed)
+
+### Sample Notebook Contents:
+1. **Setup** - Path configuration and async support
+2. **Database Access** - Query posts, comments, projects using SQLAlchemy
+3. **Embedding Client** - Generate embeddings for text
+4. **Semantic Search** - Find similar projects by vector similarity
+5. **LLM Client** - Make LLM calls using the configured endpoint
+6. **Workflow Testing** - Run workflow components interactively
+7. **RAG Chatbot** - Test the chatbot workflow
+8. **Raw SQL** - Direct SQL queries for advanced analysis
+
+### Usage:
+```bash
+# Start Jupyter Lab
+docker compose up jupyter
+
+# Access at http://localhost:8888
+```
+
+---
+
 ## Future Enhancements (Not Yet Implemented)
 
-- [ ] IPython Notebooks for demonstrating functionality
 - [ ] Tag-based filtering UI (autocomplete, multi-select)
 - [ ] Score range sliders for filtering
 - [ ] Date range picker for filtering
@@ -435,5 +526,6 @@ vector_init('waywo_projects', 'description_embedding',
 - [ ] Re-process project button
 - [ ] Export projects to CSV/JSON
 - [x] Search functionality across projects (semantic search implemented)
+- [x] Jupyter Lab for interactive development
 - [ ] Project bookmarking/favorites
 - [ ] Backfill embeddings for existing projects

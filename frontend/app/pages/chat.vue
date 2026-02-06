@@ -52,8 +52,7 @@
                 <Icon name="lucide:bot" class="h-4 w-4 text-primary" />
               </div>
               <div class="flex-1 max-w-[80%]">
-                <div class="bg-muted rounded-lg px-4 py-2">
-                  <p class="whitespace-pre-wrap">{{ message.content }}</p>
+                <div class="bg-muted rounded-lg px-4 py-2 prose prose-sm max-w-none" v-html="renderMarkdown(message.content)">
                 </div>
 
                 <!-- Source Projects -->
@@ -138,6 +137,14 @@
 </template>
 
 <script setup lang="ts">
+import { marked } from 'marked'
+
+// Configure marked for safe rendering
+marked.setOptions({
+  breaks: true,
+  gfm: true
+})
+
 interface SourceProject {
   id: number
   title: string
@@ -251,5 +258,10 @@ function askSuggestion(suggestion: string) {
 function clearChat() {
   messages.value = []
   error.value = null
+}
+
+// Render markdown to HTML
+function renderMarkdown(content: string): string {
+  return marked.parse(content) as string
 }
 </script>

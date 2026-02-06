@@ -10,13 +10,17 @@
           an application to explore what people are working on
         </p>
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
-          <Button size="lg" class="text-lg px-8">
-            Get Started
-            <Icon name="lucide:arrow-right" class="ml-2 h-5 w-5" />
-          </Button>
-          <Button variant="outline" size="lg" class="text-lg px-8">
-            Learn More
-          </Button>
+          <NuxtLink to="/search">
+            <Button size="lg" class="text-lg px-8">
+              Search Projects
+              <Icon name="lucide:search" class="ml-2 h-5 w-5" />
+            </Button>
+          </NuxtLink>
+          <NuxtLink to="/posts">
+            <Button variant="outline" size="lg" class="text-lg px-8">
+              Browse Threads
+            </Button>
+          </NuxtLink>
         </div>
       </div>
     </section>
@@ -26,7 +30,7 @@
       <div class="text-center mb-12">
         <h2 class="text-3xl font-bold tracking-tight mb-4">Key Features</h2>
         <p class="text-lg text-muted-foreground">
-          Everything you need to build amazing applications
+          Discover and explore projects from Hacker News "What are you working on?" threads
         </p>
       </div>
 
@@ -34,13 +38,13 @@
         <Card class="p-6">
           <CardHeader>
             <div class="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-              <Icon name="lucide:zap" class="h-6 w-6 text-primary" />
+              <Icon name="lucide:search" class="h-6 w-6 text-primary" />
             </div>
-            <CardTitle>High Performance</CardTitle>
+            <CardTitle>Semantic Search</CardTitle>
           </CardHeader>
           <CardContent>
             <p class="text-muted-foreground">
-              Leverage NVIDIA's powerful hardware acceleration for lightning-fast processing and rendering.
+              Find projects by meaning, not just keywords. AI-powered vector embeddings let you search for concepts and ideas across all submissions.
             </p>
           </CardContent>
         </Card>
@@ -48,13 +52,13 @@
         <Card class="p-6">
           <CardHeader>
             <div class="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-              <Icon name="lucide:shield" class="h-6 w-6 text-primary" />
+              <Icon name="lucide:message-circle" class="h-6 w-6 text-primary" />
             </div>
-            <CardTitle>Enterprise Ready</CardTitle>
+            <CardTitle>AI Chat Assistant</CardTitle>
           </CardHeader>
           <CardContent>
             <p class="text-muted-foreground">
-              Built with enterprise-grade security and reliability for mission-critical applications.
+              Ask questions about projects in natural language. The RAG-powered chatbot retrieves relevant projects and provides informed answers.
             </p>
           </CardContent>
         </Card>
@@ -62,13 +66,13 @@
         <Card class="p-6">
           <CardHeader>
             <div class="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-              <Icon name="lucide:code" class="h-6 w-6 text-primary" />
+              <Icon name="lucide:sparkles" class="h-6 w-6 text-primary" />
             </div>
-            <CardTitle>Developer Friendly</CardTitle>
+            <CardTitle>AI Project Extraction</CardTitle>
           </CardHeader>
           <CardContent>
             <p class="text-muted-foreground">
-              Comprehensive APIs and documentation to help developers build amazing experiences.
+              Projects are automatically extracted from HN comments using AI, with structured data including titles, descriptions, URLs, and scores.
             </p>
           </CardContent>
         </Card>
@@ -76,13 +80,13 @@
         <Card class="p-6">
           <CardHeader>
             <div class="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-              <Icon name="lucide:cloud" class="h-6 w-6 text-primary" />
+              <Icon name="lucide:filter" class="h-6 w-6 text-primary" />
             </div>
-            <CardTitle>Cloud Native</CardTitle>
+            <CardTitle>Filter & Explore</CardTitle>
           </CardHeader>
           <CardContent>
             <p class="text-muted-foreground">
-              Seamlessly deploy and scale your applications across cloud platforms and edge devices.
+              Browse and filter projects by hashtags, idea score, complexity score, and validity to find exactly what you're looking for.
             </p>
           </CardContent>
         </Card>
@@ -90,13 +94,13 @@
         <Card class="p-6">
           <CardHeader>
             <div class="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-              <Icon name="lucide:brain" class="h-6 w-6 text-primary" />
+              <Icon name="lucide:calendar" class="h-6 w-6 text-primary" />
             </div>
-            <CardTitle>AI Powered</CardTitle>
+            <CardTitle>Monthly Threads</CardTitle>
           </CardHeader>
           <CardContent>
             <p class="text-muted-foreground">
-              Integrate advanced AI capabilities with pre-trained models and custom training pipelines.
+              Track Hacker News "What are you working on?" threads over time. See trends, browse by month, and explore what the community is building.
             </p>
           </CardContent>
         </Card>
@@ -104,13 +108,13 @@
         <Card class="p-6">
           <CardHeader>
             <div class="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-              <Icon name="lucide:users" class="h-6 w-6 text-primary" />
+              <Icon name="lucide:mic" class="h-6 w-6 text-primary" />
             </div>
-            <CardTitle>Community Driven</CardTitle>
+            <CardTitle>Voice Search</CardTitle>
           </CardHeader>
           <CardContent>
             <p class="text-muted-foreground">
-              Join a vibrant community of developers, researchers, and innovators pushing boundaries.
+              Use real-time speech-to-text to search for projects and interact with the AI assistant hands-free via WebSocket streaming.
             </p>
           </CardContent>
         </Card>
@@ -121,20 +125,24 @@
     <section class="py-16">
       <Card class="p-8 text-center">
         <CardHeader>
-          <CardTitle class="text-2xl mb-4">Ready to Get Started?</CardTitle>
+          <CardTitle class="text-2xl mb-4">Ready to Explore?</CardTitle>
           <CardDescription class="text-lg">
-            Join thousands of developers who are already building the future with waywo.
+            Ask the AI assistant about projects, or dive into the latest Hacker News threads.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" class="text-lg px-8">
-              Start Building
-              <Icon name="lucide:rocket" class="ml-2 h-5 w-5" />
-            </Button>
-            <Button variant="outline" size="lg" class="text-lg px-8">
-              View Documentation
-            </Button>
+            <NuxtLink to="/chat">
+              <Button size="lg" class="text-lg px-8">
+                Chat with AI
+                <Icon name="lucide:message-circle" class="ml-2 h-5 w-5" />
+              </Button>
+            </NuxtLink>
+            <NuxtLink to="/posts">
+              <Button variant="outline" size="lg" class="text-lg px-8">
+                View Threads
+              </Button>
+            </NuxtLink>
           </div>
         </CardContent>
       </Card>
