@@ -59,5 +59,5 @@ def mock_hn_api(sample_post_data, sample_comment_data):
     def mock_fetch(item_id):
         return items.get(item_id)
 
-    with patch("src.tasks.fetch_item", side_effect=mock_fetch):
+    with patch("src.worker.tasks.fetch_item", side_effect=mock_fetch):
         yield items

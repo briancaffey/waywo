@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.firecrawl_client import extract_urls_from_text
+from src.clients.firecrawl import extract_urls_from_text
 
 
 class TestExtractUrlsFromText:

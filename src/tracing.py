@@ -6,7 +6,6 @@ This module configures automatic instrumentation of LlamaIndex operations
 """
 
 import logging
-import os
 
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 from opentelemetry import trace
@@ -39,9 +38,11 @@ def init_tracing(service_name: str = "waywo") -> None:
         logger.debug("Tracing already initialized, skipping")
         return
 
-    # Get Phoenix endpoint from environment or use default
-    phoenix_host = os.getenv("PHOENIX_HOST", "localhost")
-    phoenix_port = os.getenv("PHOENIX_PORT", "6006")
+    from src.settings import PHOENIX_HOST, PHOENIX_PORT
+
+    # Get Phoenix endpoint from settings
+    phoenix_host = PHOENIX_HOST
+    phoenix_port = PHOENIX_PORT
     endpoint = f"http://{phoenix_host}:{phoenix_port}/v1/traces"
 
     logger.info(f"🔭 Initializing OpenTelemetry tracing for '{service_name}'")

@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from src.models import WaywoPost, WaywoComment, WaywoYamlEntry
-from src.tasks import process_waywo_post, load_waywo_yaml
+from src.worker.tasks import process_waywo_post, load_waywo_yaml
 
 
 class TestModels:

@@ -1,12 +1,13 @@
-import os
 from celery import Celery
 from celery.signals import worker_process_init
+
+from src.settings import CELERY_BROKER_URL, CELERY_RESULT_BACKEND
 
 # Create Celery app instance
 celery_app = Celery(
     "waywo",
-    broker=os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0"),
-    backend=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0"),
+    broker=CELERY_BROKER_URL,
+    backend=CELERY_RESULT_BACKEND,
 )
 
 # Configure Celery
@@ -25,12 +26,12 @@ celery_app.conf.update(
     # Store beat schedule file in celery-data directory with proper permissions
     beat_schedule_filename="/app/celery-data/celerybeat-schedule",
     # Import tasks module to register tasks with Celery
-    imports=["src.tasks"],
+    imports=["src.worker.tasks"],
 )
 
 # Import beat schedule configuration
 # This allows beat schedule to be defined in a separate file
-from src.celery_beat import beat_schedule
+from src.worker.beat import beat_schedule
 
 # Apply beat schedule
 celery_app.conf.beat_schedule = beat_schedule

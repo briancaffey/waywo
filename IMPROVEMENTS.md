@@ -104,14 +104,14 @@ src/
 ```
 
 ### Key changes:
-- [ ] **Break `main.py` from 1,245 lines down to ~80 lines** by extracting routes into `src/routes/` using FastAPI `APIRouter`
-- [ ] **Group external service clients** into `src/clients/` - clearer than `*_client.py` scattered at top level
-- [ ] **Group database code** into `src/db/` - models, engine, client, migrations together
-- [ ] **Group Celery code** into `src/worker/` - app, tasks, beat, healthchecks together
-- [ ] **Create `src/settings.py`** to centralize all `os.environ.get()` calls (currently scattered across 10+ files with duplicate default values)
-- [ ] Update all imports throughout the codebase
-- [ ] Update `Dockerfile`, `docker-compose.yml` entrypoints
-- [ ] Update `pyproject.toml` test paths if needed
+- [x] **Break `main.py` from 1,245 lines down to ~50 lines** by extracting routes into `src/routes/` using FastAPI `APIRouter`
+- [x] **Group external service clients** into `src/clients/` - clearer than `*_client.py` scattered at top level
+- [x] **Group database code** into `src/db/` - models, engine, client, migrations together
+- [x] **Group Celery code** into `src/worker/` - app, tasks, beat, healthchecks together
+- [x] **Create `src/settings.py`** to centralize all `os.environ.get()` calls (currently scattered across 10+ files with duplicate default values)
+- [x] Update all imports throughout the codebase
+- [x] Update `Dockerfile`, `docker-compose.yml` entrypoints
+- [x] Update `pyproject.toml` test paths if needed (no changes needed)
 
 **Estimated impact:** `main.py` goes from 1,245 to ~80 lines. Every file becomes findable by domain. Agents can operate on isolated route files without touching unrelated code.
 

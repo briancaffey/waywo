@@ -13,7 +13,6 @@ Workflow Steps:
 """
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,11 +31,11 @@ from llama_index.core.workflow import (
     step,
 )
 
-from src.db_client import semantic_search
-from src.embedding_client import get_single_embedding
+from src.db.client import semantic_search
+from src.clients.embedding import get_single_embedding
 from src.llm_config import get_llm
 from src.models import WaywoProject
-from src.rerank_client import RerankError, rerank_documents
+from src.clients.rerank import RerankError, rerank_documents
 from src.workflows.events import (
     ChatQueryEvent,
     ChatResponseEvent,
@@ -49,8 +48,8 @@ from src.workflows.prompts import chatbot_response_prompt
 logger = logging.getLogger(__name__)
 
 # Default service URLs
-DEFAULT_EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://192.168.5.96:8000")
-DEFAULT_RERANK_URL = os.getenv("RERANK_URL", "http://192.168.5.173:8111")
+from src.settings import EMBEDDING_URL as DEFAULT_EMBEDDING_URL
+from src.settings import RERANK_URL as DEFAULT_RERANK_URL
 
 
 @dataclass

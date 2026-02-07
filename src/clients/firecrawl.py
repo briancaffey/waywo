@@ -8,7 +8,6 @@ and graceful error handling.
 import asyncio
 import html
 import logging
-import os
 import re
 from dataclasses import dataclass
 from typing import Optional
@@ -16,13 +15,14 @@ from urllib.parse import urlparse
 
 import httpx
 
-logger = logging.getLogger(__name__)
+from src.settings import (
+    FIRECRAWL_MAX_CONTENT_LENGTH,
+    FIRECRAWL_MAX_RETRIES,
+    FIRECRAWL_TIMEOUT,
+    FIRECRAWL_URL,
+)
 
-# Firecrawl configuration
-FIRECRAWL_URL = os.getenv("FIRECRAWL_URL", "http://localhost:3002")
-FIRECRAWL_TIMEOUT = int(os.getenv("FIRECRAWL_TIMEOUT", "30"))
-FIRECRAWL_MAX_RETRIES = int(os.getenv("FIRECRAWL_MAX_RETRIES", "3"))
-FIRECRAWL_MAX_CONTENT_LENGTH = int(os.getenv("FIRECRAWL_MAX_CONTENT_LENGTH", "10000"))
+logger = logging.getLogger(__name__)
 
 # Domains to skip (social media, login pages, etc.)
 SKIP_DOMAINS = {

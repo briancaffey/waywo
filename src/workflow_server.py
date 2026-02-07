@@ -4,8 +4,7 @@ Workflow configuration and metadata for visualization.
 Provides workflow instances and metadata for the visualization API.
 """
 
-import os
-
+from src.settings import EMBEDDING_URL, FIRECRAWL_URL
 from src.workflows import (
     # Project workflow and events
     WaywoProjectWorkflow,
@@ -24,11 +23,6 @@ from src.workflows import (
     ProjectsRetrievedEvent,
     ChatResponseEvent,
 )
-
-# Environment configuration
-FIRECRAWL_URL = os.environ.get("FIRECRAWL_URL", "http://localhost:3002")
-EMBEDDING_URL = os.environ.get("EMBEDDING_URL", "http://192.168.5.96:8000")
-
 
 def create_project_workflow() -> WaywoProjectWorkflow:
     """Create an instance of the project processing workflow."""

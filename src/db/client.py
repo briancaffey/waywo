@@ -11,9 +11,9 @@ from typing import Optional
 from sqlalchemy import and_, func, or_, text
 from sqlalchemy.orm import Session
 
-from src.database import SessionLocal, init_db
-from src.embedding_client import embedding_to_blob
-from src.db_models import WaywoCommentDB, WaywoPostDB, WaywoProjectDB
+from src.db.database import SessionLocal, init_db
+from src.clients.embedding import embedding_to_blob
+from src.db.models import WaywoCommentDB, WaywoPostDB, WaywoProjectDB
 from src.models import WaywoComment, WaywoPost, WaywoProject
 
 

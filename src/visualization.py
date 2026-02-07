@@ -17,8 +17,10 @@ from llama_index.utils.workflow import (
     draw_most_recent_execution,
 )
 
+from src.settings import DATA_DIR
+
 # Default visualization directory
-DEFAULT_VIZ_DIR = os.environ.get("DATA_DIR", "/app/data") + "/visualizations"
+DEFAULT_VIZ_DIR = DATA_DIR + "/visualizations"
 
 
 @contextmanager

@@ -6,16 +6,17 @@ Includes sqlite-vector extension for semantic search capabilities.
 
 import importlib.resources
 import logging
-import os
 from pathlib import Path
 
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
+from src.settings import DATA_DIR as _DATA_DIR_STR
+
 logger = logging.getLogger(__name__)
 
 # Database file path - use /app/data in container, local data/ dir otherwise
-DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
+DATA_DIR = Path(_DATA_DIR_STR)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DATABASE_PATH = DATA_DIR / "waywo.db"
 DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
@@ -82,7 +83,7 @@ def init_db():
     Initialize the database by creating all tables.
     Call this on application startup.
     """
-    from src.db_models import WaywoCommentDB, WaywoPostDB, WaywoProjectDB
+    from src.db.models import WaywoCommentDB, WaywoPostDB, WaywoProjectDB
 
     Base.metadata.create_all(bind=engine)
     print(f"📦 Database initialized at {DATABASE_PATH}")

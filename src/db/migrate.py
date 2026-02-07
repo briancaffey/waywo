@@ -24,7 +24,7 @@ def run_migrations():
     logger.info("Starting database migrations...")
 
     # Import here to ensure logging is configured first
-    from src.database import (
+    from src.db.database import (
         DATABASE_PATH,
         build_vector_index,
         init_db,

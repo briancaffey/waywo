@@ -1,12 +1,12 @@
 import asyncio
-import os
 from datetime import datetime
 from pathlib import Path
 
 import yaml
 
-from src.celery_app import celery_app
-from src.db_client import (
+from src.settings import EMBEDDING_URL, FIRECRAWL_URL, MEDIA_DIR
+from src.worker.app import celery_app
+from src.db.client import (
     comment_exists,
     delete_projects_for_comment,
     get_comment,
@@ -17,12 +17,12 @@ from src.db_client import (
     save_project,
     update_project_screenshot,
 )
-from src.screenshot_client import (
+from src.clients.screenshot import (
     ScreenshotError,
     capture_screenshot,
     save_screenshot_to_disk,
 )
-from src.hn_client import fetch_item
+from src.clients.hn import fetch_item
 from src.models import WaywoComment, WaywoPost, WaywoProject, WaywoYamlEntry
 
 
@@ -198,9 +198,9 @@ def process_waywo_comment(self, comment_id: int) -> dict:
             f"🗑️ Deleted {deleted_count} existing project(s) for comment {comment_id}"
         )
 
-    # Get service URLs from environment
-    firecrawl_url = os.environ.get("FIRECRAWL_URL", "http://localhost:3002")
-    embedding_url = os.environ.get("EMBEDDING_URL", "http://192.168.5.96:8000")
+    # Get service URLs from settings
+    firecrawl_url = FIRECRAWL_URL
+    embedding_url = EMBEDDING_URL
 
     try:
         # Run async workflow using asyncio.run() with nest_asyncio
@@ -271,7 +271,7 @@ def process_waywo_comment(self, comment_id: int) -> dict:
         project_urls = proj_data.get("urls", [])
         if project_urls and project_id:
             try:
-                media_dir = os.environ.get("MEDIA_DIR", "/app/media")
+                media_dir = MEDIA_DIR
                 image_bytes = asyncio.run(capture_screenshot(url=project_urls[0]))
                 screenshot_path = save_screenshot_to_disk(
                     image_bytes, project_id, media_dir=media_dir

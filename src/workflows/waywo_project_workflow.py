@@ -25,12 +25,12 @@ from llama_index.core.workflow import (
     step,
 )
 
-from src.embedding_client import (
+from src.clients.embedding import (
     EmbeddingError,
     create_embedding_text,
     get_single_embedding,
 )
-from src.firecrawl_client import extract_urls_from_text, scrape_urls
+from src.clients.firecrawl import extract_urls_from_text, scrape_urls
 from src.llm_config import get_llm, get_llm_for_structured_output
 from src.workflows.events import (
     CommentInputEvent,
