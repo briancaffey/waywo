@@ -17,6 +17,7 @@ RUN apt-get update && apt-get clean && apt-get install -y --no-install-recommend
     g++ \
     libffi-dev \
     libssl-dev \
+    graphviz \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user

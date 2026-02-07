@@ -2,622 +2,442 @@
 
 ## Overview
 
-This plan describes how to integrate [NVIDIA NeMo DataDesigner](https://github.com/NVIDIA-NeMo/DataDesigner) into the waywo project to **generate synthetic project ideas** seeded by the existing tag taxonomy extracted from real Hacker News "What are you working on?" projects.
-
-### What is NeMo DataDesigner?
-
-NeMo DataDesigner is an open-source Python library (Apache 2.0) for creating high-quality synthetic datasets. It orchestrates LLM calls to produce structured, diverse data from scratch or by augmenting seed data. Key features:
-
-- **Column-based pipeline**: Define a schema of columns (sampler, LLM text, LLM structured, expression, embedding, etc.) and DataDesigner generates rows following that schema
-- **Seed datasets**: Provide real data (CSV, DataFrame, HuggingFace) to ground generation in reality
-- **LiteLLM backend**: Connects to any OpenAI-compatible API (including local vLLM/TGI endpoints) via LiteLLM
-- **Sampler columns**: Statistical sampling (category, subcategory, distributions) without LLM calls for fast structural data
-- **LLM Judge**: Built-in quality scoring via LLM-as-Judge columns
-- **Embedding columns**: Generate vector embeddings as part of the pipeline
-- **Preview mode**: Test configs on small samples before committing to full generation
-- **Fluent Python API**: `DataDesignerConfigBuilder` with chaining, plus YAML/JSON config serialization
-
-**Package**: `pip install data-designer` (requires Python >=3.10, waywo uses 3.12)
+Integrate [NVIDIA NeMo DataDesigner](https://github.com/NVIDIA-NeMo/DataDesigner) into waywo to **generate synthetic project ideas** seeded by the tag taxonomy from real HN projects. Generated projects live in the same `waywo_projects` table with the same fields as HN-sourced projects, distinguished by a `source` column.
 
 ---
 
-## Goal
+## What NeMo DataDesigner Is (and Why It Fits)
 
-Create a new feature that lets users **generate novel project ideas** using NeMo DataDesigner, seeded by the existing tag corpus. Generated projects appear in the same project list alongside HN-sourced projects but are clearly marked as AI-generated. Users can:
+NeMo DataDesigner is a Python library for generating structured synthetic datasets by orchestrating LLM calls through a column-based pipeline. You define a schema of columns — some are statistical samplers (no LLM needed), others are LLM-generated text, structured output, or quality scores — and DataDesigner generates rows following that schema.
 
-1. Select tags (or let the system pick trending/random tags) to seed idea generation
-2. Configure how many ideas to generate and creativity parameters
-3. View generated projects with the same metadata structure as HN projects (title, description, hashtags, scores, embeddings)
-4. Filter the project list by source (HN vs. AI-generated)
+**Why it fits waywo specifically:**
 
----
+| DataDesigner concept | waywo mapping |
+|---------------------|---------------|
+| **Sampler columns** (category, subcategory, distributions) | Pick tags from the existing hashtag vocabulary with realistic frequency weights |
+| **LLM text columns** (free-form generation with Jinja2 templates) | Generate a project idea description conditioned on the selected tags |
+| **LLM structured columns** (JSON output validated against a schema) | Extract title, short_description, description, hashtags — the exact fields `WaywoProjectDB` needs |
+| **LLM judge columns** (score rubrics) | Produce `idea_score` and `complexity_score` on the same 1-10 scale HN projects use |
+| **Post-pipeline processing** | Generate embeddings via existing embedding service, save to DB |
+| **LiteLLM backend** (OpenAI-compatible) | Points directly at the same Nemotron endpoint the rest of waywo uses |
+| **Preview mode** (generate 2-3 records for testing) | Iterate on prompts without burning through full generation runs |
 
-## Architecture
-
-### How It Fits Into the Existing System
-
-```
-                          ┌────────────────────┐
-                          │   Frontend (Nuxt)   │
-                          │  "Generate Ideas"   │
-                          └────────┬───────────┘
-                                   │ POST /api/generate-ideas
-                                   ▼
-                          ┌────────────────────┐
-                          │   FastAPI Backend   │
-                          │  new endpoint       │
-                          └────────┬───────────┘
-                                   │ celery.delay()
-                                   ▼
-                          ┌────────────────────┐
-                          │   Celery Worker     │
-                          │  generate_ideas     │
-                          └────────┬───────────┘
-                                   │
-                                   ▼
-                ┌──────────────────────────────────────┐
-                │        NeMo DataDesigner Pipeline     │
-                │                                      │
-                │  1. Sampler: pick tags (seed data)   │
-                │  2. Sampler: persona/domain context   │
-                │  3. LLM Text: generate project idea  │
-                │  4. LLM Structured: extract metadata │
-                │  5. LLM Judge: score idea quality    │
-                │  6. Embedding: generate vector       │
-                └──────────────────┬───────────────────┘
-                                   │
-                    ┌──────────────┼──────────────┐
-                    ▼              ▼              ▼
-             ┌──────────┐  ┌──────────┐  ┌──────────────┐
-             │ Local LLM│  │Embedding │  │   SQLite DB   │
-             │ Nemotron │  │ Service  │  │ (save projects)│
-             └──────────┘  └──────────┘  └──────────────┘
-```
-
-### Service Reuse
-
-| Service | Current Use | NDD Use |
-|---------|------------|---------|
-| **Nemotron LLM** (`http://192.168.6.19:8002/v1`) | Project extraction, validation, metadata, scoring | Text generation, structured output, judging |
-| **Embedding Service** (`http://192.168.5.96:8000`) | Project embeddings for semantic search | Embedding generated projects (via NDD EmbeddingColumn or post-pipeline) |
-| **SQLite** | Store HN projects | Store generated projects (same table, new `source` field) |
-| **Celery/Redis** | Background task processing | Background idea generation tasks |
+The core insight: DataDesigner's pipeline maps almost 1:1 onto the fields of `WaywoProjectDB`. Instead of extracting projects from HN comments (the existing workflow), we're **generating** them from tag combinations. The output schema is identical — the only difference is the source.
 
 ---
 
-## Detailed Implementation Plan
+## How DataDesigner Works — Key Concepts
 
-### Phase 1: Add Dependency and Local LLM Provider Config
+### Pipeline = ordered list of columns
 
-**1.1 Add `data-designer` to `pyproject.toml`**
+Each column has a type and can reference earlier columns via `{{ column_name }}` Jinja2 templates. DataDesigner resolves the dependency DAG automatically.
 
-Add to `dependencies`:
 ```
-"data-designer>=0.4.0",
+Sampler columns (fast, no LLM)
+    → LLM text column (creative generation, references sampler outputs)
+        → LLM structured column (extract metadata, references text output)
+            → LLM judge column (score quality, references structured output)
 ```
 
-This pulls in `litellm`, `duckdb`, `faker`, `httpx`, `networkx`, `tiktoken`, and other deps. Most of these are lightweight and don't conflict with existing deps (httpx, pydantic, numpy already present).
+### Column types we'll use
 
-**Potential conflicts to check**:
-- `pydantic` — NDD uses Pydantic v2, waywo already uses `pydantic>=2.0.0` — OK
-- `httpx` — NDD uses httpx, waywo already has `httpx>=0.24.0` — OK
-- `numpy` — Both need numpy — OK
-- `litellm` — New dep, no conflicts expected (it's a thin wrapper)
+1. **`SamplerColumnConfig`** — Statistical sampling. Picks values from a weighted list. Used for selecting tags, target audience, complexity targets. No LLM calls, essentially free.
 
-**1.2 Create `src/ndd_config.py` — DataDesigner provider/model configuration**
+2. **`LLMTextColumnConfig`** — Free-form text generation with a Jinja2 prompt template. The workhorse for generating the actual project idea narrative.
 
-This module will configure NeMo DataDesigner to use our local Nemotron LLM and embedding service. Key config:
+3. **`LLMStructuredColumnConfig`** — LLM output validated against a JSON schema (or Pydantic model). Extracts structured fields (title, description, hashtags) from the free-form idea text.
+
+4. **`LLMJudgeColumnConfig`** — Evaluates content against a scoring rubric. Each `Score` has named options mapping score values to descriptions. Returns scores per rubric dimension.
+
+5. **`ExpressionColumnConfig`** — Jinja2 expressions to derive/reshape fields. Used to flatten structured output into individual columns.
+
+### Execution model
+
+- `DataDesigner.preview(config, num_records=3)` — Quick test, returns in-memory DataFrame
+- `DataDesigner.create(config, num_records=N, dataset_name="...")` — Full run, saves to disk, returns results handle
+- Within a run: rows are batched, columns generated sequentially per dependency order, cells within a column generated in parallel (configurable concurrency)
+
+### LLM connection via LiteLLM
+
+DataDesigner uses LiteLLM under the hood, which supports any OpenAI-compatible endpoint. You configure a `ModelProvider` (endpoint URL + auth) and `ModelConfig` (model name + inference params) and reference them by alias in column definitions.
+
+---
+
+## The Pipeline — From Tags to Projects
+
+Here's the complete data flow, showing how DataDesigner columns map to `WaywoProjectDB` fields:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    USER INPUT (from frontend)                       │
+│  seed_tags: ["ai", "python", "saas"]   num_ideas: 10               │
+│  creativity: 0.85                                                   │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  COLUMN 1: primary_tag          (SamplerColumn — CATEGORY)          │
+│  Picks from user's seed_tags with equal weight, OR from full tag    │
+│  vocabulary weighted by frequency if no seed tags specified.        │
+│  Output: "ai"                                                       │
+├─────────────────────────────────────────────────────────────────────┤
+│  COLUMN 2: secondary_tags       (SamplerColumn — SUBCATEGORY)       │
+│  Given primary_tag, picks 2-3 co-occurring tags from pre-computed   │
+│  co-occurrence data.                                                │
+│  Output: ["llm", "python"]                                          │
+├─────────────────────────────────────────────────────────────────────┤
+│  COLUMN 3: target_audience      (SamplerColumn — CATEGORY)          │
+│  Random audience persona for diversity.                              │
+│  Output: "indie hackers"                                            │
+├─────────────────────────────────────────────────────────────────────┤
+│  COLUMN 4: target_complexity    (SamplerColumn — UNIFORM 1-10)      │
+│  Random complexity target to ensure variety.                         │
+│  Output: 7                                                          │
+├─────────────────────────────────────────────────────────────────────┤
+│  COLUMN 5: project_idea         (LLMTextColumn)                     │
+│  Prompt: "Generate a project idea for {{ primary_tag }} that also   │
+│  involves {{ secondary_tags }}, targeting {{ target_audience }},     │
+│  with ~{{ target_complexity }}/10 complexity..."                     │
+│  Output: 2-3 paragraph project description (free-form text)         │
+├─────────────────────────────────────────────────────────────────────┤
+│  COLUMN 6: metadata             (LLMStructuredColumn)               │
+│  Prompt: "Extract from this project idea..."                        │
+│  Output: {                                                          │
+│    "title": "NeuroLint",                                            │
+│    "short_description": "AI-powered code review for ML pipelines",  │
+│    "description": "A tool that analyzes ML pipeline code for...",   │
+│    "hashtags": ["ai", "llm", "python", "developer-tools"]           │
+│  }                                                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│  COLUMN 7: idea_quality         (LLMJudgeColumn)                    │
+│  Rubric: idea_score (1-10), complexity_score (1-10)                 │
+│  Output: { "idea_score": 7, "complexity_score": 6 }                │
+├─────────────────────────────────────────────────────────────────────┤
+│  COLUMNS 8-11: Expression columns to flatten metadata               │
+│  title = {{ metadata.title }}                                       │
+│  short_description = {{ metadata.short_description }}               │
+│  description = {{ metadata.description }}                           │
+│  hashtags = {{ metadata.hashtags }}                                 │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    POST-PIPELINE PROCESSING                         │
+│  For each generated row:                                            │
+│  1. Generate embedding via existing embedding_client                │
+│     (same create_embedding_text → get_single_embedding flow)       │
+│  2. Save to waywo_projects with source="nemo_data_designer"        │
+│  3. Set is_valid_project=True, source_comment_id=NULL              │
+│  4. project_urls=[], url_summaries={}                               │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**LLM call count per generated project: 3** (text generation + structured extraction + judge scoring). The sampler and expression columns are pure computation — no LLM calls.
+
+---
+
+## LLM Configuration — Local or Remote
+
+DataDesigner connects to LLMs via `ModelProvider` + `ModelConfig`. We'll configure these using the **same env vars** the rest of waywo already uses, so switching between local and remote inference requires zero code changes:
 
 ```python
+import os
 import data_designer.config as dd
-from data_designer.interface import DataDesigner
 
-# Reuse the same env vars from llm_config.py
+# These are the same env vars from docker-compose.yml x-common-env
+# and from src/llm_config.py — single source of truth
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://192.168.6.19:8002/v1")
 LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4")
-EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://192.168.5.96:8000")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "not-needed")
 
-# DataDesigner model provider pointing to local Nemotron
-local_provider = dd.ModelProvider(
-    name="local-nemotron",
+provider = dd.ModelProvider(
+    name="waywo-llm",
     endpoint=LLM_BASE_URL,
-    provider_type="openai",      # OpenAI-compatible API
-    api_key="LOCAL_LLM_API_KEY", # env var name; can be "not-needed"
-)
-
-# Model configs
-text_model = dd.ModelConfig(
-    alias="local-text",
-    model=LLM_MODEL_NAME,
-    provider="local-nemotron",
-    inference_parameters=dd.ChatCompletionInferenceParams(
-        temperature=0.85,   # higher for creative idea generation
-        max_tokens=2048,
-    ),
-)
-
-structured_model = dd.ModelConfig(
-    alias="local-structured",
-    model=LLM_MODEL_NAME,
-    provider="local-nemotron",
-    inference_parameters=dd.ChatCompletionInferenceParams(
-        temperature=0.1,    # lower for structured/deterministic output
-        max_tokens=2048,
-    ),
-)
-
-judge_model = dd.ModelConfig(
-    alias="local-judge",
-    model=LLM_MODEL_NAME,
-    provider="local-nemotron",
-    inference_parameters=dd.ChatCompletionInferenceParams(
-        temperature=0.2,
-        max_tokens=512,
-    ),
+    provider_type="openai",
+    api_key="LLM_API_KEY",  # NDD reads this env var at runtime
 )
 ```
 
-**Note on embeddings**: NeMo DataDesigner's `EmbeddingColumnConfig` uses LiteLLM's embedding API, which expects an OpenAI-compatible `/v1/embeddings` endpoint. Our embedding service uses a custom `/embed` endpoint. Two options:
+**Switching to remote inference** (e.g., NVIDIA API Catalog, OpenAI, OpenRouter): just change the env vars in `docker-compose.yml` or `.env`:
 
-- **Option A**: Use a `CustomColumnConfig` that calls our existing `embedding_client.get_single_embedding()` — reuses our battle-tested client
-- **Option B**: If the embedding service also exposes `/v1/embeddings`, configure an NDD embedding model provider
+```yaml
+# Local Nemotron
+LLM_BASE_URL: http://192.168.6.19:8002/v1
+LLM_MODEL_NAME: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+LLM_API_KEY: not-needed
 
-We should go with **Option A** (custom column calling our existing client) since it's guaranteed compatible and avoids a second embedding provider config.
+# OR: NVIDIA API Catalog (remote)
+LLM_BASE_URL: https://integrate.api.nvidia.com/v1
+LLM_MODEL_NAME: nvidia/llama-3.3-nemotron-super-49b-v1
+LLM_API_KEY: nvapi-xxx
+
+# OR: OpenAI
+LLM_BASE_URL: https://api.openai.com/v1
+LLM_MODEL_NAME: gpt-4.1
+LLM_API_KEY: sk-xxx
+```
+
+Both the existing LlamaIndex workflow (HN processing) and the new DataDesigner pipeline (idea generation) will use whichever LLM the env vars point to. No config duplication.
+
+**Three model aliases with different temperatures** (all pointing to the same model/provider):
+
+| Alias | Temperature | Purpose |
+|-------|-------------|---------|
+| `waywo-creative` | 0.85 (or user-configured `creativity` param) | Free-form idea generation |
+| `waywo-structured` | 0.1 | Structured metadata extraction (JSON) |
+| `waywo-judge` | 0.2 | Quality scoring |
 
 ---
 
-### Phase 2: Database Schema Changes
+## Database Changes
 
-**2.1 Add `source` column to `WaywoProjectDB`**
+### Make `source_comment_id` nullable
 
-Add a new column to distinguish HN-sourced projects from AI-generated ones:
+Currently `NOT NULL` with FK to `waywo_comments.id`. Generated projects have no source comment. Change to nullable:
 
 ```python
-# In WaywoProjectDB
-source: Mapped[str] = mapped_column(
-    String(50), default="hackernews", nullable=False
+source_comment_id: Mapped[Optional[int]] = mapped_column(
+    Integer, ForeignKey("waywo_comments.id"), nullable=True
 )
 ```
 
-Values: `"hackernews"` (default for all existing projects) or `"ndd_generated"`.
-
-This column also needs:
-- An index for filtering: `Index("ix_waywo_projects_source", "source")`
-- A migration script to set `source = "hackernews"` on all existing rows
-
-**2.2 Make `source_comment_id` nullable**
-
-Currently `source_comment_id` is `nullable=False` with a FK to `waywo_comments.id`. Generated projects have no source comment. Options:
-
-- **Option A (recommended)**: Make `source_comment_id` nullable. Generated projects will have `source_comment_id = NULL`.
-- **Option B**: Create a synthetic "comment" entry. Adds unnecessary complexity.
-
-Go with Option A. This requires a migration and updating the FK constraint.
-
-**2.3 Add generation metadata fields**
+### Add `source` column (nullable)
 
 ```python
-# Optional fields for NDD-generated projects
-generation_config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: seed tags, params
-generation_batch_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # group generated projects
+source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 ```
 
-`generation_config` stores the seed tags and parameters used, so users can see why a project was generated. `generation_batch_id` groups projects from the same generation run for easy batch management (e.g., "delete all projects from run X").
+- `"hn"` — projects extracted from Hacker News comments
+- `"nemo_data_designer"` — projects generated by NeMo DataDesigner
+- `NULL` — legacy projects (pre-migration); functionally equivalent to `"hn"`
 
-**2.4 Migration approach**
+No backfill needed — you'll regenerate everything anyway. New HN-processed projects will set `source="hn"`, new generated projects will set `source="nemo_data_designer"`.
 
-Add a new migration in `src/migrate.py`:
-1. `ALTER TABLE waywo_projects ADD COLUMN source TEXT DEFAULT 'hackernews' NOT NULL`
-2. `ALTER TABLE waywo_projects ADD COLUMN generation_config TEXT`
-3. `ALTER TABLE waywo_projects ADD COLUMN generation_batch_id TEXT`
-4. Make `source_comment_id` nullable (SQLite requires table recreation for this)
-5. Add index on `source`
+Add an index: `Index("ix_waywo_projects_source", "source")`
+
+### Migration
+
+In `src/migrate.py`, add:
+1. `ALTER TABLE waywo_projects ADD COLUMN source TEXT` (nullable, no default needed)
+2. Recreate table to make `source_comment_id` nullable (SQLite limitation — requires copy-to-temp, drop, recreate, copy-back)
+3. Add index on `source`
+
+### What stays the same
+
+All other `WaywoProjectDB` fields remain identical. Generated projects will populate:
+- `title`, `short_description`, `description`, `hashtags` — from DataDesigner pipeline
+- `idea_score`, `complexity_score` — from LLM judge
+- `description_embedding` — from post-pipeline embedding
+- `is_valid_project` = `True` (always, since they're generated)
+- `project_urls` = `[]`, `url_summaries` = `{}` (no URLs to scrape)
+- `screenshot_path` = `None` (no URL to screenshot)
+- `source_comment_id` = `None`
+- `is_bookmarked` = `False`
 
 ---
 
-### Phase 3: Seed Data — Tag Extraction and Preparation
+## Tag Seeding Strategy
 
-**3.1 Extract tag corpus from existing projects**
+### How tags drive generation
 
-The existing `/api/waywo-projects/hashtags` endpoint returns all unique tags. We'll build a seed dataset from this:
+The user selects tags in the frontend UI. These become the seed for the DataDesigner pipeline:
 
+**If user provides specific tags**: The `primary_tag` sampler picks uniformly from those tags. Every generated project will be rooted in one of the user's chosen tags.
+
+**If user provides no tags**: The `primary_tag` sampler picks from the full tag vocabulary weighted by frequency (popular tags like "ai", "saas", "web-dev" are more likely). This produces a "surprise me" generation mode.
+
+### Tag co-occurrence for realistic combinations
+
+Real projects have 3-5 tags that make sense together ("ai" + "llm" + "python", not "ai" + "gardening" + "cooking"). We need a co-occurrence map.
+
+**Build co-occurrence data** from existing projects:
 ```python
-def build_tag_seed_data() -> pd.DataFrame:
+def build_tag_cooccurrence(projects: list[WaywoProjectDB]) -> dict[str, list[tuple[str, int]]]:
     """
-    Extract tags from existing projects with frequency counts.
-    Returns DataFrame with columns: tag, count, sample_titles
+    For each tag, find which other tags most commonly appear alongside it.
+    Returns: {"ai": [("llm", 45), ("python", 38), ("nlp", 22), ...], ...}
     """
-    # Query all valid projects' hashtags
-    # Count frequency of each tag
-    # For each tag, collect 3-5 sample project titles that use it
-    # Return as DataFrame
 ```
 
-The seed DataFrame will look like:
+This feeds the `SUBCATEGORY` sampler: given primary_tag="ai", sample secondary tags from ["llm", "python", "nlp", "computer-vision"] with co-occurrence-based weights.
 
-| tag | count | sample_titles |
-|-----|-------|---------------|
-| ai | 142 | "AI-Powered Code Review", "LLM Chat App", ... |
-| saas | 87 | "Invoice SaaS Platform", ... |
-| python | 76 | "Python Web Scraper", ... |
-| web-dev | 65 | ... |
-
-**3.2 Build tag combination sampler**
-
-Instead of generating ideas for single tags, we want realistic multi-tag combinations (like real projects have 3-5 tags). DataDesigner's `SamplerType.CATEGORY` with weighted probabilities based on tag frequency handles this naturally, combined with subcategory sampling for complementary tags.
-
-Alternatively, we can pre-compute common tag co-occurrence pairs from existing projects and use those as seed rows.
-
-**3.3 Seed data strategy**
-
-Two approaches, both valid:
-
-- **Approach A — Tag-seeded generation**: Use sampler columns to pick tags, then LLM generates project ideas matching those tags. Tags drive the generation.
-- **Approach B — Existing project-seeded generation**: Use existing project summaries (title + description + tags) as seed data, and have the LLM generate "similar but novel" project ideas. More grounded but less diverse.
-
-**Recommendation**: Start with **Approach A** (tag-seeded) for maximum novelty, with the option to add Approach B later. The tag frequency data ensures generated ideas reflect the actual distribution of what people build.
+**When to compute**: At pipeline build time (start of Celery task), querying the DB for current tag data. Not expensive — just counts over the project table.
 
 ---
 
-### Phase 4: DataDesigner Pipeline Definition
+## Embedding Integration
 
-**4.1 Pipeline column schema**
-
-```python
-config_builder = dd.DataDesignerConfigBuilder(
-    model_configs=[text_model, structured_model, judge_model]
-)
-
-# --- Column 1: Primary tag (sampler) ---
-config_builder.add_column(
-    dd.SamplerColumnConfig(
-        name="primary_tag",
-        sampler_type=dd.SamplerType.CATEGORY,
-        params={
-            "values": ["ai", "saas", "python", "web-dev", ...],  # from seed data
-            "weights": [142, 87, 76, 65, ...],                    # frequency weights
-        },
-    )
-)
-
-# --- Column 2: Secondary tags (sampler, conditioned on primary) ---
-config_builder.add_column(
-    dd.SamplerColumnConfig(
-        name="secondary_tags",
-        sampler_type=dd.SamplerType.SUBCATEGORY,
-        params={
-            "parent_column": "primary_tag",
-            "mapping": {
-                "ai": {"values": ["llm", "machine-learning", "nlp", "computer-vision"], "weights": [4,3,2,1]},
-                "saas": {"values": ["billing", "api", "dashboard", "analytics"], "weights": [3,3,2,2]},
-                # ... built from tag co-occurrence analysis
-            },
-        },
-    )
-)
-
-# --- Column 3: Target audience / persona context (sampler) ---
-config_builder.add_column(
-    dd.SamplerColumnConfig(
-        name="target_audience",
-        sampler_type=dd.SamplerType.CATEGORY,
-        params={
-            "values": [
-                "indie hackers", "enterprise teams", "developers",
-                "small businesses", "students", "researchers",
-                "content creators", "data scientists"
-            ],
-            "weights": [3, 2, 4, 2, 1, 1, 1, 1],
-        },
-    )
-)
-
-# --- Column 4: Complexity target (sampler) ---
-config_builder.add_column(
-    dd.SamplerColumnConfig(
-        name="target_complexity",
-        sampler_type=dd.SamplerType.UNIFORM,
-        params={"low": 1, "high": 10},
-        convert_to="int",
-    )
-)
-
-# --- Column 5: Project idea generation (LLM text) ---
-config_builder.add_column(
-    dd.LLMTextColumnConfig(
-        name="project_idea",
-        prompt="""You are a creative tech entrepreneur brainstorming project ideas.
-
-Generate a novel, specific, and actionable project idea that:
-- Focuses on the domain: {{ primary_tag }}
-- Incorporates elements of: {{ secondary_tags }}
-- Targets: {{ target_audience }}
-- Has approximately {{ target_complexity }}/10 complexity
-
-The idea should be something a solo developer or small team could realistically build.
-Write 2-3 paragraphs describing the project concept, what it does, why it's useful,
-and what makes it interesting. Be specific about features and technical approach.
-
-Do NOT describe a project that already exists as a well-known product.
-Be creative and original.""",
-        model_alias="local-text",
-    )
-)
-
-# --- Column 6: Structured metadata extraction (LLM structured) ---
-config_builder.add_column(
-    dd.LLMStructuredColumnConfig(
-        name="metadata",
-        prompt="""Extract structured metadata from this project idea.
-
-Project idea: {{ project_idea }}
-Primary domain: {{ primary_tag }}
-Related tags: {{ secondary_tags }}
-
-Return a JSON object with:
-- "title": A catchy, concise project name (2-5 words)
-- "short_description": A one-line summary (5-10 words)
-- "description": A 1-2 sentence description
-- "hashtags": An array of 3-5 lowercase hashtag strings (include {{ primary_tag }})""",
-        output_format={
-            "type": "object",
-            "properties": {
-                "title": {"type": "string"},
-                "short_description": {"type": "string"},
-                "description": {"type": "string"},
-                "hashtags": {"type": "array", "items": {"type": "string"}},
-            },
-            "required": ["title", "short_description", "description", "hashtags"],
-        },
-        model_alias="local-structured",
-    )
-)
-
-# --- Column 7: Idea quality score (LLM judge) ---
-config_builder.add_column(
-    dd.LLMJudgeColumnConfig(
-        name="idea_quality",
-        prompt="""Evaluate this project idea for quality and potential.
-
-Title: {{ metadata.title }}
-Description: {{ metadata.description }}
-Full idea: {{ project_idea }}""",
-        scores=[
-            dd.Score(
-                name="idea_score",
-                description="How novel, useful, and feasible is this idea?",
-                options={
-                    "1": "Trivial/unoriginal — a to-do app clone",
-                    "3": "Somewhat interesting but common",
-                    "5": "Solid idea with clear value",
-                    "7": "Very creative with strong potential",
-                    "9": "Exceptional — novel, high-impact, and feasible",
-                },
-            ),
-            dd.Score(
-                name="complexity_score",
-                description="How complex would this be to build?",
-                options={
-                    "1": "Weekend project, very simple",
-                    "3": "A few weeks of work",
-                    "5": "A month or two for one developer",
-                    "7": "Several months, needs multiple skills",
-                    "9": "Major undertaking, team required",
-                },
-            ),
-        ],
-        model_alias="local-judge",
-    )
-)
-
-# --- Column 8: Expression columns to extract final fields ---
-config_builder.add_column(
-    dd.ExpressionColumnConfig(
-        name="title",
-        expr="{{ metadata.title }}",
-    )
-)
-config_builder.add_column(
-    dd.ExpressionColumnConfig(
-        name="short_description",
-        expr="{{ metadata.short_description }}",
-    )
-)
-config_builder.add_column(
-    dd.ExpressionColumnConfig(
-        name="description",
-        expr="{{ metadata.description }}",
-    )
-)
-config_builder.add_column(
-    dd.ExpressionColumnConfig(
-        name="hashtags",
-        expr="{{ metadata.hashtags }}",
-    )
-)
-```
-
-**4.2 Embedding generation (post-pipeline)**
-
-Since our embedding service uses a custom API (not OpenAI-compatible `/v1/embeddings`), we'll generate embeddings **after** the DataDesigner pipeline completes, using our existing `embedding_client`:
+Generated projects get embeddings the **exact same way** HN projects do:
 
 ```python
-# After DataDesigner produces DataFrame:
-df = results.load_dataset()
-
-for _, row in df.iterrows():
-    embedding_text = create_embedding_text(
-        title=row["title"],
-        description=row["description"],
-        hashtags=row["hashtags"],
-    )
-    embedding = await get_single_embedding(text=embedding_text)
-    # Save to DB with embedding
-```
-
-This keeps the pipeline simple and reuses our existing, tested embedding code path.
-
-**4.3 Alternative: Use NDD CustomColumnConfig for embeddings**
-
-If we want embeddings inside the pipeline (for preview/analysis), we can use a custom column:
-
-```python
-@dd.custom_column_generator()
-async def generate_waywo_embedding(row, generator_params):
-    from src.embedding_client import get_single_embedding, create_embedding_text
-    text = create_embedding_text(row["title"], row["description"], row["hashtags"])
-    return await get_single_embedding(text=text)
-
-config_builder.add_column(
-    dd.CustomColumnConfig(
-        name="embedding",
-        generator_function=generate_waywo_embedding,
-        generation_strategy="cell_by_cell",
-    )
+# Same function used in WaywoProjectWorkflow.generate_embedding step
+embedding_text = create_embedding_text(
+    title=row["title"],
+    description=row["description"],
+    hashtags=row["hashtags"],
 )
+embedding = await get_single_embedding(
+    text=embedding_text,
+    embedding_url=EMBEDDING_URL,  # same env var
+)
+blob = embedding_to_blob(embedding)
+# Save to description_embedding column
 ```
 
-**Recommendation**: Start with post-pipeline embedding (simpler), consider moving to CustomColumn later if needed.
+This means generated projects will:
+- Appear in semantic search results alongside HN projects
+- Show up in "similar projects" for HN projects (and vice versa)
+- Be searchable via the RAG chatbot
+
+The embedding service is called **after** the DataDesigner pipeline completes, not during it. DataDesigner doesn't know about embeddings — we handle that in the save loop. This avoids needing to configure a second provider for our custom `/embed` endpoint.
 
 ---
 
-### Phase 5: API Endpoints
+## End-to-End Flow
 
-**5.1 `POST /api/generate-ideas`**
+### 1. User opens "Generate Ideas" dialog in frontend
 
-Request body:
-```python
-class GenerateIdeasRequest(BaseModel):
-    num_ideas: int = Field(default=5, ge=1, le=50)
-    seed_tags: Optional[list[str]] = None    # specific tags to seed with; None = auto-select
-    min_idea_score: Optional[int] = Field(default=None, ge=1, le=10)  # filter threshold
-    creativity: float = Field(default=0.85, ge=0.1, le=1.5)  # maps to LLM temperature
+The dialog (on the `/projects` page) shows:
+- **Tag selector**: Multi-select chips populated from `GET /api/waywo-projects/hashtags`. User picks tags they're interested in (or leaves empty for random).
+- **Number of ideas**: Input/slider, 1-50, default 5
+- **Creativity**: Slider, maps to LLM temperature (0.3 = conservative, 0.85 = balanced, 1.2 = wild)
+
+### 2. Frontend calls `POST /api/generate-ideas`
+
+```json
+{
+  "num_ideas": 10,
+  "seed_tags": ["ai", "python", "developer-tools"],
+  "creativity": 0.85
+}
 ```
 
-Response:
-```python
-class GenerateIdeasResponse(BaseModel):
-    task_id: str          # Celery task ID for polling
-    batch_id: str         # generation_batch_id for grouping
-    num_requested: int
-    seed_tags: list[str]  # the tags that will be used
+### 3. Backend enqueues Celery task
+
+The endpoint validates the request, creates a Celery task, and returns the task ID immediately:
+
+```json
+{
+  "task_id": "abc123-...",
+  "num_requested": 10,
+  "seed_tags": ["ai", "python", "developer-tools"]
+}
 ```
 
-**5.2 `GET /api/generate-ideas/{task_id}/status`**
-
-Returns task status (PENDING, STARTED, SUCCESS, FAILURE) and progress info.
-
-**5.3 `DELETE /api/generated-projects/batch/{batch_id}`**
-
-Delete all projects from a specific generation batch.
-
-**5.4 Update existing `GET /api/waywo-projects`**
-
-Add `source` filter parameter:
-- `source=hackernews` — only HN projects
-- `source=ndd_generated` — only AI-generated projects
-- `source=all` (default) — both
-
----
-
-### Phase 6: Celery Task
-
-**6.1 `generate_ideas` task**
+### 4. Celery worker runs DataDesigner pipeline
 
 ```python
 @celery_app.task(bind=True)
-def generate_ideas(self, num_ideas, seed_tags, creativity, batch_id):
-    """
-    Generate synthetic project ideas using NeMo DataDesigner.
-    """
-    # 1. Build tag seed data (from DB or provided tags)
-    # 2. Configure DataDesigner pipeline
-    # 3. Run pipeline: data_designer.create(config, num_records=num_ideas)
-    # 4. Post-process: generate embeddings via embedding service
-    # 5. Save each generated project to DB with source="ndd_generated"
-    # 6. Return summary of generated projects
+def generate_ideas(self, num_ideas: int, seed_tags: list[str], creativity: float):
+    nest_asyncio.apply()
+
+    # 1. Build tag data (co-occurrence map from DB)
+    tag_cooccurrence = build_tag_cooccurrence(get_all_projects())
+
+    # 2. Configure DataDesigner with env-var-driven LLM provider
+    provider, models = build_ndd_provider_and_models(creativity=creativity)
+    data_designer = DataDesigner(model_providers=[provider])
+    config = build_pipeline_config(
+        models=models,
+        seed_tags=seed_tags,
+        tag_cooccurrence=tag_cooccurrence,
+    )
+
+    # 3. Generate
+    results = data_designer.create(config, num_records=num_ideas, dataset_name="waywo-ideas")
+    df = results.load_dataset()
+
+    # 4. Post-process: embeddings + save
+    loop = asyncio.get_event_loop()
+    for _, row in df.iterrows():
+        embedding = loop.run_until_complete(generate_embedding_for_row(row))
+        save_generated_project(row, embedding, source="nemo_data_designer")
 ```
 
-**6.2 Async considerations**
+### 5. Frontend polls for completion, then refreshes project list
 
-NeMo DataDesigner uses async internally. Like the existing workflow tasks, we'll use `nest_asyncio.apply()` to run async code within the sync Celery task. DataDesigner's `create()` method handles its own async event loop, but we need to ensure compatibility with Celery's execution model.
+The frontend polls `GET /api/generate-ideas/{task_id}/status` until complete, then reloads the project list (optionally filtered to `source=nemo_data_designer` to show just the new projects).
+
+### 6. Generated projects appear in project list
+
+They look like regular projects but with:
+- A small "NDD" or "AI Generated" badge
+- No "Original Comment" section on the detail page
+- No screenshot (nothing to screenshot)
+- `source_comment_id` is null → "Source" section hidden
 
 ---
 
-### Phase 7: Pydantic Model Updates
+## API Changes
 
-**7.1 Update `WaywoProject`**
+### New endpoints
 
-Add fields:
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/generate-ideas` | POST | Start idea generation (returns task ID) |
+| `/api/generate-ideas/{task_id}/status` | GET | Poll task status |
+
+### Updated endpoints
+
+| Endpoint | Change |
+|----------|--------|
+| `GET /api/waywo-projects` | Add optional `source` query param (`hn`, `nemo_data_designer`, or omit for all) |
+| `GET /api/waywo-projects/{id}` | Response now includes `source` field |
+
+### Request/response models
+
 ```python
-source: str = "hackernews"                           # "hackernews" or "ndd_generated"
-generation_config: Optional[dict] = None             # seed tags, params used
-generation_batch_id: Optional[str] = None            # batch grouping
+class GenerateIdeasRequest(BaseModel):
+    num_ideas: int = Field(default=5, ge=1, le=50)
+    seed_tags: Optional[list[str]] = None
+    creativity: float = Field(default=0.85, ge=0.1, le=1.5)
+
+class GenerateIdeasResponse(BaseModel):
+    task_id: str
+    num_requested: int
+    seed_tags: list[str]
 ```
 
-**7.2 Update `WaywoProjectSummary`**
+---
+
+## Frontend Changes
+
+### Projects index page (`/projects`)
+
+- **Source filter**: Tab bar or segmented control — "All" | "From HN" | "AI Generated"
+- **"Generate Ideas" button**: Opens dialog/drawer with tag selector + options
+- **Badge on project cards**: Small chip showing "AI" for `source === "nemo_data_designer"`
+
+### Generate Ideas dialog
+
+- Tag multi-select (from existing hashtags endpoint)
+- Num ideas input
+- Creativity slider
+- Generate button → loading state → completion toast → refresh list
+
+### Project detail page (`/projects/[id]`)
+
+- Show "AI Generated" badge when `source === "nemo_data_designer"`
+- Conditionally hide "Original Comment" section when `source_comment_id` is null
+- Everything else (scores, tags, description, similar projects, bookmark) works identically
+
+---
+
+## Pydantic Model Changes
+
+### `WaywoProject` + `WaywoProjectSummary`
 
 Add:
 ```python
-source: str = "hackernews"
+source: Optional[str] = None  # "hn", "nemo_data_designer", or None (legacy)
 ```
 
-**7.3 Update `WaywoProjectListFilters`**
+### `WaywoProjectListFilters`
 
 Add:
 ```python
-source: Optional[str] = None  # "hackernews", "ndd_generated", or None for all
+source: Optional[str] = None  # filter by source
 ```
-
----
-
-### Phase 8: Frontend Changes
-
-**8.1 Projects index page (`/projects`)**
-
-- Add a **source filter** tab/toggle: "All" | "From HN" | "AI Generated"
-- Add a **"Generate Ideas" button** that opens a dialog/drawer
-- Show a badge on project cards indicating source (small "AI" chip for generated projects)
-
-**8.2 Generate Ideas dialog**
-
-- Tag selector: multi-select from existing tags (pre-populated from `/api/waywo-projects/hashtags`)
-- Number of ideas: slider (1-50, default 5)
-- Creativity: slider (0.1-1.5, default 0.85) with labels ("Conservative" to "Wild")
-- "Generate" button → calls `POST /api/generate-ideas` → shows progress/polling
-- On completion: refresh project list with `source=ndd_generated` filter active
-
-**8.3 Project detail page (`/projects/[id]`)**
-
-- Show "AI Generated" badge for `source === "ndd_generated"`
-- Show "Seed Tags" section if `generation_config` is present
-- Hide "Original Comment" section (since there's no source comment)
-- Show "Generation Batch" info with link to see other projects from same batch
-- "Delete Batch" button to remove all projects from the generation run
-
----
-
-### Phase 9: Tag Co-occurrence Analysis
-
-To make the subcategory sampling realistic, we need to analyze which tags commonly appear together in existing projects.
-
-**9.1 Build co-occurrence matrix**
-
-```python
-def build_tag_cooccurrence() -> dict[str, dict[str, int]]:
-    """
-    Analyze existing projects to find which tags commonly appear together.
-    Returns: {primary_tag: {co_tag: count, ...}, ...}
-    """
-    # For each project, for each pair of tags, increment co-occurrence count
-    # Filter to top-N co-occurring tags per primary tag
-```
-
-This data feeds into the `SUBCATEGORY` sampler's `mapping` parameter, ensuring generated ideas have realistic tag combinations (e.g., "ai" commonly pairs with "llm", "python", "nlp" — not with "gardening").
-
-**9.2 Cache/refresh strategy**
-
-Store the co-occurrence data as a JSON file or in a DB table. Refresh when new HN projects are processed. The generation pipeline reads this at startup.
 
 ---
 
@@ -625,17 +445,32 @@ Store the co-occurrence data as a JSON file or in a DB table. Refresh when new H
 
 | File | Change |
 |------|--------|
-| `pyproject.toml` | Add `data-designer>=0.4.0` dependency |
-| `src/ndd_config.py` | **NEW** — DataDesigner provider/model config, pipeline builder |
-| `src/ndd_pipeline.py` | **NEW** — Pipeline definition (columns, seed data, generation logic) |
-| `src/db_models.py` | Add `source`, `generation_config`, `generation_batch_id` columns; make `source_comment_id` nullable |
-| `src/models.py` | Add `source`, `generation_config`, `generation_batch_id` to Pydantic models; add `GenerateIdeasRequest`/`Response` |
-| `src/db_client.py` | Update `save_project` and query methods for new fields; add `delete_batch` |
-| `src/main.py` | Add `/api/generate-ideas` endpoints; update project list filtering |
+| `pyproject.toml` | Add `data-designer>=0.4.0` |
+| `src/ndd_config.py` | **NEW** — Provider/model config using existing env vars |
+| `src/ndd_pipeline.py` | **NEW** — Pipeline definition (columns, seed data builder, co-occurrence) |
+| `src/db_models.py` | Add `source` (nullable); make `source_comment_id` nullable |
+| `src/models.py` | Add `source` to project models; add `GenerateIdeasRequest`/`Response` |
+| `src/db_client.py` | Update queries for `source` filter; update `save_project` |
+| `src/main.py` | Add generate-ideas endpoints; update project list with source filter |
 | `src/tasks.py` | Add `generate_ideas` Celery task |
-| `src/migrate.py` | Add migration for new columns |
-| `frontend/app/pages/projects/index.vue` | Source filter, Generate Ideas button/dialog |
-| `frontend/app/pages/projects/[id].vue` | AI-generated badge, generation metadata display |
+| `src/migrate.py` | Migration for new column + nullable change |
+| `frontend/app/pages/projects/index.vue` | Source filter tabs, Generate Ideas button + dialog |
+| `frontend/app/pages/projects/[id].vue` | AI badge, conditional comment section |
+| `docker-compose.yml` | No changes needed (env vars already flow to celery worker) |
+
+---
+
+## Implementation Order
+
+1. Add `data-designer` dependency, verify it installs cleanly alongside existing deps
+2. DB changes: add `source` column, make `source_comment_id` nullable, migration
+3. Pydantic model updates (source field)
+4. `ndd_config.py` — provider + model config reading from env vars
+5. `ndd_pipeline.py` — tag co-occurrence builder + pipeline definition
+6. Celery task (`generate_ideas`) with post-pipeline embedding + DB save
+7. API endpoints (generate-ideas + source filter on project list)
+8. Frontend: source filter, generate dialog, AI badges
+9. Update HN workflow to set `source="hn"` on newly processed projects
 
 ---
 
@@ -643,45 +478,18 @@ Store the co-occurrence data as a JSON file or in a DB table. Refresh when new H
 
 | Risk | Mitigation |
 |------|-----------|
-| `data-designer` dependency conflicts | Test install in isolated venv first; pin version |
-| LiteLLM conflicts with existing `openai` package | LiteLLM wraps openai; test compatibility |
-| Nemotron model quality for creative generation | Use higher temperature (0.85); add quality filtering via LLM Judge; allow regeneration |
-| Embedding service compatibility | Use post-pipeline embedding with existing client (not NDD's EmbeddingColumn) |
-| Large generation runs blocking LLM for HN processing | Use separate Celery queue or rate limiting; limit max batch size to 50 |
-| DataDesigner async compatibility with Celery | Follow same `nest_asyncio` pattern as existing workflow tasks |
-
----
-
-## Implementation Order
-
-1. **Phase 1** — Add dependency, create `ndd_config.py` with local LLM provider setup
-2. **Phase 2** — Database schema changes + migration
-3. **Phase 7** — Pydantic model updates (needed before API/task work)
-4. **Phase 3** — Tag seed data extraction utilities
-5. **Phase 9** — Tag co-occurrence analysis
-6. **Phase 4** — DataDesigner pipeline definition
-7. **Phase 6** — Celery task for generation
-8. **Phase 5** — API endpoints
-9. **Phase 8** — Frontend changes
-
----
-
-## Testing Strategy
-
-- **Unit tests**: Pipeline config validation, tag extraction, co-occurrence analysis
-- **Integration test**: Run DataDesigner preview (2-3 records) against local LLM, verify output schema
-- **DB tests**: Migration correctness, nullable `source_comment_id`, filtering by source
-- **API tests**: Generate ideas endpoint, status polling, batch deletion
-- **E2E test**: Frontend → API → Celery → DataDesigner → DB → Frontend display
+| `data-designer` dependency conflicts with existing packages | Test install in isolated venv first; pin version |
+| Nemotron model struggles with creative generation or structured output | DataDesigner has built-in retry/correction loops for structured output; use LLM Judge to filter low-quality ideas; temperature tunable via UI |
+| Generation runs compete with HN processing for LLM resources | Celery concurrency is already 1; tasks are sequential; generation runs are user-initiated so timing is controllable |
+| DataDesigner async/event-loop conflicts with Celery | Same `nest_asyncio` pattern already used successfully for WaywoProjectWorkflow |
+| Co-occurrence map is empty if no projects exist yet | Fallback: skip subcategory sampling, use only user-provided tags |
 
 ---
 
 ## Open Questions
 
-1. **Should generated projects be valid by default?** Currently, HN projects go through a validation step. Generated projects are inherently "valid" (they're not spam/deleted comments). Recommend setting `is_valid_project = True` for all generated projects.
+1. **Generated project validity** — Recommend setting `is_valid_project = True` for all generated projects since they're not spam. The LLM Judge scores serve as the quality signal instead.
 
-2. **Should we support "similar to project X" generation?** Approach B from Phase 3 — seed with existing project descriptions to generate variations. Could be a v2 feature.
+2. **"Similar to project X" mode** — Future enhancement: select an existing project and generate variations. Would use DataDesigner's seed dataset feature with the project's description as seed. Good v2 feature.
 
-3. **Tag vocabulary control**: Should we limit generated hashtags to the existing vocabulary, or allow the LLM to create new tags? Recommend constraining to existing tags for consistency, with an option to allow new ones.
-
-4. **Generation quotas**: Should there be limits on how many ideas a user can generate? Relevant if LLM resources are shared.
+3. **Tag vocabulary control** — The structured extraction prompt should instruct the LLM to prefer existing tags but allow new ones if the idea genuinely introduces a new domain. The UI tag filter will auto-discover new tags.
