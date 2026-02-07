@@ -1,17 +1,17 @@
 <template>
-  <div class="container mx-auto px-4 py-12">
+  <div class="container mx-auto px-4 py-8 md:py-12">
     <div class="max-w-4xl mx-auto">
       <!-- Loading State -->
-      <div v-if="isLoading" class="flex justify-center py-12">
+      <div v-if="isLoading" class="flex justify-center py-20">
         <Icon name="lucide:loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
 
       <!-- Error State -->
-      <div v-else-if="fetchError" class="text-center py-12">
+      <div v-else-if="fetchError" class="text-center py-20">
         <Icon name="lucide:alert-circle" class="h-12 w-12 text-destructive mx-auto mb-4" />
-        <p class="text-destructive">{{ fetchError }}</p>
+        <p class="text-destructive text-lg">{{ fetchError }}</p>
         <a href="/projects">
-          <Button variant="outline" class="mt-4">
+          <Button variant="outline" class="mt-6">
             <Icon name="lucide:arrow-left" class="mr-2 h-4 w-4" />
             Back to Projects
           </Button>
@@ -20,272 +20,352 @@
 
       <!-- Project Details -->
       <div v-else-if="project">
-        <!-- Back Button -->
-        <a href="/projects" class="inline-flex items-center text-muted-foreground hover:text-primary mb-6">
-          <Icon name="lucide:arrow-left" class="mr-2 h-4 w-4" />
-          Back to Projects
+        <!-- Breadcrumb -->
+        <a href="/projects" class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8">
+          <Icon name="lucide:arrow-left" class="h-4 w-4" />
+          All Projects
         </a>
 
-        <!-- Header -->
-        <div class="mb-8">
-          <div class="flex items-start justify-between mb-4">
-            <div>
-              <div class="flex items-center gap-3 mb-2">
-                <button
-                  @click="toggleBookmark"
-                  :disabled="isTogglingBookmark"
-                  class="hover:scale-110 transition-transform"
-                  :title="project.is_bookmarked ? 'Remove bookmark' : 'Add bookmark'"
-                >
-                  <Icon
-                    name="lucide:star"
-                    :class="[
-                      'h-7 w-7 transition-colors',
-                      project.is_bookmarked ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground hover:text-yellow-500',
-                      isTogglingBookmark ? 'animate-pulse' : ''
-                    ]"
-                  />
-                </button>
-                <h1 class="text-3xl font-bold">{{ project.title }}</h1>
-                <Badge v-if="!project.is_valid_project" variant="destructive">
+        <!-- Hero Header -->
+        <div class="mb-10">
+          <!-- Invalid Alert (top of header) -->
+          <Alert v-if="!project.is_valid_project && project.invalid_reason" variant="destructive" class="mb-6">
+            <Icon name="lucide:alert-circle" class="h-4 w-4" />
+            <AlertTitle>Invalid Project</AlertTitle>
+            <AlertDescription>{{ project.invalid_reason }}</AlertDescription>
+          </Alert>
+
+          <!-- Title Row -->
+          <div class="flex items-start gap-4 mb-3">
+            <button
+              @click="toggleBookmark"
+              :disabled="isTogglingBookmark"
+              class="mt-1 hover:scale-110 transition-transform flex-shrink-0"
+              :title="project.is_bookmarked ? 'Remove bookmark' : 'Add bookmark'"
+            >
+              <Icon
+                name="lucide:star"
+                :class="[
+                  'h-8 w-8 transition-colors',
+                  project.is_bookmarked ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/40 hover:text-yellow-500',
+                  isTogglingBookmark ? 'animate-pulse' : ''
+                ]"
+              />
+            </button>
+            <div class="min-w-0">
+              <div class="flex items-center gap-3 flex-wrap">
+                <h1 class="text-5xl md:text-6xl font-bold tracking-tight">{{ project.title }}</h1>
+                <Badge v-if="!project.is_valid_project" variant="destructive" class="text-xs">
                   Invalid
                 </Badge>
               </div>
-              <p class="text-xl text-muted-foreground">{{ project.short_description }}</p>
+              <p class="text-lg md:text-xl text-muted-foreground mt-2 leading-relaxed">{{ project.short_description }}</p>
             </div>
-            <div class="flex gap-3">
-              <div class="text-center">
-                <div class="text-2xl font-bold text-primary">{{ project.idea_score }}</div>
-                <div class="text-xs text-muted-foreground">Idea Score</div>
+          </div>
+
+          <!-- Score Cards -->
+          <div class="grid grid-cols-2 gap-4 mt-8 mb-6">
+            <div class="relative overflow-hidden rounded-xl border bg-gradient-to-br from-amber-500/5 to-orange-500/10 dark:from-amber-500/10 dark:to-orange-500/5 p-5">
+              <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-amber-500/10 dark:bg-amber-500/20">
+                  <Icon name="lucide:lightbulb" class="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <div class="text-sm font-medium text-muted-foreground">Idea Score</div>
+                  <div class="text-3xl font-bold tracking-tight">{{ project.idea_score }}<span class="text-base font-normal text-muted-foreground">/10</span></div>
+                </div>
               </div>
-              <div class="text-center">
-                <div class="text-2xl font-bold text-primary">{{ project.complexity_score }}</div>
-                <div class="text-xs text-muted-foreground">Complexity</div>
+            </div>
+            <div class="relative overflow-hidden rounded-xl border bg-gradient-to-br from-blue-500/5 to-indigo-500/10 dark:from-blue-500/10 dark:to-indigo-500/5 p-5">
+              <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-500/10 dark:bg-blue-500/20">
+                  <Icon name="lucide:gauge" class="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <div class="text-sm font-medium text-muted-foreground">Complexity</div>
+                  <div class="text-3xl font-bold tracking-tight">{{ project.complexity_score }}<span class="text-base font-normal text-muted-foreground">/10</span></div>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Tags -->
-          <div class="flex flex-wrap gap-2 mb-4">
+          <div v-if="project.hashtags?.length" class="flex flex-wrap gap-2 mb-6">
             <Badge
               v-for="tag in project.hashtags"
               :key="tag"
               variant="secondary"
+              class="px-3 py-1"
             >
               #{{ tag }}
             </Badge>
           </div>
 
-          <!-- Delete Button -->
-          <button
-            @click="deleteProject"
-            :disabled="isDeleting"
-            class="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 mb-4"
-          >
-            <Icon
-              :name="isDeleting ? 'lucide:loader-2' : 'lucide:trash-2'"
-              :class="isDeleting ? 'animate-spin' : ''"
-              class="h-3 w-3"
-            />
-            {{ isDeleting ? 'Deleting...' : 'Delete project' }}
-          </button>
-
-          <!-- Invalid Reason -->
-          <Alert v-if="!project.is_valid_project && project.invalid_reason" variant="destructive" class="mb-4">
-            <Icon name="lucide:alert-circle" class="h-4 w-4" />
-            <AlertTitle>Invalid Project</AlertTitle>
-            <AlertDescription>{{ project.invalid_reason }}</AlertDescription>
-          </Alert>
+          <!-- Action Buttons -->
+          <div class="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              @click="reprocessProject"
+              :disabled="isReprocessing"
+              class="text-muted-foreground"
+            >
+              <Icon
+                :name="isReprocessing ? 'lucide:loader-2' : 'lucide:rotate-cw'"
+                :class="['h-3.5 w-3.5 mr-1.5', isReprocessing ? 'animate-spin' : '']"
+              />
+              {{ isReprocessing ? 'Queuing...' : 'Reprocess' }}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              @click="deleteProject"
+              :disabled="isDeleting"
+              class="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              <Icon
+                :name="isDeleting ? 'lucide:loader-2' : 'lucide:trash-2'"
+                :class="['h-3.5 w-3.5 mr-1.5', isDeleting ? 'animate-spin' : '']"
+              />
+              {{ isDeleting ? 'Deleting...' : 'Delete' }}
+            </Button>
+          </div>
         </div>
 
-        <!-- Description -->
-        <Card class="p-6 mb-6">
-          <h2 class="text-lg font-semibold mb-3">Description</h2>
-          <p class="text-muted-foreground">{{ project.description }}</p>
-        </Card>
+        <!-- Content Sections -->
+        <div class="space-y-6">
 
-        <!-- Screenshot -->
-        <Card v-if="project.screenshot_path" class="p-6 mb-6">
-          <h2 class="text-lg font-semibold mb-3">Screenshot</h2>
-          <div class="rounded-lg overflow-hidden border">
-            <img
-              :src="`${config.public.apiBase}/media/${project.screenshot_path}`"
-              :alt="`Screenshot of ${project.title}`"
-              class="w-full"
-              loading="lazy"
-            />
-          </div>
-          <p v-if="project.project_urls?.length" class="text-sm text-muted-foreground mt-2">
-            Source: {{ project.project_urls[0] }}
-          </p>
-        </Card>
-
-        <!-- URLs & Content (Collapsible) -->
-        <Collapsible v-if="project.project_urls?.length" class="mb-6">
-          <Card class="p-6">
-            <CollapsibleTrigger class="flex items-center justify-between w-full">
-              <h2 class="text-lg font-semibold">URLs & Scraped Content</h2>
-              <Icon name="lucide:chevron-down" class="h-5 w-5 text-muted-foreground" />
-            </CollapsibleTrigger>
-            <CollapsibleContent class="mt-4 space-y-4">
-              <div v-for="url in project.project_urls" :key="url" class="border rounded-lg p-4">
-                <a
-                  :href="url"
-                  target="_blank"
-                  class="text-primary hover:underline flex items-center gap-2 mb-2"
-                >
-                  <Icon name="lucide:external-link" class="h-4 w-4" />
-                  {{ url }}
-                </a>
-                <div v-if="project.url_summaries?.[url]" class="text-sm text-muted-foreground bg-muted p-3 rounded">
-                  {{ project.url_summaries[url] }}
-                </div>
-                <div v-else class="text-sm text-muted-foreground italic">
-                  No content summary available
-                </div>
-              </div>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-
-        <!-- Original Comment (Collapsible) -->
-        <Collapsible v-if="sourceComment" class="mb-6">
-          <Card class="p-6">
-            <CollapsibleTrigger class="flex items-center justify-between w-full">
-              <h2 class="text-lg font-semibold">Original Comment</h2>
-              <Icon name="lucide:chevron-down" class="h-5 w-5 text-muted-foreground" />
-            </CollapsibleTrigger>
-            <CollapsibleContent class="mt-4">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span class="text-sm font-medium text-primary">
-                    {{ sourceComment.by?.charAt(0).toUpperCase() || '?' }}
-                  </span>
-                </div>
-                <div>
-                  <a
-                    :href="`https://news.ycombinator.com/user?id=${sourceComment.by}`"
-                    target="_blank"
-                    class="font-medium hover:underline"
-                  >
-                    {{ sourceComment.by || 'Unknown' }}
-                  </a>
-                  <p class="text-sm text-muted-foreground">
-                    {{ formatTime(sourceComment.time) }}
-                  </p>
-                </div>
-              </div>
-              <div
-                class="prose prose-sm max-w-none dark:prose-invert bg-muted p-4 rounded-lg"
-                v-html="sourceComment.text || '<em>No content</em>'"
-              />
-              <div class="mt-4 flex gap-4">
-                <a
-                  :href="`https://news.ycombinator.com/item?id=${sourceComment.id}`"
-                  target="_blank"
-                  class="text-sm text-primary hover:underline flex items-center gap-1"
-                >
-                  <Icon name="lucide:external-link" class="h-3 w-3" />
-                  View on HN
-                </a>
-                <a
-                  v-if="parentPost"
-                  :href="`/comments?post_id=${parentPost.id}`"
-                  class="text-sm text-primary hover:underline flex items-center gap-1"
-                >
-                  <Icon name="lucide:file-text" class="h-3 w-3" />
-                  View Post Comments
-                </a>
-              </div>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-
-        <!-- Workflow Logs (Collapsible) -->
-        <Collapsible v-if="project.workflow_logs?.length" class="mb-6">
-          <Card class="p-6">
-            <CollapsibleTrigger class="flex items-center justify-between w-full">
-              <h2 class="text-lg font-semibold">Processing Logs</h2>
-              <Icon name="lucide:chevron-down" class="h-5 w-5 text-muted-foreground" />
-            </CollapsibleTrigger>
-            <CollapsibleContent class="mt-4">
-              <div class="bg-muted rounded-lg p-4 font-mono text-sm space-y-1 max-h-96 overflow-y-auto">
-                <div v-for="(log, index) in project.workflow_logs" :key="index" class="text-muted-foreground">
-                  {{ log }}
-                </div>
-              </div>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-
-        <!-- Metadata -->
-        <Card class="p-6 mb-6">
-          <h2 class="text-lg font-semibold mb-3">Metadata</h2>
-          <div class="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span class="text-muted-foreground">Project ID:</span>
-              <span class="ml-2 font-medium">{{ project.id }}</span>
+          <!-- Description -->
+          <section>
+            <div class="flex items-center gap-2.5 mb-3">
+              <Icon name="lucide:text" class="h-5 w-5 text-muted-foreground" />
+              <h2 class="text-lg font-semibold">Description</h2>
             </div>
-            <div>
-              <span class="text-muted-foreground">Source Comment ID:</span>
-              <span class="ml-2 font-medium">{{ project.source_comment_id }}</span>
-            </div>
-            <div>
-              <span class="text-muted-foreground">Comment Date:</span>
-              <span class="ml-2 font-medium">{{ project.comment_time ? formatTime(project.comment_time) : 'Unknown' }}</span>
-            </div>
-            <div>
-              <span class="text-muted-foreground">Processed:</span>
-              <span class="ml-2 font-medium">{{ formatDate(project.processed_at) }}</span>
-            </div>
-          </div>
-        </Card>
+            <Card class="p-6">
+              <p class="text-muted-foreground leading-relaxed">{{ project.description }}</p>
+            </Card>
+          </section>
 
-        <!-- Similar Projects -->
-        <Card class="p-6">
-          <h2 class="text-lg font-semibold mb-3">Similar Projects</h2>
-          <div v-if="isLoadingSimilar" class="flex items-center gap-2 text-muted-foreground">
-            <Icon name="lucide:loader-2" class="h-4 w-4 animate-spin" />
-            <span class="text-sm">Finding similar projects...</span>
-          </div>
-          <div v-else-if="similarProjects.length === 0" class="text-sm text-muted-foreground">
-            No similar projects found.
-          </div>
-          <div v-else class="space-y-3">
-            <a
-              v-for="item in similarProjects"
-              :key="item.project.id"
-              :href="`/projects/${item.project.id}`"
-              class="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
-            >
-              <div
-                v-if="item.project.screenshot_path"
-                class="w-16 h-10 rounded overflow-hidden flex-shrink-0 bg-muted"
-              >
+          <!-- Screenshot -->
+          <section v-if="project.screenshot_path">
+            <div class="flex items-center gap-2.5 mb-3">
+              <Icon name="lucide:image" class="h-5 w-5 text-muted-foreground" />
+              <h2 class="text-lg font-semibold">Screenshot</h2>
+            </div>
+            <Card class="overflow-hidden">
+              <div class="border-b">
                 <img
-                  :src="`${config.public.apiBase}/media/${item.project.screenshot_path.replace('.jpg', '_thumb.jpg')}`"
-                  :alt="item.project.title"
-                  class="w-full h-full object-cover"
+                  :src="`${config.public.apiBase}/media/${project.screenshot_path}`"
+                  :alt="`Screenshot of ${project.title}`"
+                  class="w-full"
                   loading="lazy"
                 />
               </div>
-              <div
-                v-else
-                class="w-16 h-10 rounded flex-shrink-0 bg-muted flex items-center justify-center"
-              >
-                <Icon name="lucide:image-off" class="h-4 w-4 text-muted-foreground" />
+              <div v-if="project.project_urls?.length" class="px-5 py-3">
+                <a
+                  :href="project.project_urls[0]"
+                  target="_blank"
+                  class="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5"
+                >
+                  <Icon name="lucide:external-link" class="h-3.5 w-3.5" />
+                  {{ project.project_urls[0] }}
+                </a>
               </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-medium text-sm truncate">{{ item.project.title }}</div>
-                <div class="text-xs text-muted-foreground truncate">{{ item.project.short_description }}</div>
+            </Card>
+          </section>
+
+          <!-- URLs & Content (Collapsible) -->
+          <section v-if="project.project_urls?.length">
+            <Collapsible>
+              <div class="flex items-center gap-2.5 mb-3">
+                <Icon name="lucide:link" class="h-5 w-5 text-muted-foreground" />
+                <CollapsibleTrigger class="flex items-center gap-2 group">
+                  <h2 class="text-lg font-semibold">URLs & Scraped Content</h2>
+                  <Icon name="lucide:chevron-down" class="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
               </div>
-              <div class="flex-shrink-0 text-right">
-                <div class="text-sm font-medium text-primary">{{ Math.round(item.similarity * 100) }}%</div>
-                <div class="text-xs text-muted-foreground">match</div>
+              <CollapsibleContent>
+                <Card class="divide-y">
+                  <div v-for="url in project.project_urls" :key="url" class="p-5">
+                    <a
+                      :href="url"
+                      target="_blank"
+                      class="text-primary hover:underline flex items-center gap-2 mb-3 font-medium text-sm"
+                    >
+                      <Icon name="lucide:external-link" class="h-4 w-4 flex-shrink-0" />
+                      <span class="truncate">{{ url }}</span>
+                    </a>
+                    <div v-if="project.url_summaries?.[url]" class="text-sm text-muted-foreground bg-muted/50 p-4 rounded-lg leading-relaxed">
+                      {{ project.url_summaries[url] }}
+                    </div>
+                    <div v-else class="text-sm text-muted-foreground/60 italic">
+                      No content summary available
+                    </div>
+                  </div>
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
+          </section>
+
+          <!-- Original Comment (Collapsible) -->
+          <section v-if="sourceComment">
+            <Collapsible>
+              <div class="flex items-center gap-2.5 mb-3">
+                <Icon name="lucide:message-square" class="h-5 w-5 text-muted-foreground" />
+                <CollapsibleTrigger class="flex items-center gap-2 group">
+                  <h2 class="text-lg font-semibold">Original Comment</h2>
+                  <Icon name="lucide:chevron-down" class="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
               </div>
-            </a>
-          </div>
-        </Card>
+              <CollapsibleContent>
+                <Card class="p-6">
+                  <div class="flex items-center gap-3 mb-5">
+                    <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <span class="text-sm font-semibold text-primary">
+                        {{ sourceComment.by?.charAt(0).toUpperCase() || '?' }}
+                      </span>
+                    </div>
+                    <div>
+                      <a
+                        :href="`https://news.ycombinator.com/user?id=${sourceComment.by}`"
+                        target="_blank"
+                        class="font-medium hover:underline"
+                      >
+                        {{ sourceComment.by || 'Unknown' }}
+                      </a>
+                      <p class="text-sm text-muted-foreground">
+                        {{ formatTime(sourceComment.time) }}
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    class="prose prose-sm max-w-none dark:prose-invert bg-muted/50 p-5 rounded-lg"
+                    v-html="sourceComment.text || '<em>No content</em>'"
+                  />
+                  <div class="mt-5 flex gap-4">
+                    <a
+                      :href="`https://news.ycombinator.com/item?id=${sourceComment.id}`"
+                      target="_blank"
+                      class="text-sm text-primary hover:underline flex items-center gap-1.5"
+                    >
+                      <Icon name="lucide:external-link" class="h-3.5 w-3.5" />
+                      View on HN
+                    </a>
+                    <a
+                      v-if="parentPost"
+                      :href="`/comments?post_id=${parentPost.id}`"
+                      class="text-sm text-primary hover:underline flex items-center gap-1.5"
+                    >
+                      <Icon name="lucide:file-text" class="h-3.5 w-3.5" />
+                      View Post Comments
+                    </a>
+                  </div>
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
+          </section>
+
+          <!-- Workflow Logs (Collapsible) -->
+          <section v-if="project.workflow_logs?.length">
+            <Collapsible>
+              <div class="flex items-center gap-2.5 mb-3">
+                <Icon name="lucide:terminal" class="h-5 w-5 text-muted-foreground" />
+                <CollapsibleTrigger class="flex items-center gap-2 group">
+                  <h2 class="text-lg font-semibold">Processing Logs</h2>
+                  <Icon name="lucide:chevron-down" class="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+              </div>
+              <CollapsibleContent>
+                <Card class="p-5">
+                  <div class="bg-muted/50 rounded-lg p-4 font-mono text-xs space-y-1 max-h-80 overflow-y-auto">
+                    <div v-for="(log, index) in project.workflow_logs" :key="index" class="text-muted-foreground">
+                      {{ log }}
+                    </div>
+                  </div>
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
+          </section>
+
+          <!-- Metadata -->
+          <section>
+            <div class="flex items-center gap-2.5 mb-3">
+              <Icon name="lucide:info" class="h-5 w-5 text-muted-foreground" />
+              <h2 class="text-lg font-semibold">Metadata</h2>
+            </div>
+            <Card class="p-6">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div class="flex flex-col gap-1">
+                  <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Project ID</span>
+                  <span class="font-mono text-sm">{{ project.id }}</span>
+                </div>
+                <div class="flex flex-col gap-1">
+                  <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Source Comment</span>
+                  <span class="font-mono text-sm">{{ project.source_comment_id }}</span>
+                </div>
+                <div class="flex flex-col gap-1">
+                  <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Comment Date</span>
+                  <span class="text-sm">{{ project.comment_time ? formatTime(project.comment_time) : 'Unknown' }}</span>
+                </div>
+                <div class="flex flex-col gap-1">
+                  <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Processed</span>
+                  <span class="text-sm">{{ formatDate(project.processed_at) }}</span>
+                </div>
+              </div>
+            </Card>
+          </section>
+
+          <!-- Similar Projects -->
+          <section>
+            <div class="flex items-center gap-2.5 mb-3">
+              <Icon name="lucide:sparkles" class="h-5 w-5 text-muted-foreground" />
+              <h2 class="text-lg font-semibold">Similar Projects</h2>
+            </div>
+            <Card>
+              <div v-if="isLoadingSimilar" class="flex items-center gap-2.5 text-muted-foreground p-6">
+                <Icon name="lucide:loader-2" class="h-4 w-4 animate-spin" />
+                <span class="text-sm">Finding similar projects...</span>
+              </div>
+              <div v-else-if="similarProjects.length === 0" class="text-sm text-muted-foreground p-6">
+                No similar projects found.
+              </div>
+              <div v-else class="divide-y">
+                <a
+                  v-for="item in similarProjects"
+                  :key="item.project.id"
+                  :href="`/projects/${item.project.id}`"
+                  class="flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                >
+                  <div
+                    v-if="item.project.screenshot_path"
+                    class="w-16 h-10 rounded-md overflow-hidden flex-shrink-0 bg-muted border"
+                  >
+                    <img
+                      :src="`${config.public.apiBase}/media/${item.project.screenshot_path.replace('.jpg', '_thumb.jpg')}`"
+                      :alt="item.project.title"
+                      class="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div
+                    v-else
+                    class="w-16 h-10 rounded-md flex-shrink-0 bg-muted border flex items-center justify-center"
+                  >
+                    <Icon name="lucide:image-off" class="h-4 w-4 text-muted-foreground/40" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="font-medium text-sm truncate">{{ item.project.title }}</div>
+                    <div class="text-xs text-muted-foreground truncate mt-0.5">{{ item.project.short_description }}</div>
+                  </div>
+                  <Badge variant="outline" class="flex-shrink-0 tabular-nums">
+                    {{ Math.round(item.similarity * 100) }}%
+                  </Badge>
+                </a>
+              </div>
+            </Card>
+          </section>
+
+        </div>
       </div>
     </div>
   </div>
@@ -352,6 +432,7 @@ const parentPost = ref<WaywoPost | null>(null)
 const isLoading = ref(false)
 const fetchError = ref<string | null>(null)
 const isDeleting = ref(false)
+const isReprocessing = ref(false)
 const isTogglingBookmark = ref(false)
 const similarProjects = ref<{ project: WaywoProject; similarity: number }[]>([])
 const isLoadingSimilar = ref(false)
@@ -443,6 +524,29 @@ async function deleteProject() {
     console.error('Failed to delete project:', err)
     alert('Failed to delete project. Please try again.')
     isDeleting.value = false
+  }
+}
+
+// Reprocess project (reprocess the source comment)
+async function reprocessProject() {
+  if (isReprocessing.value || !project.value) return
+
+  if (!confirm('This will delete all projects from this comment and reprocess it. Continue?')) {
+    return
+  }
+
+  isReprocessing.value = true
+
+  try {
+    await $fetch(`${config.public.apiBase}/api/waywo-comments/${project.value.source_comment_id}/process`, {
+      method: 'POST'
+    })
+    alert(`Reprocessing queued for comment ${project.value.source_comment_id}. Refresh later to see updated projects.`)
+  } catch (err) {
+    console.error('Failed to reprocess project:', err)
+    alert('Failed to queue reprocessing. Please try again.')
+  } finally {
+    isReprocessing.value = false
   }
 }
 
