@@ -40,13 +40,10 @@ from src.db_client import (
     toggle_bookmark,
 )
 from src.models import (
-    NatQueryRequest,
     ProcessCommentsRequest,
     ProcessWaywoPostsRequest,
     WaywoPostSummary,
 )
-from src.nat_client import generate as nat_generate
-from src.nat_client import health_check as nat_health_check
 from src.tasks import process_waywo_comment, process_waywo_comments, process_waywo_posts
 
 app = FastAPI(
@@ -335,38 +332,6 @@ async def process_single_comment(comment_id: int):
             "message": f"Processing task queued for comment {comment_id}",
         }
     )
-
-
-@app.get("/api/nat/health", tags=["nat"])
-async def nat_service_health():
-    """
-    Check if the NAT service is healthy.
-    """
-    is_healthy = await nat_health_check()
-    if not is_healthy:
-        return JSONResponse(
-            status_code=503,
-            content={"status": "unhealthy", "message": "NAT service is not reachable"},
-        )
-    return JSONResponse(content={"status": "healthy"})
-
-
-@app.post("/api/nat/query", tags=["nat"])
-async def query_nat_service(request: NatQueryRequest):
-    """
-    Send a query to the NAT service and get an LLM response.
-
-    This is a simple test endpoint to verify the NAT integration.
-    Default message is 'Hello, who are you?'
-    """
-    try:
-        response = await nat_generate(request.message)
-        return JSONResponse(content={"status": "success", "response": response})
-    except Exception as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Failed to get response from NAT service: {str(e)}",
-        )
 
 
 # =============================================================================

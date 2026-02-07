@@ -1,16 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-import fakeredis
-
-
-@pytest.fixture
-def mock_redis():
-    """Provide a fake Redis client for testing."""
-    fake_redis = fakeredis.FakeRedis(decode_responses=True)
-    with patch("src.redis_client.get_redis_client", return_value=fake_redis):
-        yield fake_redis
-
 
 @pytest.fixture
 def sample_post_data():

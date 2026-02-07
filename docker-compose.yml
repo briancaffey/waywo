@@ -2,10 +2,9 @@ x-common-env: &common-env
   CELERY_BROKER_URL: redis://redis:6379/0
   CELERY_RESULT_BACKEND: redis://redis:6379/0
   REDIS_URL: redis://redis:6379/0
-  NAT_SERVICE_URL: http://nat:8080
   FIRECRAWL_URL: http://host.docker.internal:3002
   EMBEDDING_URL: http://192.168.5.96:8000
-  RERANK_URL: http://192.168.5.173:8111
+  RERANK_URL: http://192.168.5.173:8001
   LLM_BASE_URL: http://192.168.6.19:8002/v1
   LLM_MODEL_NAME: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
   DATA_DIR: /app/data
@@ -174,35 +173,6 @@ services:
           "--spider",
           "http://localhost:5555/",
         ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  nat:
-    build:
-      context: ./nat
-      dockerfile: Dockerfile
-    container_name: waywo-nat
-    ports:
-      - "8080:8080"
-    environment:
-      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-not-needed}
-      - REDIS_URL=redis://redis:6379/0
-      - LLM_BASE_URL=${LLM_BASE_URL:-http://192.168.6.19:8002/v1}
-      - LLM_MODEL_NAME=${LLM_MODEL_NAME:-nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16}
-    volumes:
-      - ./nat/workflow.yml:/app/workflow.yml:ro
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - waywo-network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

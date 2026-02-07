@@ -63,12 +63,6 @@ class WaywoPostSummary(BaseModel):
     descendants: Optional[int] = None
 
 
-class NatQueryRequest(BaseModel):
-    """Request body for NAT query endpoint."""
-
-    message: str = "Hello, who are you?"
-
-
 class WaywoProject(BaseModel):
     """Extracted project data from a WaywoComment."""
 

@@ -2,7 +2,6 @@
 Database client for waywo using SQLAlchemy with SQLite.
 
 This module provides functions for CRUD operations on posts, comments, and projects.
-Function signatures are designed to be compatible with the previous redis_client.py.
 """
 
 import json
