@@ -65,7 +65,9 @@ async def rerank_documents(
     for attempt in range(max_retries):
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                logger.info(f"📡 Calling rerank service for {len(documents)} document(s)")
+                logger.info(
+                    f"📡 Calling rerank service for {len(documents)} document(s)"
+                )
 
                 response = await client.post(
                     endpoint,

@@ -55,9 +55,7 @@ class TestExtractUrlsFromText:
 
     def test_deduplication(self):
         """Same URL appearing multiple times is deduplicated."""
-        text = (
-            "Visit https://example.com and also https://example.com again."
-        )
+        text = "Visit https://example.com and also https://example.com again."
         urls = extract_urls_from_text(text)
         assert urls == ["https://example.com"]
 

@@ -320,9 +320,7 @@ class WaywoChatbotWorkflow(Workflow):
         try:
             # Prepare documents for reranking
             # Use title + description for better reranking
-            documents = [
-                f"{c['title']}: {c['description']}" for c in ev.candidates
-            ]
+            documents = [f"{c['title']}: {c['description']}" for c in ev.candidates]
 
             # Call rerank service
             rerank_result = await rerank_documents(
@@ -371,7 +369,9 @@ Idea Score: {candidate['idea_score']}/10 | Complexity Score: {candidate['complex
                 context = "\n".join(context_parts)
 
         except RerankError as e:
-            logger.warning(f"⚠️ Reranking failed, falling back to similarity order: {e}")
+            logger.warning(
+                f"⚠️ Reranking failed, falling back to similarity order: {e}"
+            )
             # Fallback to original similarity order
             for candidate in ev.candidates[: ev.top_k]:
                 projects.append(

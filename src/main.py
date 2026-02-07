@@ -386,9 +386,16 @@ async def list_waywo_projects(
     max_complexity_score: Optional[int] = Query(None, ge=1, le=10),
     is_valid: Optional[bool] = None,
     bookmarked: Optional[bool] = Query(None, description="Filter by bookmark status"),
-    date_from: Optional[datetime] = Query(None, description="Filter projects created on or after this date (ISO format)"),
-    date_to: Optional[datetime] = Query(None, description="Filter projects created on or before this date (ISO format)"),
-    sort: Optional[str] = Query(None, description="Sort order: 'random' for random order, default is newest first"),
+    date_from: Optional[datetime] = Query(
+        None, description="Filter projects created on or after this date (ISO format)"
+    ),
+    date_to: Optional[datetime] = Query(
+        None, description="Filter projects created on or before this date (ISO format)"
+    ),
+    sort: Optional[str] = Query(
+        None,
+        description="Sort order: 'random' for random order, default is newest first",
+    ),
 ):
     """
     List all WaywoProject entries with pagination and filtering.
@@ -529,7 +536,9 @@ async def toggle_project_bookmark(project_id: int):
 @app.get("/api/waywo-projects/{project_id}/similar", tags=["projects"])
 async def get_similar_waywo_projects(
     project_id: int,
-    limit: int = Query(default=5, ge=1, le=20, description="Number of similar projects to return"),
+    limit: int = Query(
+        default=5, ge=1, le=20, description="Number of similar projects to return"
+    ),
 ):
     """
     Get projects similar to the specified project using vector similarity.
@@ -565,7 +574,9 @@ class SemanticSearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, description="Search query text")
     limit: int = Field(default=10, ge=1, le=50, description="Maximum results to return")
-    use_rerank: bool = Field(default=True, description="Use reranking to improve results")
+    use_rerank: bool = Field(
+        default=True, description="Use reranking to improve results"
+    )
 
 
 class ChatbotRequest(BaseModel):
@@ -700,8 +711,7 @@ async def perform_semantic_search(request: SemanticSearchRequest):
         try:
             # Prepare documents for reranking (title + description)
             documents = [
-                f"{project.title}: {project.description}"
-                for project, _ in results
+                f"{project.title}: {project.description}" for project, _ in results
             ]
 
             rerank_result = await rerank_documents(
@@ -714,11 +724,13 @@ async def perform_semantic_search(request: SemanticSearchRequest):
             reranked_results = []
             for idx in rerank_result.ranked_indices[: request.limit]:
                 project, similarity = results[idx]
-                reranked_results.append({
-                    "project": project.model_dump(),
-                    "similarity": round(similarity, 4),
-                    "rerank_score": round(rerank_result.scores[idx], 4),
-                })
+                reranked_results.append(
+                    {
+                        "project": project.model_dump(),
+                        "similarity": round(similarity, 4),
+                        "rerank_score": round(rerank_result.scores[idx], 4),
+                    }
+                )
 
             reranked = True
             formatted_results = reranked_results

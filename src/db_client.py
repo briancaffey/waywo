@@ -400,7 +400,9 @@ def get_project(project_id: int) -> WaywoProject | None:
     try:
         result = (
             db.query(WaywoProjectDB, WaywoCommentDB.time)
-            .outerjoin(WaywoCommentDB, WaywoProjectDB.source_comment_id == WaywoCommentDB.id)
+            .outerjoin(
+                WaywoCommentDB, WaywoProjectDB.source_comment_id == WaywoCommentDB.id
+            )
             .filter(WaywoProjectDB.id == project_id)
             .first()
         )
@@ -445,7 +447,9 @@ def get_projects_for_comment(comment_id: int) -> list[WaywoProject]:
     try:
         results = (
             db.query(WaywoProjectDB, WaywoCommentDB.time)
-            .outerjoin(WaywoCommentDB, WaywoProjectDB.source_comment_id == WaywoCommentDB.id)
+            .outerjoin(
+                WaywoCommentDB, WaywoProjectDB.source_comment_id == WaywoCommentDB.id
+            )
             .filter(WaywoProjectDB.source_comment_id == comment_id)
             .all()
         )

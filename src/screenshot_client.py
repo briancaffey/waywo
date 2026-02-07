@@ -104,4 +104,6 @@ def save_screenshot_to_disk(
         return f"screenshots/{project_id}.jpg"
 
     except Exception as e:
-        raise ScreenshotError(f"Failed to save screenshot for project {project_id}: {e}")
+        raise ScreenshotError(
+            f"Failed to save screenshot for project {project_id}: {e}"
+        )

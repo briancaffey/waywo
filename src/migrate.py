@@ -60,9 +60,7 @@ def run_migrations():
         # Add screenshot_path column to waywo_projects if it doesn't exist
         try:
             conn.execute(
-                text(
-                    "ALTER TABLE waywo_projects ADD COLUMN screenshot_path TEXT"
-                )
+                text("ALTER TABLE waywo_projects ADD COLUMN screenshot_path TEXT")
             )
             conn.commit()
             logger.info("Added screenshot_path column to waywo_projects")
