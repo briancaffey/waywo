@@ -261,7 +261,7 @@
                         {{ sourceComment.by || 'Unknown' }}
                       </a>
                       <p class="text-sm text-muted-foreground">
-                        {{ formatTime(sourceComment.time) }}
+                        {{ formatUnixTime(sourceComment.time) }}
                       </p>
                     </div>
                   </div>
@@ -332,11 +332,11 @@
                 </div>
                 <div class="flex flex-col gap-1">
                   <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Comment Date</span>
-                  <span class="text-sm">{{ project.comment_time ? formatTime(project.comment_time) : 'Unknown' }}</span>
+                  <span class="text-sm">{{ project.comment_time ? formatUnixTime(project.comment_time) : 'Unknown' }}</span>
                 </div>
                 <div class="flex flex-col gap-1">
                   <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Processed</span>
-                  <span class="text-sm">{{ formatDate(project.processed_at) }}</span>
+                  <span class="text-sm">{{ formatISODate(project.processed_at, true) }}</span>
                 </div>
               </div>
             </Card>
@@ -399,45 +399,7 @@
 </template>
 
 <script setup lang="ts">
-interface WaywoProject {
-  id: number
-  source_comment_id: number
-  is_valid_project: boolean
-  invalid_reason: string | null
-  title: string
-  short_description: string
-  description: string
-  hashtags: string[]
-  project_urls: string[]
-  url_summaries: Record<string, string>
-  primary_url: string | null
-  url_contents: Record<string, string>
-  idea_score: number
-  complexity_score: number
-  is_bookmarked: boolean
-  screenshot_path: string | null
-  created_at: string
-  processed_at: string
-  comment_time: number | null
-  workflow_logs: string[]
-}
-
-interface WaywoComment {
-  id: number
-  type: string
-  by: string | null
-  time: number | null
-  text: string | null
-  parent: number | null
-  kids: number[] | null
-}
-
-interface WaywoPost {
-  id: number
-  title: string | null
-  year: number | null
-  month: number | null
-}
+import type { WaywoProject, WaywoComment, WaywoPost } from '~/types/models'
 
 // Get route params
 const route = useRoute()
@@ -451,7 +413,6 @@ useHead({
   ]
 })
 
-// Get runtime config for API base URL
 const config = useRuntimeConfig()
 
 // Reactive state
@@ -465,31 +426,6 @@ const isReprocessing = ref(false)
 const isTogglingBookmark = ref(false)
 const similarProjects = ref<{ project: WaywoProject; similarity: number }[]>([])
 const isLoadingSimilar = ref(false)
-
-// Format date
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-// Format Unix timestamp
-function formatTime(timestamp: number | null): string {
-  if (!timestamp) return 'Unknown date'
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
 
 // Fetch project from API
 async function fetchProject() {

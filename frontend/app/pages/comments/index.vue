@@ -124,7 +124,7 @@
                   {{ comment.by || 'Unknown' }}
                 </a>
                 <p class="text-sm text-muted-foreground">
-                  {{ formatTime(comment.time) }}
+                  {{ formatUnixTime(comment.time) }}
                 </p>
               </div>
             </div>
@@ -215,15 +215,7 @@
 </template>
 
 <script setup lang="ts">
-interface WaywoComment {
-  id: number
-  type: string
-  by: string | null
-  time: number | null
-  text: string | null
-  parent: number | null
-  kids: number[] | null
-}
+import type { WaywoComment } from '~/types/models'
 
 // Set page metadata
 useHead({
@@ -233,7 +225,6 @@ useHead({
   ]
 })
 
-// Get runtime config for API base URL
 const config = useRuntimeConfig()
 const route = useRoute()
 
@@ -263,19 +254,6 @@ const maxComments = ref<string>('')
 
 // Processing state (single comment)
 const processingCommentId = ref<number | null>(null)
-
-// Format Unix timestamp to readable date
-function formatTime(timestamp: number | null): string {
-  if (!timestamp) return 'Unknown date'
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
 
 // Fetch comments from API
 async function fetchComments() {

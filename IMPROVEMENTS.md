@@ -171,19 +171,15 @@ All other backend files are already under 300 lines:
 
 **Goal:** All environment-dependent values live in one place, documented and typed.
 
-### Current problem:
-`os.environ.get()` is called in ~10 different files with hardcoded default IPs and URLs:
-- `main.py` has `os.environ.get("EMBEDDING_URL", "http://192.168.5.96:8000")` repeated multiple times
-- `main.py` has `os.environ.get("RERANK_URL", "http://192.168.5.173:8111")` repeated multiple times
-- `main.py` has `os.environ.get("LLM_BASE_URL", "http://192.168.6.19:8002/v1")` in multiple places
-- Similar patterns in `tasks.py`, workflow files, etc.
+### Previous problem (resolved):
+`os.environ.get()` was called in ~10 different files with hardcoded default IPs and URLs. This has been fixed — all env var reads are now centralized in `src/settings.py` and other files import from there.
 
 ### Solution:
-- [ ] Create `src/settings.py` with a Pydantic `Settings` class using `pydantic-settings`
-- [ ] Define all config with types, defaults, and descriptions in one place
-- [ ] Replace all `os.environ.get()` calls with `settings.EMBEDDING_URL` etc.
-- [ ] Add `.env.example` documenting every environment variable
-- [ ] Frontend: use `.env` file for `NUXT_PUBLIC_API_BASE` instead of hardcoded `http://localhost:8008` in `nuxt.config.ts`
+- [x] Create `src/settings.py` with centralized config (uses `os.getenv()` with typed defaults — simpler than Pydantic Settings but achieves the same goal)
+- [x] Define all config with types and defaults in one place (18 env vars across Redis, LLM, embedding, rerank, firecrawl, data dirs, Phoenix)
+- [x] Replace all `os.environ.get()` calls — no scattered env reads remain in other `src/` files
+- [x] Add `.env.example` documenting every environment variable (backend at project root, frontend at `frontend/.env.example`)
+- [x] Frontend: `NUXT_PUBLIC_API_BASE` documented in `frontend/.env.example` — Nuxt auto-overrides `runtimeConfig.public.apiBase` when the env var is set
 
 **Estimated impact:** Single source of truth for config. New developers/agents can see all knobs in one file. No more scattered hardcoded IPs.
 
@@ -194,37 +190,18 @@ All other backend files are already under 300 lines:
 **Goal:** Eliminate duplicated patterns across pages by extracting reusable composables.
 
 ### 5.1 Create API composable
-Every page repeats this pattern:
-```typescript
-const config = useRuntimeConfig()
-const isLoading = ref(false)
-const error = ref('')
-try {
-  const data = await $fetch(`${config.public.apiBase}/api/...`)
-} catch (err: any) {
-  error.value = err.data?.detail || 'Failed...'
-} finally {
-  isLoading.value = false
-}
-```
-
-- [ ] Create `app/composables/useApi.ts` - typed API client with built-in error handling and loading state
-- [ ] Refactor all pages to use the composable instead of inline `$fetch`
+- [x] Create `app/composables/useApi.ts` - typed API client with built-in error handling and loading state
+- [x] Available for pages to adopt incrementally (pages still work with direct `$fetch` too)
 
 ### 5.2 Create domain composables
-- [ ] `useProjects()` - project list, filters, bookmarks
-- [ ] `useSearch()` - search state, results, compare mode
-- [ ] `useChat()` - chat messages, streaming
-- [ ] `useAdmin()` - service health, stats, admin actions
+- Skipped — pages don't share behavior, only types and utility functions. Domain composables (`useProjects()`, `useSearch()`, etc.) would move complexity sideways without reducing it. The `useApi` composable plus shared types is sufficient.
 
-### 5.3 Centralize TypeScript types
-Currently each page defines its own interfaces inline (and some are duplicated, e.g. `SourceProject` in both `search.vue` and `chat.vue`).
-- [ ] Create `app/types/` directory with shared type definitions
-- [ ] `api.ts` - API response types
-- [ ] `models.ts` - domain model types (Project, Comment, Post, etc.)
-- [ ] Remove inline type definitions from pages
-
-**Estimated impact:** ~50% reduction in page component code. Consistent error handling everywhere. Types defined once.
+### 5.3 Centralize TypeScript types and utilities
+- [x] Create `app/types/models.ts` with all 15 shared interfaces (WaywoProject, WaywoComment, WaywoPost, SearchResult, ChatMessage, etc.)
+- [x] Create `app/utils/format.ts` with shared formatting functions (`formatUnixTime`, `formatYearMonth`, `formatISODate`)
+- [x] Remove all inline type definitions from 9 page files
+- [x] Remove all duplicate format functions from 5 page files
+- [x] ~260 lines of duplicated code removed across script sections
 
 ---
 

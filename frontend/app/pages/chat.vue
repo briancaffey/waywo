@@ -138,28 +138,13 @@
 
 <script setup lang="ts">
 import { marked } from 'marked'
+import type { SourceProject, ChatMessage } from '~/types/models'
 
 // Configure marked for safe rendering
 marked.setOptions({
   breaks: true,
   gfm: true
 })
-
-interface SourceProject {
-  id: number
-  title: string
-  short_description: string
-  similarity: number
-  hashtags: string[]
-  idea_score: number
-  complexity_score: number
-}
-
-interface ChatMessage {
-  role: 'user' | 'assistant'
-  content: string
-  sourceProjects?: SourceProject[]
-}
 
 // Set page metadata
 useHead({
@@ -169,7 +154,6 @@ useHead({
   ]
 })
 
-// Get runtime config for API base URL
 const config = useRuntimeConfig()
 
 // Reactive state

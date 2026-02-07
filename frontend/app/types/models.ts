@@ -1,0 +1,124 @@
+export interface WaywoProject {
+  id: number
+  source_comment_id: number
+  is_valid_project: boolean
+  invalid_reason: string | null
+  title: string
+  short_description: string
+  description: string
+  hashtags: string[]
+  project_urls: string[]
+  url_summaries: Record<string, string>
+  idea_score: number
+  complexity_score: number
+  created_at: string
+  processed_at: string
+  workflow_logs: string[]
+  // Present in list/detail responses but not search results
+  primary_url?: string | null
+  is_bookmarked?: boolean
+  screenshot_path?: string | null
+  comment_time?: number | null
+  // Present only in detail response
+  url_contents?: Record<string, string>
+}
+
+export interface WaywoComment {
+  id: number
+  type: string
+  by: string | null
+  time: number | null
+  text: string | null
+  parent: number | null
+  kids: number[] | null
+}
+
+export interface WaywoPost {
+  id: number
+  title: string | null
+  year: number | null
+  month: number | null
+}
+
+export interface WaywoPostSummary {
+  id: number
+  title: string | null
+  year: number | null
+  month: number | null
+  score: number | null
+  comment_count: number
+  descendants: number | null
+}
+
+export interface SearchResult {
+  project: WaywoProject
+  similarity: number
+  rerank_score?: number
+}
+
+export interface SearchStats {
+  total_projects: number
+  projects_with_embeddings: number
+  embedding_coverage: number
+}
+
+export interface SourceProject {
+  id: number
+  title: string
+  short_description: string
+  similarity: number
+  hashtags: string[]
+  idea_score: number
+  complexity_score: number
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  sourceProjects?: SourceProject[]
+}
+
+export interface DatabaseStats {
+  posts_count: number
+  comments_count: number
+  projects_count: number
+  processed_comments_count: number
+  valid_projects_count: number
+  projects_with_embeddings_count: number
+  redis_keys_count: number
+  redis_memory_used: string
+  redis_connected: boolean
+}
+
+export interface ServiceHealth {
+  status: 'healthy' | 'unhealthy'
+  url: string
+  error?: string
+  configured_model?: string
+  available_models?: string[]
+  device?: string
+}
+
+export interface ServicesHealth {
+  llm: ServiceHealth
+  embedder: ServiceHealth
+  reranker: ServiceHealth
+}
+
+export interface ResultMessage {
+  success: boolean
+  message: string
+  details?: any
+}
+
+export interface WorkflowStep {
+  step: number
+  name: string
+  title: string
+  description: string
+  workflow: string
+  input_event: string
+  output_event: string
+  prompt_template: string | null
+  template_variables: string[]
+}

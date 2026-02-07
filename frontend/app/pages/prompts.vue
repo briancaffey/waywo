@@ -78,17 +78,7 @@
 </template>
 
 <script setup lang="ts">
-interface WorkflowStep {
-  step: number
-  name: string
-  title: string
-  description: string
-  workflow: string
-  input_event: string
-  output_event: string
-  prompt_template: string | null
-  template_variables: string[]
-}
+import type { WorkflowStep } from '~/types/models'
 
 useHead({
   title: 'Workflow Prompts - waywo',

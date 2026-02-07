@@ -295,35 +295,7 @@
 </template>
 
 <script setup lang="ts">
-interface WaywoProject {
-  id: number
-  source_comment_id: number
-  is_valid_project: boolean
-  invalid_reason: string | null
-  title: string
-  short_description: string
-  description: string
-  hashtags: string[]
-  project_urls: string[]
-  url_summaries: Record<string, string>
-  idea_score: number
-  complexity_score: number
-  created_at: string
-  processed_at: string
-  workflow_logs: string[]
-}
-
-interface SearchResult {
-  project: WaywoProject
-  similarity: number
-  rerank_score?: number
-}
-
-interface SearchStats {
-  total_projects: number
-  projects_with_embeddings: number
-  embedding_coverage: number
-}
+import type { WaywoProject, SearchResult, SearchStats } from '~/types/models'
 
 // Set page metadata
 useHead({
@@ -333,7 +305,6 @@ useHead({
   ]
 })
 
-// Get runtime config for API base URL
 const config = useRuntimeConfig()
 
 // Reactive state

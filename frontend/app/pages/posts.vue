@@ -127,7 +127,7 @@
               @click="viewComments(post.id)"
             >
               <TableCell class="font-medium">
-                {{ formatDate(post.year, post.month) }}
+                {{ formatYearMonth(post.year, post.month) }}
               </TableCell>
               <TableCell>
                 <a
@@ -169,16 +169,7 @@
 
 <script setup lang="ts">
 import PostsChart from '~/components/waywo/PostsChart.vue'
-
-interface WaywoPostSummary {
-  id: number
-  title: string | null
-  year: number | null
-  month: number | null
-  score: number | null
-  comment_count: number
-  descendants: number | null
-}
+import type { WaywoPostSummary } from '~/types/models'
 
 // Set page metadata
 useHead({
@@ -188,7 +179,6 @@ useHead({
   ]
 })
 
-// Get runtime config for API base URL
 const config = useRuntimeConfig()
 
 // Reactive state
@@ -206,13 +196,6 @@ const limitComments = ref<number | undefined>(undefined)
 
 // Chart ref
 const postsChartRef = ref<{ refresh: () => void } | null>(null)
-
-// Format date from year/month
-function formatDate(year: number | null, month: number | null): string {
-  if (!year || !month) return 'Unknown'
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  return `${monthNames[month - 1]} ${year}`
-}
 
 // Navigate to comments page filtered by post
 function viewComments(postId: number) {

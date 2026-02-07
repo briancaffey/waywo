@@ -332,7 +332,7 @@
                 @click.stop
               >Y</a>
               <span>
-                {{ project.comment_time ? formatUnixTime(project.comment_time) : formatDate(project.created_at) }}
+                {{ project.comment_time ? formatUnixTime(project.comment_time, false) : formatISODate(project.created_at) }}
               </span>
             </div>
             <div class="flex items-center gap-3">
@@ -407,27 +407,7 @@
 </template>
 
 <script setup lang="ts">
-interface WaywoProject {
-  id: number
-  source_comment_id: number
-  is_valid_project: boolean
-  invalid_reason: string | null
-  title: string
-  short_description: string
-  description: string
-  hashtags: string[]
-  project_urls: string[]
-  url_summaries: Record<string, string>
-  primary_url: string | null
-  idea_score: number
-  complexity_score: number
-  is_bookmarked: boolean
-  screenshot_path: string | null
-  created_at: string
-  processed_at: string
-  comment_time: number | null
-  workflow_logs: string[]
-}
+import type { WaywoProject } from '~/types/models'
 
 // Set page metadata
 useHead({
@@ -437,7 +417,6 @@ useHead({
   ]
 })
 
-// Get runtime config for API base URL
 const config = useRuntimeConfig()
 const route = useRoute()
 
@@ -502,26 +481,6 @@ const reprocessingProjectId = ref<number | null>(null)
 
 // Bookmark state
 const togglingBookmarkId = ref<number | null>(null)
-
-// Format date
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
-
-// Format Unix timestamp
-function formatUnixTime(timestamp: number): string {
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
 
 // Extract hostname from URL
 function getHostname(url: string): string {

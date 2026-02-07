@@ -328,38 +328,7 @@
 </template>
 
 <script setup lang="ts">
-interface DatabaseStats {
-  posts_count: number
-  comments_count: number
-  projects_count: number
-  processed_comments_count: number
-  valid_projects_count: number
-  projects_with_embeddings_count: number
-  redis_keys_count: number
-  redis_memory_used: string
-  redis_connected: boolean
-}
-
-interface ServiceHealth {
-  status: 'healthy' | 'unhealthy'
-  url: string
-  error?: string
-  configured_model?: string
-  available_models?: string[]
-  device?: string
-}
-
-interface ServicesHealth {
-  llm: ServiceHealth
-  embedder: ServiceHealth
-  reranker: ServiceHealth
-}
-
-interface ResultMessage {
-  success: boolean
-  message: string
-  details?: any
-}
+import type { DatabaseStats, ServicesHealth, ResultMessage } from '~/types/models'
 
 // Set page metadata
 useHead({
@@ -369,7 +338,6 @@ useHead({
   ]
 })
 
-// Get runtime config for API base URL
 const config = useRuntimeConfig()
 
 // Reactive state

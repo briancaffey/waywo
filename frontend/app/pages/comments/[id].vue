@@ -44,7 +44,7 @@
                   {{ comment.by || 'Unknown' }}
                 </a>
                 <p class="text-sm text-muted-foreground">
-                  {{ formatTime(comment.time) }}
+                  {{ formatUnixTime(comment.time) }}
                 </p>
               </div>
             </div>
@@ -110,7 +110,7 @@
                 {{ parentPost.title || `Post ${parentPost.id}` }}
               </a>
               <p class="text-sm text-muted-foreground mt-1">
-                {{ formatDate(parentPost.year, parentPost.month) }}
+                {{ formatYearMonth(parentPost.year, parentPost.month) }}
               </p>
             </div>
             <a :href="`/comments?post_id=${parentPost.id}`">
@@ -205,40 +205,7 @@
 </template>
 
 <script setup lang="ts">
-interface WaywoComment {
-  id: number
-  type: string
-  by: string | null
-  time: number | null
-  text: string | null
-  parent: number | null
-  kids: number[] | null
-}
-
-interface WaywoPost {
-  id: number
-  title: string | null
-  year: number | null
-  month: number | null
-}
-
-interface WaywoProject {
-  id: number
-  source_comment_id: number
-  is_valid_project: boolean
-  invalid_reason: string | null
-  title: string
-  short_description: string
-  description: string
-  hashtags: string[]
-  project_urls: string[]
-  url_summaries: Record<string, string>
-  idea_score: number
-  complexity_score: number
-  created_at: string
-  processed_at: string
-  workflow_logs: string[]
-}
+import type { WaywoComment, WaywoPost, WaywoProject } from '~/types/models'
 
 // Get route params
 const route = useRoute()
@@ -252,7 +219,6 @@ useHead({
   ]
 })
 
-// Get runtime config for API base URL
 const config = useRuntimeConfig()
 
 // Reactive state
@@ -267,26 +233,6 @@ const isProcessing = ref(false)
 const processError = ref<string | null>(null)
 const processSuccess = ref(false)
 const taskId = ref<string | null>(null)
-
-// Format Unix timestamp
-function formatTime(timestamp: number | null): string {
-  if (!timestamp) return 'Unknown date'
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-// Format date from year/month
-function formatDate(year: number | null, month: number | null): string {
-  if (!year || !month) return 'Unknown'
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  return `${monthNames[month - 1]} ${year}`
-}
 
 // Fetch comment from API
 async function fetchComment() {
