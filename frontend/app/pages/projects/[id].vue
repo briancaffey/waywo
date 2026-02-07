@@ -60,6 +60,15 @@
                 </Badge>
               </div>
               <p class="text-lg md:text-xl text-muted-foreground mt-2 leading-relaxed">{{ project.short_description }}</p>
+              <a
+                v-if="project.primary_url"
+                :href="project.primary_url"
+                target="_blank"
+                class="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-2"
+              >
+                <Icon name="lucide:external-link" class="h-3.5 w-3.5" />
+                {{ project.primary_url }}
+              </a>
             </div>
           </div>
 
@@ -103,6 +112,14 @@
 
           <!-- Action Buttons -->
           <div class="flex items-center gap-1">
+            <a
+              :href="`https://news.ycombinator.com/item?id=${project.source_comment_id}`"
+              target="_blank"
+              class="inline-flex items-center justify-center h-8 px-3 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors gap-1.5"
+            >
+              <span class="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-orange-500 text-white text-[10px] font-bold leading-none">Y</span>
+              HN
+            </a>
             <Button
               variant="ghost"
               size="sm"
@@ -174,7 +191,7 @@
             </Card>
           </section>
 
-          <!-- URLs & Content (Collapsible) -->
+          <!-- URLs & Scraped Content -->
           <section v-if="project.project_urls?.length">
             <Collapsible>
               <div class="flex items-center gap-2.5 mb-3">
@@ -195,11 +212,21 @@
                       <Icon name="lucide:external-link" class="h-4 w-4 flex-shrink-0" />
                       <span class="truncate">{{ url }}</span>
                     </a>
-                    <div v-if="project.url_summaries?.[url]" class="text-sm text-muted-foreground bg-muted/50 p-4 rounded-lg leading-relaxed">
+                    <!-- Full scraped content (primary display) -->
+                    <div v-if="project.url_contents?.[url]" class="space-y-3">
+                      <div class="text-sm text-muted-foreground bg-muted/50 p-4 rounded-lg leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap font-mono text-xs">{{ project.url_contents[url] }}</div>
+                      <!-- Summary as secondary info -->
+                      <div v-if="project.url_summaries?.[url]" class="text-sm text-muted-foreground italic border-l-2 border-muted pl-3">
+                        <span class="font-medium not-italic text-xs uppercase tracking-wider text-muted-foreground/70">Summary:</span>
+                        {{ project.url_summaries[url] }}
+                      </div>
+                    </div>
+                    <!-- Fallback to summary only -->
+                    <div v-else-if="project.url_summaries?.[url]" class="text-sm text-muted-foreground bg-muted/50 p-4 rounded-lg leading-relaxed">
                       {{ project.url_summaries[url] }}
                     </div>
                     <div v-else class="text-sm text-muted-foreground/60 italic">
-                      No content summary available
+                      No content available
                     </div>
                   </div>
                 </Card>
@@ -383,6 +410,8 @@ interface WaywoProject {
   hashtags: string[]
   project_urls: string[]
   url_summaries: Record<string, string>
+  primary_url: string | null
+  url_contents: Record<string, string>
   idea_score: number
   complexity_score: number
   is_bookmarked: boolean

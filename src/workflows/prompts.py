@@ -84,19 +84,22 @@ Generate the following metadata as a JSON object:
 
 2. "short_description": A very brief description in 5-10 words that captures what it is.
 
-3. "description": A 1-2 sentence description explaining what the project is and what it does. Start with the type of thing it is.
+3. "description": A comprehensive 3-5 sentence description synthesizing both the comment text AND any scraped web content. Explain what the project is, what problem it solves, key features or technologies used, and what makes it interesting. Start with the type of thing it is.
 
 4. "hashtags": An array of 3-5 single-word tags or common acronyms (lowercase) that describe the project. Examples: ["ai", "python", "productivity", "saas", "opensource"]
 
 5. "url_summaries": An object mapping each URL to a brief (1-2 sentence) summary of what that page contains. Only include URLs that were successfully fetched.
 
+6. "primary_url": The single most important URL for this project (e.g. the project homepage, GitHub repo, or demo link). Pick the URL that best represents the project itself. If no URLs are available, use null.
+
 Return ONLY valid JSON matching this structure:
 {{
   "title": "Project Name",
   "short_description": "Brief 5-10 word description",
-  "description": "One or two sentences describing the project.",
+  "description": "Three to five sentences describing the project comprehensively.",
   "hashtags": ["tag1", "tag2", "tag3"],
-  "url_summaries": {{"https://example.com": "Summary of the page content"}}
+  "url_summaries": {{"https://example.com": "Summary of the page content"}},
+  "primary_url": "https://example.com"
 }}"""
 
 

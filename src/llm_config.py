@@ -40,6 +40,11 @@ def get_llm() -> OpenAILike:
         max_tokens=LLM_MAX_TOKENS,
         is_chat_model=True,
         is_function_calling_model=False,  # Nemotron doesn't support function calling
+        additional_kwargs={
+            "extra_body": {
+                "chat_template_kwargs": {"enable_thinking": False}
+            }
+        },
     )
 
     return llm
@@ -64,6 +69,11 @@ def get_llm_for_structured_output() -> OpenAILike:
         max_tokens=LLM_MAX_TOKENS,
         is_chat_model=True,
         is_function_calling_model=False,
+        additional_kwargs={
+            "extra_body": {
+                "chat_template_kwargs": {"enable_thinking": False}
+            }
+        },
     )
 
     return llm

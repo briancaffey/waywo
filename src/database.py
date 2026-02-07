@@ -87,8 +87,28 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     print(f"📦 Database initialized at {DATABASE_PATH}")
 
+    # Safe migrations for new columns on existing databases
+    _run_migrations()
+
     # Initialize vector search for projects table
     init_vector_search()
+
+
+def _run_migrations():
+    """Run safe ALTER TABLE migrations for new columns."""
+    migrations = [
+        "ALTER TABLE waywo_projects ADD COLUMN primary_url TEXT",
+        "ALTER TABLE waywo_projects ADD COLUMN url_contents TEXT",
+    ]
+    with SessionLocal() as session:
+        for sql in migrations:
+            try:
+                session.execute(text(sql))
+                session.commit()
+                logger.info(f"✅ Migration: {sql}")
+            except Exception:
+                session.rollback()
+                # Column already exists, safe to ignore
 
 
 def init_vector_search():

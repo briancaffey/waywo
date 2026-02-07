@@ -286,13 +286,15 @@ def get_total_comment_count(post_id: int | None = None) -> int:
 
 
 def get_unprocessed_comments(limit: int | None = None) -> list[WaywoComment]:
-    """Get comments that haven't been processed yet."""
+    """Get comments that haven't been processed yet, in random order."""
+    from sqlalchemy.sql.expression import func
+
     db = get_db_session()
     try:
         query = (
             db.query(WaywoCommentDB)
             .filter(WaywoCommentDB.processed == False)
-            .order_by(WaywoCommentDB.id.asc())
+            .order_by(func.random())
         )
 
         if limit:
@@ -376,6 +378,10 @@ def save_project(project: WaywoProject, embedding: list[float] | None = None) ->
             url_summaries=(
                 json.dumps(project.url_summaries) if project.url_summaries else None
             ),
+            primary_url=project.primary_url,
+            url_contents=(
+                json.dumps(project.url_contents) if project.url_contents else None
+            ),
             idea_score=project.idea_score,
             complexity_score=project.complexity_score,
             workflow_logs=(
@@ -426,6 +432,10 @@ def get_project(project_id: int) -> WaywoProject | None:
             url_summaries=(
                 json.loads(db_project.url_summaries) if db_project.url_summaries else {}
             ),
+            primary_url=db_project.primary_url,
+            url_contents=(
+                json.loads(db_project.url_contents) if db_project.url_contents else {}
+            ),
             idea_score=db_project.idea_score,
             complexity_score=db_project.complexity_score,
             workflow_logs=(
@@ -466,6 +476,8 @@ def get_projects_for_comment(comment_id: int) -> list[WaywoProject]:
                 hashtags=json.loads(p.hashtags) if p.hashtags else [],
                 project_urls=json.loads(p.project_urls) if p.project_urls else [],
                 url_summaries=json.loads(p.url_summaries) if p.url_summaries else {},
+                primary_url=p.primary_url,
+                url_contents=json.loads(p.url_contents) if p.url_contents else {},
                 idea_score=p.idea_score,
                 complexity_score=p.complexity_score,
                 workflow_logs=json.loads(p.workflow_logs) if p.workflow_logs else [],
@@ -637,6 +649,8 @@ def get_all_projects(
                 hashtags=json.loads(p.hashtags) if p.hashtags else [],
                 project_urls=json.loads(p.project_urls) if p.project_urls else [],
                 url_summaries=json.loads(p.url_summaries) if p.url_summaries else {},
+                primary_url=p.primary_url,
+                url_contents=json.loads(p.url_contents) if p.url_contents else {},
                 idea_score=p.idea_score,
                 complexity_score=p.complexity_score,
                 workflow_logs=json.loads(p.workflow_logs) if p.workflow_logs else [],

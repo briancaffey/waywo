@@ -281,6 +281,16 @@
                   />
                 </button>
                 <h3 class="text-lg font-semibold">{{ project.title }}</h3>
+                <a
+                  v-if="project.primary_url"
+                  :href="project.primary_url"
+                  target="_blank"
+                  class="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 flex-shrink-0"
+                  @click.stop
+                >
+                  <Icon name="lucide:external-link" class="h-3 w-3" />
+                  {{ getHostname(project.primary_url) }}
+                </a>
                 <Badge v-if="!project.is_valid_project" variant="destructive" class="text-xs">
                   Invalid
                 </Badge>
@@ -313,9 +323,18 @@
           </div>
 
           <div class="mt-4 pt-4 border-t flex items-center justify-between text-sm text-muted-foreground">
-            <span>
-              {{ project.comment_time ? formatUnixTime(project.comment_time) : formatDate(project.created_at) }}
-            </span>
+            <div class="flex items-center gap-2">
+              <a
+                :href="`https://news.ycombinator.com/item?id=${project.source_comment_id}`"
+                target="_blank"
+                class="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-orange-500 text-white text-xs font-bold leading-none hover:bg-orange-600 transition-colors"
+                title="View on Hacker News"
+                @click.stop
+              >Y</a>
+              <span>
+                {{ project.comment_time ? formatUnixTime(project.comment_time) : formatDate(project.created_at) }}
+              </span>
+            </div>
             <div class="flex items-center gap-3">
               <Button
                 variant="outline"
@@ -399,6 +418,7 @@ interface WaywoProject {
   hashtags: string[]
   project_urls: string[]
   url_summaries: Record<string, string>
+  primary_url: string | null
   idea_score: number
   complexity_score: number
   is_bookmarked: boolean
@@ -501,6 +521,15 @@ function formatUnixTime(timestamp: number): string {
     month: 'short',
     day: 'numeric'
   })
+}
+
+// Extract hostname from URL
+function getHostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
 }
 
 // Remove tag from selection

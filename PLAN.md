@@ -344,6 +344,7 @@ GET  /api/waywo-projects/hashtags
 | **Phase 8** | 16 | Reranking for RAG | ✅ Complete |
 | **Phase 9** | 17 | Project Screenshots | ✅ Complete |
 | **Phase 10** | 18 | Similar Projects | ✅ Complete |
+| **Phase 10.5** | 18.5 | Project Quality & Display Improvements | ✅ Complete |
 | **Phase 11** | 19, 20 | Voice Interface (STT & TTS) | 🔲 Planned |
 | **Phase 12** | 21 | Safety & Content Moderation | 🔲 Planned |
 | **Phase 13** | 22 | Vision-Language Screenshot Analysis | 🔲 Planned |
@@ -957,6 +958,37 @@ GET /api/waywo-projects/{id}/similar
 - [x] Display similarity percentage
 - [x] Handle projects without embeddings
 - [x] Add loading state for similar projects
+
+---
+
+## Milestone 18.5: Project Quality & Display Improvements ✅ COMPLETE
+
+**Goal**: Batch of small quality-of-life fixes — better descriptions, full scraped content display, primary URL field, HN links on cards, and disable LLM thinking tokens.
+
+### Changes
+
+- **Better descriptions**: Updated LLM prompt from "1-2 sentences" to "3-5 sentences" synthesizing both comment text and scraped web data
+- **Store & display full scraped content**: Added `url_contents` field to DB; detail page shows full scraped markdown with summaries as secondary info
+- **Extract primary URL**: LLM now identifies the single most important project URL during metadata generation; stored in new `primary_url` field
+- **HN link on project cards**: Orange "Y" icon next to date in card footer, linking to the HN comment
+- **Primary URL on cards & detail page**: Hostname link next to project title on cards; full URL link below title on detail page
+- **Disable LLM thinking**: Added `additional_kwargs` with `enable_thinking: False` to both LLM config functions
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/db_models.py` | Added `primary_url` and `url_contents` columns + JSON helpers |
+| `src/database.py` | Added safe ALTER TABLE migration in `init_db()` |
+| `src/models.py` | Added `primary_url` and `url_contents` to `WaywoProject`, `primary_url` to `WaywoProjectSummary` |
+| `src/llm_config.py` | Added `enable_thinking: False` to both LLM functions |
+| `src/workflows/prompts.py` | Rewrote `GENERATE_METADATA_TEMPLATE` for 3-5 sentence descriptions and `primary_url` extraction |
+| `src/workflows/events.py` | Added `primary_url` to `MetadataGeneratedEvent`, `ScoredProjectEvent`, `EmbeddingGeneratedEvent` |
+| `src/workflows/waywo_project_workflow.py` | Extract `primary_url` in `generate_metadata`, include both new fields in `finalize` |
+| `src/tasks.py` | Pass `primary_url` and `url_contents` to `WaywoProject` construction |
+| `src/db_client.py` | Added both fields to all 4 CRUD functions |
+| `frontend/app/pages/projects/index.vue` | Added HN "Y" icon, primary URL hostname link, updated interface |
+| `frontend/app/pages/projects/[id].vue` | Added HN button, primary URL link, full scraped content display, updated interface |
 
 ---
 

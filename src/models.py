@@ -88,6 +88,8 @@ class WaywoProject(BaseModel):
     # URLs
     project_urls: list[str] = Field(default_factory=list)
     url_summaries: dict[str, str] = Field(default_factory=dict)
+    primary_url: Optional[str] = None
+    url_contents: dict[str, str] = Field(default_factory=dict)
 
     # Scores (1-10)
     idea_score: int = Field(ge=1, le=10)
@@ -121,6 +123,7 @@ class WaywoProjectSummary(BaseModel):
     is_valid_project: bool
     is_bookmarked: bool
     screenshot_path: Optional[str] = None
+    primary_url: Optional[str] = None
     created_at: datetime
 
 

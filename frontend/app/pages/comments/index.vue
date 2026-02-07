@@ -37,14 +37,23 @@
               />
               Refresh
             </Button>
-            <Button @click="processComments" :disabled="isProcessing">
-              <Icon
-                :name="isProcessing ? 'lucide:loader-2' : 'lucide:sparkles'"
-                :class="isProcessing ? 'animate-spin' : ''"
-                class="mr-2 h-4 w-4"
+            <div class="flex items-center gap-2">
+              <input
+                v-model="maxComments"
+                type="number"
+                min="1"
+                placeholder="All"
+                class="w-20 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
-              {{ isProcessing ? 'Processing...' : 'Extract Projects' }}
-            </Button>
+              <Button @click="processComments" :disabled="isProcessing">
+                <Icon
+                  :name="isProcessing ? 'lucide:loader-2' : 'lucide:sparkles'"
+                  :class="isProcessing ? 'animate-spin' : ''"
+                  class="mr-2 h-4 w-4"
+                />
+                {{ isProcessing ? 'Processing...' : 'Extract Projects' }}
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -249,6 +258,9 @@ const processError = ref<string | null>(null)
 const processSuccess = ref(false)
 const taskId = ref<string | null>(null)
 
+// Max comments for batch processing
+const maxComments = ref<string>('')
+
 // Processing state (single comment)
 const processingCommentId = ref<number | null>(null)
 
@@ -333,11 +345,12 @@ async function processComments() {
   taskId.value = null
 
   try {
+    const limit = maxComments.value ? parseInt(maxComments.value, 10) : null
     const response = await $fetch<{ task_id: string; status: string }>(
       `${config.public.apiBase}/api/process-waywo-comments`,
       {
         method: 'POST',
-        body: {}
+        body: limit ? { limit } : {}
       }
     )
 

@@ -252,6 +252,8 @@ def process_waywo_comment(self, comment_id: int) -> dict:
             hashtags=proj_data.get("hashtags", []),
             project_urls=proj_data.get("urls", []),
             url_summaries=proj_data.get("url_summaries", {}),
+            primary_url=proj_data.get("primary_url"),
+            url_contents=proj_data.get("url_contents", {}),
             idea_score=proj_data.get("idea_score", 5),
             complexity_score=proj_data.get("complexity_score", 5),
             workflow_logs=proj_data.get("workflow_logs", logs),

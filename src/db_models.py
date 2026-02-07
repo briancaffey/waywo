@@ -165,6 +165,10 @@ class WaywoProjectDB(Base):
     url_summaries: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )  # JSON dict
+    primary_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    url_contents: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # JSON dict
 
     # Scores (1-10)
     idea_score: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -237,6 +241,16 @@ class WaywoProjectDB(Base):
     def set_url_summaries_dict(self, summaries: dict[str, str]) -> None:
         """Serialize dict to JSON string."""
         self.url_summaries = json.dumps(summaries) if summaries else None
+
+    def get_url_contents_dict(self) -> dict[str, str]:
+        """Parse url_contents JSON string to dict."""
+        if self.url_contents is None:
+            return {}
+        return json.loads(self.url_contents)
+
+    def set_url_contents_dict(self, contents: dict[str, str]) -> None:
+        """Serialize dict to JSON string."""
+        self.url_contents = json.dumps(contents) if contents else None
 
     def get_workflow_logs_list(self) -> list[str]:
         """Parse workflow_logs JSON string to list."""

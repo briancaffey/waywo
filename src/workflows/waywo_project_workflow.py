@@ -359,6 +359,7 @@ class WaywoProjectWorkflow(Workflow):
             description = result.get("description", ev.raw_text[:200])
             hashtags = result.get("hashtags", [])
             url_summaries = result.get("url_summaries", {})
+            primary_url = result.get("primary_url")
 
             # Validate hashtags
             hashtags = [
@@ -376,6 +377,7 @@ class WaywoProjectWorkflow(Workflow):
                 description=description,
                 hashtags=hashtags,
                 url_summaries=url_summaries,
+                primary_url=primary_url,
             )
 
         except Exception as e:
@@ -514,6 +516,8 @@ class WaywoProjectWorkflow(Workflow):
             "hashtags": ev.hashtags,
             "urls": ev.urls,
             "url_summaries": ev.url_summaries,
+            "primary_url": ev.primary_url,
+            "url_contents": ev.url_contents,
             "idea_score": ev.idea_score,
             "complexity_score": ev.complexity_score,
             "embedding": ev.embedding,

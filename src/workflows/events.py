@@ -95,9 +95,10 @@ class MetadataGeneratedEvent(Event):
     # Generated metadata
     title: str
     short_description: str  # 5-10 words
-    description: str  # 1-2 sentences
+    description: str  # 3-5 sentences
     hashtags: list[str]  # 3-5 tags
     url_summaries: dict[str, str]  # URL -> summary of content
+    primary_url: Optional[str] = None
 
 
 class ScoredProjectEvent(Event):
@@ -120,6 +121,7 @@ class ScoredProjectEvent(Event):
     description: str
     hashtags: list[str]
     url_summaries: dict[str, str]
+    primary_url: Optional[str] = None
 
     # Scores
     idea_score: int  # 1-10
@@ -146,6 +148,7 @@ class EmbeddingGeneratedEvent(Event):
     description: str
     hashtags: list[str]
     url_summaries: dict[str, str]
+    primary_url: Optional[str] = None
     idea_score: int
     complexity_score: int
 
