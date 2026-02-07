@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from src.celery_app import debug_task
@@ -31,6 +32,7 @@ from src.db_client import (
     get_project,
     get_projects_for_comment,
     get_projects_with_embeddings_count,
+    get_similar_projects,
     get_total_comment_count,
     get_total_project_count,
     reset_all_data,
@@ -64,6 +66,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Mount static files for media (screenshots, etc.)
+media_dir = os.environ.get("MEDIA_DIR", "/app/media")
+os.makedirs(media_dir, exist_ok=True)
+app.mount("/media", StaticFiles(directory=media_dir), name="media")
 
 
 @app.on_event("startup")
@@ -380,6 +388,7 @@ async def list_waywo_projects(
     bookmarked: Optional[bool] = Query(None, description="Filter by bookmark status"),
     date_from: Optional[datetime] = Query(None, description="Filter projects created on or after this date (ISO format)"),
     date_to: Optional[datetime] = Query(None, description="Filter projects created on or before this date (ISO format)"),
+    sort: Optional[str] = Query(None, description="Sort order: 'random' for random order, default is newest first"),
 ):
     """
     List all WaywoProject entries with pagination and filtering.
@@ -415,6 +424,7 @@ async def list_waywo_projects(
             is_bookmarked=bookmarked,
             date_from=date_from,
             date_to=date_to,
+            sort=sort,
         )
         total = get_total_project_count(is_valid=is_valid)
 
@@ -514,6 +524,35 @@ async def toggle_project_bookmark(project_id: int):
             "project_id": project_id,
         }
     )
+
+
+@app.get("/api/waywo-projects/{project_id}/similar", tags=["projects"])
+async def get_similar_waywo_projects(
+    project_id: int,
+    limit: int = Query(default=5, ge=1, le=20, description="Number of similar projects to return"),
+):
+    """
+    Get projects similar to the specified project using vector similarity.
+
+    Uses the project's embedding to find the most similar projects.
+    Returns empty list if the project has no embedding.
+    """
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+
+    results = get_similar_projects(project_id=project_id, limit=limit)
+
+    return {
+        "similar_projects": [
+            {
+                "project": proj.model_dump(),
+                "similarity": round(similarity, 4),
+            }
+            for proj, similarity in results
+        ],
+        "project_id": project_id,
+    }
 
 
 # =============================================================================

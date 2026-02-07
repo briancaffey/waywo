@@ -104,6 +104,22 @@
           <p class="text-muted-foreground">{{ project.description }}</p>
         </Card>
 
+        <!-- Screenshot -->
+        <Card v-if="project.screenshot_path" class="p-6 mb-6">
+          <h2 class="text-lg font-semibold mb-3">Screenshot</h2>
+          <div class="rounded-lg overflow-hidden border">
+            <img
+              :src="`${config.public.apiBase}/media/${project.screenshot_path}`"
+              :alt="`Screenshot of ${project.title}`"
+              class="w-full"
+              loading="lazy"
+            />
+          </div>
+          <p v-if="project.project_urls?.length" class="text-sm text-muted-foreground mt-2">
+            Source: {{ project.project_urls[0] }}
+          </p>
+        </Card>
+
         <!-- URLs & Content (Collapsible) -->
         <Collapsible v-if="project.project_urls?.length" class="mb-6">
           <Card class="p-6">
@@ -203,7 +219,7 @@
         </Collapsible>
 
         <!-- Metadata -->
-        <Card class="p-6">
+        <Card class="p-6 mb-6">
           <h2 class="text-lg font-semibold mb-3">Metadata</h2>
           <div class="grid grid-cols-2 gap-4 text-sm">
             <div>
@@ -215,13 +231,59 @@
               <span class="ml-2 font-medium">{{ project.source_comment_id }}</span>
             </div>
             <div>
-              <span class="text-muted-foreground">Created:</span>
-              <span class="ml-2 font-medium">{{ formatDate(project.created_at) }}</span>
+              <span class="text-muted-foreground">Comment Date:</span>
+              <span class="ml-2 font-medium">{{ project.comment_time ? formatTime(project.comment_time) : 'Unknown' }}</span>
             </div>
             <div>
               <span class="text-muted-foreground">Processed:</span>
               <span class="ml-2 font-medium">{{ formatDate(project.processed_at) }}</span>
             </div>
+          </div>
+        </Card>
+
+        <!-- Similar Projects -->
+        <Card class="p-6">
+          <h2 class="text-lg font-semibold mb-3">Similar Projects</h2>
+          <div v-if="isLoadingSimilar" class="flex items-center gap-2 text-muted-foreground">
+            <Icon name="lucide:loader-2" class="h-4 w-4 animate-spin" />
+            <span class="text-sm">Finding similar projects...</span>
+          </div>
+          <div v-else-if="similarProjects.length === 0" class="text-sm text-muted-foreground">
+            No similar projects found.
+          </div>
+          <div v-else class="space-y-3">
+            <a
+              v-for="item in similarProjects"
+              :key="item.project.id"
+              :href="`/projects/${item.project.id}`"
+              class="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+            >
+              <div
+                v-if="item.project.screenshot_path"
+                class="w-16 h-10 rounded overflow-hidden flex-shrink-0 bg-muted"
+              >
+                <img
+                  :src="`${config.public.apiBase}/media/${item.project.screenshot_path.replace('.jpg', '_thumb.jpg')}`"
+                  :alt="item.project.title"
+                  class="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+              <div
+                v-else
+                class="w-16 h-10 rounded flex-shrink-0 bg-muted flex items-center justify-center"
+              >
+                <Icon name="lucide:image-off" class="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-sm truncate">{{ item.project.title }}</div>
+                <div class="text-xs text-muted-foreground truncate">{{ item.project.short_description }}</div>
+              </div>
+              <div class="flex-shrink-0 text-right">
+                <div class="text-sm font-medium text-primary">{{ Math.round(item.similarity * 100) }}%</div>
+                <div class="text-xs text-muted-foreground">match</div>
+              </div>
+            </a>
           </div>
         </Card>
       </div>
@@ -244,8 +306,10 @@ interface WaywoProject {
   idea_score: number
   complexity_score: number
   is_bookmarked: boolean
+  screenshot_path: string | null
   created_at: string
   processed_at: string
+  comment_time: number | null
   workflow_logs: string[]
 }
 
@@ -289,6 +353,8 @@ const isLoading = ref(false)
 const fetchError = ref<string | null>(null)
 const isDeleting = ref(false)
 const isTogglingBookmark = ref(false)
+const similarProjects = ref<{ project: WaywoProject; similarity: number }[]>([])
+const isLoadingSimilar = ref(false)
 
 // Format date
 function formatDate(dateStr: string): string {
@@ -330,11 +396,30 @@ async function fetchProject() {
     project.value = response.project
     sourceComment.value = response.source_comment
     parentPost.value = response.parent_post
+
+    // Fetch similar projects in parallel (non-blocking)
+    fetchSimilarProjects()
   } catch (err) {
     console.error('Failed to fetch project:', err)
     fetchError.value = 'Failed to fetch project. It may not exist.'
   } finally {
     isLoading.value = false
+  }
+}
+
+// Fetch similar projects
+async function fetchSimilarProjects() {
+  isLoadingSimilar.value = true
+  try {
+    const response = await $fetch<{
+      similar_projects: { project: WaywoProject; similarity: number }[]
+      project_id: number
+    }>(`${config.public.apiBase}/api/waywo-projects/${projectId.value}/similar?limit=5`)
+    similarProjects.value = response.similar_projects
+  } catch (err) {
+    console.error('Failed to fetch similar projects:', err)
+  } finally {
+    isLoadingSimilar.value = false
   }
 }
 

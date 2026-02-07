@@ -96,12 +96,16 @@ class WaywoProject(BaseModel):
     # Timestamps
     created_at: datetime
     processed_at: datetime
+    comment_time: Optional[int] = None  # HN comment Unix timestamp
 
     # Workflow metadata
     workflow_logs: list[str] = Field(default_factory=list)
 
     # Bookmarking
     is_bookmarked: bool = False
+
+    # Screenshot
+    screenshot_path: Optional[str] = None
 
 
 class WaywoProjectSummary(BaseModel):
@@ -116,6 +120,7 @@ class WaywoProjectSummary(BaseModel):
     complexity_score: int
     is_valid_project: bool
     is_bookmarked: bool
+    screenshot_path: Optional[str] = None
     created_at: datetime
 
 

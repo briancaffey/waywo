@@ -6,7 +6,8 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PATH="/app/.venv/bin:$PATH"
+    PATH="/app/.venv/bin:$PATH" \
+    PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -39,12 +40,12 @@ COPY --chown=app:app src/healthcheck.py /app/healthcheck.py
 RUN . .venv/bin/activate && \
     uv pip install -e . && \
     uv pip install -e ".[dev]" && \
-    uv pip install -e ".[notebook]"
+    uv pip install -e ".[notebook]" && \
+    playwright install --with-deps chromium
 
-# Create directories for celery and media with proper permissions
-# Do this after copying source code to ensure directories exist
+# Create directories for celery, media, and playwright with proper permissions
 RUN mkdir -p /app/celery-data /app/media && \
-    chown -R app:app /app/celery-data /app/media
+    chown -R app:app /app/celery-data /app/media /app/.playwright-browsers
 
 USER app
 

@@ -6,6 +6,7 @@ and graceful error handling.
 """
 
 import asyncio
+import html
 import logging
 import os
 import re
@@ -130,15 +131,21 @@ def extract_urls_from_text(text: str) -> list[str]:
     """
     Extract URLs from text content.
 
+    Handles HN-style HTML entity encoding (e.g. &#x2F; for /) by
+    decoding entities before running the regex.
+
     Args:
-        text: Text that may contain URLs
+        text: Text that may contain URLs (plain text or HTML)
 
     Returns:
         List of unique, cleaned URLs
     """
+    # Decode HTML entities first (HN encodes / as &#x2F; and ' as &#x27;)
+    decoded_text = html.unescape(text)
+
     # URL regex pattern
     url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
-    urls = re.findall(url_pattern, text)
+    urls = re.findall(url_pattern, decoded_text)
 
     # Clean and deduplicate
     cleaned_urls = []

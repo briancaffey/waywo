@@ -15,6 +15,12 @@ from src.db_client import (
     save_comment,
     save_post,
     save_project,
+    update_project_screenshot,
+)
+from src.screenshot_client import (
+    ScreenshotError,
+    capture_screenshot,
+    save_screenshot_to_disk,
 )
 from src.hn_client import fetch_item
 from src.models import WaywoComment, WaywoPost, WaywoProject, WaywoYamlEntry
@@ -258,6 +264,22 @@ def process_waywo_comment(self, comment_id: int) -> dict:
         saved_project_ids.append(project_id)
         has_embedding = "with embedding" if embedding else "without embedding"
         print(f"💾 Saved project {project_id}: {project.title} ({has_embedding})")
+
+        # Capture screenshot for first URL (non-fatal)
+        project_urls = proj_data.get("urls", [])
+        if project_urls and project_id:
+            try:
+                media_dir = os.environ.get("MEDIA_DIR", "/app/media")
+                image_bytes = asyncio.run(capture_screenshot(url=project_urls[0]))
+                screenshot_path = save_screenshot_to_disk(
+                    image_bytes, project_id, media_dir=media_dir
+                )
+                update_project_screenshot(project_id, screenshot_path)
+                print(f"📸 Screenshot saved for project {project_id}")
+            except ScreenshotError as e:
+                print(f"📸 Screenshot failed for project {project_id} (non-fatal): {e}")
+            except Exception as e:
+                print(f"📸 Screenshot error for project {project_id} (non-fatal): {e}")
 
     # Mark comment as processed
     mark_comment_processed(comment_id)

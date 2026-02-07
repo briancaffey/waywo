@@ -260,8 +260,13 @@ class WaywoProjectWorkflow(Workflow):
             ctx, "🔗", f"Extracting URLs from project {ev.project_index + 1}"
         )
 
-        # Extract URLs using firecrawl_client (handles validation and deduplication)
+        # Extract URLs from both the LLM-extracted project text and the original
+        # comment HTML.  The LLM often strips URLs when it returns project
+        # segments, so falling back to the original comment ensures we still
+        # discover links embedded in <a href="..."> tags.
         cleaned_urls = extract_urls_from_text(ev.raw_text)
+        if not cleaned_urls and ev.original_comment_text:
+            cleaned_urls = extract_urls_from_text(ev.original_comment_text)
 
         await self._log(ctx, "📋", f"Found {len(cleaned_urls)} valid URLs")
 

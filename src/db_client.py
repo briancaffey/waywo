@@ -384,6 +384,7 @@ def save_project(project: WaywoProject, embedding: list[float] | None = None) ->
             description_embedding=embedding_blob,
             created_at=project.created_at,
             processed_at=project.processed_at,
+            screenshot_path=project.screenshot_path,
         )
         db.add(db_project)
         db.commit()
@@ -397,11 +398,16 @@ def get_project(project_id: int) -> WaywoProject | None:
     """Retrieve a WaywoProject from the database."""
     db = get_db_session()
     try:
-        db_project = (
-            db.query(WaywoProjectDB).filter(WaywoProjectDB.id == project_id).first()
+        result = (
+            db.query(WaywoProjectDB, WaywoCommentDB.time)
+            .outerjoin(WaywoCommentDB, WaywoProjectDB.source_comment_id == WaywoCommentDB.id)
+            .filter(WaywoProjectDB.id == project_id)
+            .first()
         )
-        if db_project is None:
+        if result is None:
             return None
+
+        db_project, comment_time = result
 
         return WaywoProject(
             id=db_project.id,
@@ -426,6 +432,8 @@ def get_project(project_id: int) -> WaywoProject | None:
             created_at=db_project.created_at,
             processed_at=db_project.processed_at,
             is_bookmarked=db_project.is_bookmarked,
+            screenshot_path=db_project.screenshot_path,
+            comment_time=comment_time,
         )
     finally:
         db.close()
@@ -435,8 +443,9 @@ def get_projects_for_comment(comment_id: int) -> list[WaywoProject]:
     """Get all projects extracted from a specific comment."""
     db = get_db_session()
     try:
-        db_projects = (
-            db.query(WaywoProjectDB)
+        results = (
+            db.query(WaywoProjectDB, WaywoCommentDB.time)
+            .outerjoin(WaywoCommentDB, WaywoProjectDB.source_comment_id == WaywoCommentDB.id)
             .filter(WaywoProjectDB.source_comment_id == comment_id)
             .all()
         )
@@ -459,8 +468,10 @@ def get_projects_for_comment(comment_id: int) -> list[WaywoProject]:
                 created_at=p.created_at,
                 processed_at=p.processed_at,
                 is_bookmarked=p.is_bookmarked,
+                screenshot_path=p.screenshot_path,
+                comment_time=comment_time,
             )
-            for p in db_projects
+            for p, comment_time in results
         ]
     finally:
         db.close()
@@ -510,6 +521,22 @@ def toggle_bookmark(project_id: int) -> bool | None:
         db.close()
 
 
+def update_project_screenshot(project_id: int, screenshot_path: str) -> bool:
+    """Update the screenshot_path for a project. Returns True if updated, False if not found."""
+    db = get_db_session()
+    try:
+        db_project = (
+            db.query(WaywoProjectDB).filter(WaywoProjectDB.id == project_id).first()
+        )
+        if db_project is None:
+            return False
+        db_project.screenshot_path = screenshot_path
+        db.commit()
+        return True
+    finally:
+        db.close()
+
+
 def get_bookmarked_count() -> int:
     """Get count of bookmarked projects."""
     db = get_db_session()
@@ -535,11 +562,14 @@ def get_all_projects(
     date_to: datetime | None = None,
     is_valid: bool | None = None,
     is_bookmarked: bool | None = None,
+    sort: str | None = None,
 ) -> list[WaywoProject]:
     """Get all projects with optional filtering."""
     db = get_db_session()
     try:
-        query = db.query(WaywoProjectDB)
+        query = db.query(WaywoProjectDB, WaywoCommentDB.time).outerjoin(
+            WaywoCommentDB, WaywoProjectDB.source_comment_id == WaywoCommentDB.id
+        )
 
         # Apply filters
         if is_valid is not None:
@@ -579,14 +609,17 @@ def get_all_projects(
             query = query.filter(or_(*tag_conditions))
 
         # Order and paginate
-        query = query.order_by(WaywoProjectDB.created_at.desc())
+        if sort == "random":
+            query = query.order_by(func.random())
+        else:
+            query = query.order_by(WaywoProjectDB.created_at.desc())
 
         if offset:
             query = query.offset(offset)
         if limit:
             query = query.limit(limit)
 
-        db_projects = query.all()
+        results = query.all()
 
         return [
             WaywoProject(
@@ -606,8 +639,10 @@ def get_all_projects(
                 created_at=p.created_at,
                 processed_at=p.processed_at,
                 is_bookmarked=p.is_bookmarked,
+                screenshot_path=p.screenshot_path,
+                comment_time=comment_time,
             )
-            for p in db_projects
+            for p, comment_time in results
         ]
     finally:
         db.close()
@@ -712,6 +747,93 @@ def semantic_search(
         import logging
 
         logging.getLogger(__name__).warning(f"Semantic search failed: {e}")
+        return []
+    finally:
+        db.close()
+
+
+def get_similar_projects(
+    project_id: int,
+    limit: int = 5,
+    is_valid: bool | None = True,
+) -> list[tuple[WaywoProject, float]]:
+    """
+    Find projects similar to the given project using vector similarity.
+
+    Args:
+        project_id: The project to find similar projects for
+        limit: Maximum number of similar projects to return
+        is_valid: Filter by validity (default True for valid projects only)
+
+    Returns:
+        List of (WaywoProject, similarity_score) tuples, sorted by similarity
+    """
+    db = get_db_session()
+    try:
+        # Get the source project's embedding
+        db_project = (
+            db.query(WaywoProjectDB).filter(WaywoProjectDB.id == project_id).first()
+        )
+        if db_project is None or db_project.description_embedding is None:
+            return []
+
+        # Use the project's own embedding as the query
+        query_blob = db_project.description_embedding
+
+        # Search for similar projects, excluding the source project
+        # Fetch extra to account for filtering out the source project
+        fetch_limit = limit + 1
+        if is_valid is not None:
+            sql = text("""
+                SELECT p.id, v.distance
+                FROM waywo_projects AS p
+                JOIN vector_full_scan('waywo_projects', 'description_embedding', :query, :fetch_limit) AS v
+                ON p.id = v.rowid
+                WHERE p.is_valid_project = :is_valid AND p.id != :exclude_id
+                ORDER BY v.distance ASC
+            """)
+            result = db.execute(
+                sql,
+                {
+                    "query": query_blob,
+                    "fetch_limit": fetch_limit * 2,
+                    "is_valid": is_valid,
+                    "exclude_id": project_id,
+                },
+            )
+        else:
+            sql = text("""
+                SELECT p.id, v.distance
+                FROM waywo_projects AS p
+                JOIN vector_full_scan('waywo_projects', 'description_embedding', :query, :fetch_limit) AS v
+                ON p.id = v.rowid
+                WHERE p.id != :exclude_id
+                ORDER BY v.distance ASC
+            """)
+            result = db.execute(
+                sql,
+                {
+                    "query": query_blob,
+                    "fetch_limit": fetch_limit * 2,
+                    "exclude_id": project_id,
+                },
+            )
+
+        results = []
+        for row in result:
+            pid, distance = row
+            proj = get_project(pid)
+            if proj:
+                similarity = 1.0 - (distance / 2.0)
+                results.append((proj, similarity))
+                if len(results) >= limit:
+                    break
+
+        return results
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning(f"Similar projects search failed: {e}")
         return []
     finally:
         db.close()

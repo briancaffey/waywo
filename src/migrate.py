@@ -57,6 +57,21 @@ def run_migrations():
             else:
                 logger.warning(f"Could not add is_bookmarked column: {e}")
 
+        # Add screenshot_path column to waywo_projects if it doesn't exist
+        try:
+            conn.execute(
+                text(
+                    "ALTER TABLE waywo_projects ADD COLUMN screenshot_path TEXT"
+                )
+            )
+            conn.commit()
+            logger.info("Added screenshot_path column to waywo_projects")
+        except Exception as e:
+            if "duplicate column name" in str(e).lower():
+                logger.info("screenshot_path column already exists")
+            else:
+                logger.warning(f"Could not add screenshot_path column: {e}")
+
     # Explicitly re-run vector search init to ensure it's set up
     # This is idempotent - safe to run multiple times
     logger.info("Initializing vector search indexes...")

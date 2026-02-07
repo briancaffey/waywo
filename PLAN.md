@@ -342,8 +342,8 @@ GET  /api/waywo-projects/hashtags
 | **Phase 6** | 14 | Project Bookmarking | ✅ Complete |
 | **Phase 7** | 15 | Project Filtering UI | ✅ Complete |
 | **Phase 8** | 16 | Reranking for RAG | ✅ Complete |
-| **Phase 9** | 17 | Project Screenshots | 🔲 Planned |
-| **Phase 10** | 18 | Similar Projects | 🔲 Planned |
+| **Phase 9** | 17 | Project Screenshots | ✅ Complete |
+| **Phase 10** | 18 | Similar Projects | ✅ Complete |
 | **Phase 11** | 19, 20 | Voice Interface (STT & TTS) | 🔲 Planned |
 | **Phase 12** | 21 | Safety & Content Moderation | 🔲 Planned |
 | **Phase 13** | 22 | Vision-Language Screenshot Analysis | 🔲 Planned |
@@ -855,63 +855,70 @@ RERANK_URL: http://192.168.5.173:8111
 
 ---
 
-## Milestone 17: Project Screenshots
+## Milestone 17: Project Screenshots ✅ COMPLETE
 
 **Goal**: Automatically capture screenshots of project URLs during processing and display them in the UI.
 
 ### Approach
-- Use Playwright to capture homepage screenshots
-- Store as optimized images in `/data/screenshots/`
-- Display thumbnails on project cards and full images on detail pages
+- Playwright runs as a local library inside the main app (no separate service)
+- Screenshots captured as a post-processing step in `tasks.py` after projects are saved
+- Full JPEG + 320x200 thumbnail generated via Pillow
+- Stored in `./media/screenshots/` volume, served via FastAPI StaticFiles at `/media/`
+- Failures are non-blocking (logged but don't prevent project creation)
 
-### Files to Create/Modify
+### Files Created/Modified
 
 | File | Action |
 |------|--------|
-| `src/screenshot_client.py` | **New** - Playwright screenshot capture service |
-| `src/db_models.py` | Add `screenshot_path` column to `WaywoProjectDB` |
-| `src/workflows/waywo_project_workflow.py` | Add screenshot capture step |
-| `src/main.py` | Add screenshot serving endpoint |
-| `src/migrate.py` | Add migration for screenshot column |
-| `frontend/app/pages/projects/index.vue` | Display thumbnail on cards |
-| `frontend/app/pages/projects/[id].vue` | Display full screenshot |
-
-### New API Endpoints
-
-```
-GET /api/waywo-projects/{id}/screenshot
-    Response: Image file (PNG/JPEG)
-    - Returns cached screenshot if available
-    - Returns placeholder if not captured
-
-POST /api/waywo-projects/{id}/capture-screenshot
-    Response: {status: "captured", path: "..."}
-    - Manually trigger screenshot capture
-```
+| `pyproject.toml` | Added `playwright>=1.40.0`, `Pillow>=10.0.0` |
+| `Dockerfile` | Added `PLAYWRIGHT_BROWSERS_PATH` env var, `playwright install --with-deps chromium` |
+| `src/screenshot_client.py` | **New** - `capture_screenshot()` async, `save_screenshot_to_disk()`, `ScreenshotError` |
+| `src/db_models.py` | Added `screenshot_path` column (nullable Text) to `WaywoProjectDB` |
+| `src/models.py` | Added `screenshot_path` field to `WaywoProject` and `WaywoProjectSummary` |
+| `src/migrate.py` | Added idempotent `ALTER TABLE` migration for `screenshot_path` column |
+| `src/db_client.py` | Added `screenshot_path` to all project constructors, new `update_project_screenshot()` |
+| `src/tasks.py` | Added post-save screenshot capture for first URL (non-fatal try/except) |
+| `src/main.py` | Added `StaticFiles` mount at `/media` for serving screenshots |
+| `src/firecrawl_client.py` | Fixed URL extraction: added `html.unescape()` to decode HN `&#x2F;` entities |
+| `src/workflows/waywo_project_workflow.py` | Fallback URL extraction from `original_comment_text` when LLM strips URLs |
+| `src/test/test_url_extraction.py` | **New** - 11 tests for URL extraction with HN HTML entity encoding |
+| `frontend/app/pages/projects/index.vue` | Added 160x96px thumbnail area on project cards with placeholder icon |
+| `frontend/app/pages/projects/[id].vue` | Added full screenshot Card section between Description and URLs |
 
 ### Screenshot Configuration
 
 - Resolution: 1280x800 (desktop viewport)
-- Format: JPEG (optimized for size)
-- Thumbnail: 320x200 for cards
+- Format: JPEG (quality 80)
+- Thumbnail: 320x200 for list cards
 - Timeout: 30 seconds per URL
-- Skip: URLs that fail to load, localhost, IP addresses
+- Navigation: `wait_until="networkidle"` (falls back to screenshot on timeout)
+- Storage: `./media/screenshots/{project_id}.jpg` and `{project_id}_thumb.jpg`
+
+### Bug Fixes During Implementation
+
+1. **HN HTML entity encoding**: URLs in HN comments use `&#x2F;` for `/`, causing the regex `https?://` to never match. Fixed by adding `html.unescape()` before URL extraction.
+2. **LLM strips URLs**: The LLM project extraction step returns cleaned text without URLs. Added fallback to extract URLs from `original_comment_text` (raw HTML).
+3. **Playwright browser path**: Browsers installed as root during Docker build went to `/root/.cache/ms-playwright/`, but the app runs as `app` user. Fixed by setting `PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers` in Dockerfile.
 
 ### Tasks
 
-- [ ] Create `src/screenshot_client.py` with Playwright
-- [ ] Add screenshot capture to project workflow
-- [ ] Add database column and migration
-- [ ] Create screenshot serving endpoint
-- [ ] Add thumbnail generation
-- [ ] Update project cards with thumbnails
-- [ ] Update project detail page with full screenshot
-- [ ] Add manual capture button on detail page
-- [ ] Handle missing/failed screenshots gracefully
+- [x] Add Playwright and Pillow dependencies
+- [x] Install Chromium in Dockerfile with correct browser path
+- [x] Create `src/screenshot_client.py` with async capture + thumbnail generation
+- [x] Add database column, migration, and model fields
+- [x] Add `screenshot_path` to all db_client project constructors
+- [x] Add post-save screenshot capture in tasks.py (non-fatal)
+- [x] Mount `/media` via StaticFiles for serving screenshots
+- [x] Fix HN HTML entity URL extraction (`html.unescape`)
+- [x] Fix LLM URL stripping (fallback to original comment text)
+- [x] Fix Playwright browser path for non-root Docker user
+- [x] Update project list cards with thumbnails
+- [x] Update project detail page with full screenshot
+- [x] Write URL extraction tests (11 tests)
 
 ---
 
-## Milestone 18: Similar Projects
+## Milestone 18: Similar Projects ✅ COMPLETE
 
 **Goal**: Add a "Similar Projects" section to the project detail page using existing embeddings.
 
@@ -944,12 +951,12 @@ GET /api/waywo-projects/{id}/similar
 
 ### Tasks
 
-- [ ] Add `get_similar_projects()` to db_client
-- [ ] Create API endpoint
-- [ ] Add "Similar Projects" card to detail page
-- [ ] Display similarity percentage
-- [ ] Handle projects without embeddings
-- [ ] Add loading state for similar projects
+- [x] Add `get_similar_projects()` to db_client
+- [x] Create API endpoint
+- [x] Add "Similar Projects" card to detail page
+- [x] Display similarity percentage
+- [x] Handle projects without embeddings
+- [x] Add loading state for similar projects
 
 ---
 

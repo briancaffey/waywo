@@ -28,14 +28,23 @@
             <p class="text-sm text-muted-foreground">Total Projects</p>
             <p class="text-3xl font-bold">{{ total }}</p>
           </div>
-          <Button variant="outline" @click="fetchProjects" :disabled="isLoading">
-            <Icon
-              :name="isLoading ? 'lucide:loader-2' : 'lucide:refresh-cw'"
-              :class="isLoading ? 'animate-spin' : ''"
-              class="mr-2 h-4 w-4"
-            />
-            Refresh
-          </Button>
+          <div class="flex gap-2">
+            <Button :variant="sortOrder === 'random' ? 'default' : 'outline'" @click="shuffleProjects" :disabled="isLoading">
+              <Icon
+                name="lucide:shuffle"
+                class="mr-2 h-4 w-4"
+              />
+              Shuffle
+            </Button>
+            <Button variant="outline" @click="refreshProjects" :disabled="isLoading">
+              <Icon
+                :name="isLoading ? 'lucide:loader-2' : 'lucide:refresh-cw'"
+                :class="isLoading ? 'animate-spin' : ''"
+                class="mr-2 h-4 w-4"
+              />
+              Refresh
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -239,6 +248,20 @@
           class="p-6 cursor-pointer hover:border-primary/50 transition-colors"
           @click="viewProject(project.id)"
         >
+          <div class="flex gap-4">
+            <!-- Thumbnail -->
+            <div class="flex-shrink-0 w-[160px] h-[96px] rounded-md overflow-hidden bg-muted flex items-center justify-center">
+              <img
+                v-if="project.screenshot_path"
+                :src="`${config.public.apiBase}/media/${project.screenshot_path.replace('.jpg', '_thumb.jpg')}`"
+                :alt="`Screenshot of ${project.title}`"
+                class="w-full h-full object-cover"
+                loading="lazy"
+              />
+              <Icon v-else name="lucide:image" class="h-8 w-8 text-muted-foreground/40" />
+            </div>
+
+            <div class="flex-1 min-w-0">
           <div class="flex justify-between items-start mb-3">
             <div class="flex-1">
               <div class="flex items-center gap-2 mb-1">
@@ -291,9 +314,22 @@
 
           <div class="mt-4 pt-4 border-t flex items-center justify-between text-sm text-muted-foreground">
             <span>
-              {{ formatDate(project.created_at) }}
+              {{ project.comment_time ? formatUnixTime(project.comment_time) : formatDate(project.created_at) }}
             </span>
             <div class="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                @click.stop="reprocessProject(project)"
+                :disabled="reprocessingProjectId === project.id"
+              >
+                <Icon
+                  :name="reprocessingProjectId === project.id ? 'lucide:loader-2' : 'lucide:rotate-cw'"
+                  :class="reprocessingProjectId === project.id ? 'animate-spin' : ''"
+                  class="mr-1 h-3 w-3"
+                />
+                {{ reprocessingProjectId === project.id ? 'Queuing...' : 'Reprocess' }}
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -316,6 +352,8 @@
                 View Details
                 <Icon name="lucide:arrow-right" class="h-3 w-3" />
               </a>
+            </div>
+          </div>
             </div>
           </div>
         </Card>
@@ -364,8 +402,10 @@ interface WaywoProject {
   idea_score: number
   complexity_score: number
   is_bookmarked: boolean
+  screenshot_path: string | null
   created_at: string
   processed_at: string
+  comment_time: number | null
   workflow_logs: string[]
 }
 
@@ -434,12 +474,28 @@ const activeFilterCount = computed(() => {
 // Delete state
 const deletingProjectId = ref<number | null>(null)
 
+// Sort state
+const sortOrder = ref<'default' | 'random'>('default')
+
+// Reprocess state
+const reprocessingProjectId = ref<number | null>(null)
+
 // Bookmark state
 const togglingBookmarkId = ref<number | null>(null)
 
 // Format date
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
+// Format Unix timestamp
+function formatUnixTime(timestamp: number): string {
+  const date = new Date(timestamp * 1000)
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -555,6 +611,11 @@ async function fetchProjects() {
       offset: offset.value
     }
 
+    // Add sort order
+    if (sortOrder.value === 'random') {
+      params.sort = 'random'
+    }
+
     // Add comment_id filter
     if (commentId.value) {
       params.comment_id = commentId.value
@@ -630,6 +691,19 @@ function clearAllFilters() {
   fetchProjects()
 }
 
+// Shuffle projects (fetch in random order)
+function shuffleProjects() {
+  sortOrder.value = 'random'
+  offset.value = 0
+  fetchProjects()
+}
+
+// Refresh projects (reset to default sort)
+function refreshProjects() {
+  sortOrder.value = 'default'
+  fetchProjects()
+}
+
 // View project details
 function viewProject(projectId: number) {
   window.location.href = `/projects/${projectId}`
@@ -657,6 +731,33 @@ async function deleteProject(projectId: number) {
     alert('Failed to delete project. Please try again.')
   } finally {
     deletingProjectId.value = null
+  }
+}
+
+// Reprocess project (reprocess the source comment)
+async function reprocessProject(project: WaywoProject) {
+  if (reprocessingProjectId.value === project.id) return
+
+  if (!confirm('This will delete all projects from this comment and reprocess it. Continue?')) {
+    return
+  }
+
+  reprocessingProjectId.value = project.id
+
+  try {
+    await $fetch(`${config.public.apiBase}/api/waywo-comments/${project.source_comment_id}/process`, {
+      method: 'POST'
+    })
+    // Remove all projects with this source_comment_id from the local list
+    const removedIds = projects.value.filter(p => p.source_comment_id === project.source_comment_id).map(p => p.id)
+    projects.value = projects.value.filter(p => p.source_comment_id !== project.source_comment_id)
+    total.value -= removedIds.length
+    alert(`Reprocessing queued for comment ${project.source_comment_id}. Refresh later to see updated projects.`)
+  } catch (err) {
+    console.error('Failed to reprocess project:', err)
+    alert('Failed to queue reprocessing. Please try again.')
+  } finally {
+    reprocessingProjectId.value = null
   }
 }
 

@@ -183,6 +183,9 @@ class WaywoProjectDB(Base):
     # Bookmarking
     is_bookmarked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    # Screenshot
+    screenshot_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
