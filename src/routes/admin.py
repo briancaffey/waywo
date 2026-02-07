@@ -1,7 +1,13 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-from src.settings import EMBEDDING_URL, LLM_BASE_URL, LLM_MODEL_NAME, RERANK_URL, REDIS_URL
+from src.settings import (
+    EMBEDDING_URL,
+    LLM_BASE_URL,
+    LLM_MODEL_NAME,
+    RERANK_URL,
+    REDIS_URL,
+)
 from src.db.client import get_database_stats, reset_all_data
 
 router = APIRouter()

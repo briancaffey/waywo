@@ -8,7 +8,11 @@ from src.clients.embedding import (
     check_embedding_service_health,
     get_single_embedding,
 )
-from src.clients.rerank import RerankError, check_rerank_service_health, rerank_documents
+from src.clients.rerank import (
+    RerankError,
+    check_rerank_service_health,
+    rerank_documents,
+)
 from src.db.client import (
     get_projects_with_embeddings_count,
     get_total_project_count,

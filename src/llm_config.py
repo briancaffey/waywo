@@ -37,9 +37,7 @@ def get_llm() -> OpenAILike:
         is_chat_model=True,
         is_function_calling_model=False,  # Nemotron doesn't support function calling
         additional_kwargs={
-            "extra_body": {
-                "chat_template_kwargs": {"enable_thinking": False}
-            }
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}}
         },
     )
 
@@ -66,9 +64,7 @@ def get_llm_for_structured_output() -> OpenAILike:
         is_chat_model=True,
         is_function_calling_model=False,
         additional_kwargs={
-            "extra_body": {
-                "chat_template_kwargs": {"enable_thinking": False}
-            }
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}}
         },
     )
 

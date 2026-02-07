@@ -4,14 +4,19 @@ This document tracks concrete improvement milestones to make the project leaner,
 
 ---
 
-## Current State Summary
+## Current State Summary (updated post-M2 refactor)
 
 | Area | Files | Lines | Notes |
 |------|-------|-------|-------|
-| `src/` (Python backend) | 24 `.py` files | ~4,900 | Flat structure, `main.py` alone is 1,245 lines |
-| `src/workflows/` | 4 files | ~1,600 | Well-organized already |
-| `src/test/` | 2 test files | ~340 | Minimal coverage |
-| `frontend/app/pages/` | 11 `.vue` files | ~4,200 | Several 500+ line pages |
+| `src/` (Python backend) | 40 `.py` files | ~6,370 | Reorganized into `routes/`, `clients/`, `db/`, `worker/` packages |
+| `src/routes/` | 7 files | ~1,186 | Extracted from old monolithic `main.py` |
+| `src/clients/` | 5 files | ~800 | Grouped external service clients |
+| `src/db/` | 4 files | ~1,468 | `client.py` still 926 lines — needs splitting |
+| `src/worker/` | 4 files | ~439 | Celery app, tasks, beat, healthcheck |
+| `src/workflows/` | 5 files | ~1,807 | Well-organized, two files over 300 lines |
+| `src/test/` | 3 test files | ~211 | Minimal coverage |
+| `src/main.py` | 1 file | 49 | Down from 1,245 — slim app entry point ✅ |
+| `frontend/app/pages/` | 11 `.vue` files | ~4,178 | Several 500+ line pages (unchanged) |
 | `frontend/app/components/` | ~300 UI files, 2 custom | - | Many unused shadcn components |
 | `services/` | 3 services | - | 1 unused (speech-to-text) |
 | `docker-compose.yml` | 1 file | 253 lines | 9 services, some experimental |
@@ -121,16 +126,34 @@ src/
 
 **Goal:** No single file should require scrolling through hundreds of lines to understand. Target max ~200-300 lines per file.
 
-### 3.1 Backend: Split `db_client.py` (927 lines)
+### 3.1 Backend: Split `db/client.py` (926 lines → 6 files, max 357 lines)
 This file contains every database operation. Split by domain:
-- [ ] `src/db/posts.py` - post CRUD operations
-- [ ] `src/db/comments.py` - comment CRUD operations
-- [ ] `src/db/projects.py` - project CRUD, bookmarks, similar projects
-- [ ] `src/db/search.py` - semantic search, embeddings, vector operations
-- [ ] `src/db/stats.py` - admin stats, counts
-- [ ] `src/db/client.py` - re-export all functions for backwards compatibility (thin facade)
+- [x] `src/db/posts.py` (98 lines) - post CRUD operations
+- [x] `src/db/comments.py` (244 lines) - comment CRUD operations
+- [x] `src/db/projects.py` (357 lines) - project CRUD, bookmarks, similar projects
+- [x] `src/db/search.py` (189 lines) - semantic search, embeddings, vector operations
+- [x] `src/db/stats.py` (59 lines) - admin stats, counts
+- [x] `src/db/client.py` (55 lines) - re-export all functions for backwards compatibility (thin facade)
 
-### 3.2 Frontend: Split large page components
+### 3.2 Backend: Other files over 300 lines
+The M2 refactor brought most files well under 300 lines (`main.py` went from 1,245 → 49). These remaining files are over the target but are less critical since they have cohesive single responsibilities:
+
+| File | Lines | Notes |
+|------|-------|-------|
+| `workflows/waywo_project_workflow.py` | 550 | Single workflow class — could split steps into separate files but adds complexity |
+| `workflows/waywo_chatbot_workflow.py` | 481 | Single workflow class — same tradeoff |
+| `worker/tasks.py` | 350 | Slightly over, manageable as-is |
+| `clients/firecrawl.py` | 326 | Slightly over, mostly retry/validation logic |
+
+**Recommendation:** Splitting `db/client.py` is the clear win (926 lines, mixed concerns). The workflow files are borderline — they're large but each is a single cohesive class. Consider splitting only if they grow further.
+
+### 3.3 Backend summary (post-M2 refactor)
+All other backend files are already under 300 lines:
+- `workflows/prompts.py` (281), `db/models.py` (263), `routes/admin.py` (258)
+- `workflows/events.py` (245), `routes/search.py` (228), `routes/projects.py` (211)
+- Everything else under 200 lines
+
+### 3.4 Frontend: Split large page components (unchanged)
 | Page | Lines | Split strategy |
 |------|-------|----------------|
 | `projects/index.vue` | 858 | Extract filter sidebar, project card, project list into components |
@@ -140,7 +163,7 @@ This file contains every database operation. Split by domain:
 | `comments/index.vue` | 418 | Extract comment card, filter controls into components |
 | `comments/[id].vue` | 377 | Extract comment detail sections into components |
 
-**Estimated impact:** No file over ~300 lines. Each component has a single, clear responsibility.
+**Estimated impact:** The main backend win is splitting `db/client.py` into ~5 focused files. Frontend pages still need component extraction. After this milestone, no file should exceed ~300 lines (with workflow files as acceptable exceptions at ~500 lines given their cohesive nature).
 
 ---
 

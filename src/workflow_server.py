@@ -24,6 +24,7 @@ from src.workflows import (
     ChatResponseEvent,
 )
 
+
 def create_project_workflow() -> WaywoProjectWorkflow:
     """Create an instance of the project processing workflow."""
     return WaywoProjectWorkflow(
