@@ -216,29 +216,30 @@ All other backend files are already under 300 lines:
 - No CI pipeline running tests
 
 ### 6.1 Fix existing tests
-- [ ] Update `test_data_collection.py` to test `db_client` instead of dead `redis_client`
-- [ ] Verify `test_url_extraction.py` still passes
+- [x] Rewrite `test_data_collection.py` to function-based style, test Pydantic models and YAML loading
+- [x] Rewrite `test_url_extraction.py` to function-based style with `@pytest.mark.parametrize`
 
 ### 6.2 Add high-value tests (prioritized by risk)
-- [ ] **API route tests** - use FastAPI `TestClient` to test each endpoint group
-  - Health/debug endpoints
-  - Posts CRUD
-  - Comments CRUD
-  - Projects CRUD (including bookmark, similar, delete)
-  - Search endpoints
-  - Admin endpoints
-- [ ] **Database client tests** - test `db_client.py` operations with an in-memory SQLite DB
-- [ ] **Workflow tests** - test project extraction and chatbot workflows with mocked LLM responses
-- [ ] **Client tests** - test embedding/rerank/firecrawl clients with mocked HTTP responses
+- [x] **API route tests** - FastAPI `TestClient` tests for each endpoint group
+  - Health/debug endpoints (`test_routes_health.py`)
+  - Posts CRUD (`test_routes_posts.py`)
+  - Comments CRUD (`test_routes_comments.py`)
+  - Projects CRUD including bookmark, similar, delete (`test_routes_projects.py`)
+  - Search endpoints (`test_routes_search.py`)
+  - Admin endpoints (`test_routes_admin.py`)
+- [x] **Database client tests** - `test_db.py` with in-memory SQLite (posts, comments, projects, stats, reset)
+- [ ] **Workflow tests** - test project extraction and chatbot workflows with mocked LLM responses (deferred — complex LlamaIndex workflow mocking)
+- [x] **Client tests** - `test_clients.py` for embedding/rerank/firecrawl/HN clients with mocked HTTP responses
+- [x] **Worker task tests** - `test_worker_tasks.py` for Celery tasks with mocked dependencies (per Celery testing docs)
 
 ### 6.3 Coverage visibility
-- [ ] Add `make test` target to Makefile: `pytest --cov=src --cov-report=term-missing`
-- [ ] Add `make test-html` target for HTML coverage report
+- [x] Add `make test` target: `docker compose run --rm backend pytest --cov=src --cov-report=term-missing`
+- [x] Add `make test-html` target for HTML coverage report
+- [x] Add `make test-file` and `make test-k` targets for targeted test runs
 - [ ] Add coverage badge or minimum threshold (start with whatever current coverage is, then ratchet up)
 
-### 6.4 Frontend tests (lower priority)
-- [ ] Add Vitest for component/composable testing
-- [ ] Start with composable tests (pure logic, easy to test)
+### 6.4 Frontend tests — SKIPPED
+Frontend testing deferred per project decision.
 
 **Estimated impact:** Confidence to refactor. Catch regressions. Coverage visibility motivates incremental improvement.
 
@@ -252,18 +253,9 @@ All other backend files are already under 300 lines:
 Current Makefile has 5 targets. Add practical shortcuts:
 - [ ] `make test` - run Python tests with coverage
 - [ ] `make lint` - run black + isort + flake8 checks
-- [ ] `make fmt` - auto-format code
-- [ ] `make dev` - start backend + frontend for local development
-- [ ] `make seed` - seed database with sample data (if applicable)
-- [ ] `make clean` - clean up generated files, caches, etc.
 
-### 7.2 Add `.env.example`
-- [ ] Document every environment variable with descriptions and example values
-- [ ] Group by service (LLM, Embedding, Rerank, Database, Redis, etc.)
-
-### 7.3 Improve project entry points
+### 7.2 Improve project entry points
 - [ ] Add a brief `CLAUDE.md` for coding agents with project conventions, key file locations, how to run tests
-- [ ] Keep `PLAN.md` for feature milestones, this `IMPROVEMENTS.md` for code quality milestones
 
 **Estimated impact:** Faster onboarding. Less time figuring out "how do I run X?"
 

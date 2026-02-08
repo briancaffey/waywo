@@ -1,4 +1,4 @@
-.PHONY: black check up docs docs-build docs-install
+.PHONY: black check up test test-html test-file test-k docs docs-build docs-install
 
 # Format code with black
 black:
@@ -12,6 +12,22 @@ check:
 up:
 	docker compose up
 
+# Run tests with coverage
+test:
+	docker compose run --rm -e COVERAGE_FILE=/tmp/.coverage backend /app/.venv/bin/python -m pytest --cov=src --cov-report=term-missing src/test/
+
+# Run tests with HTML coverage report
+test-html:
+	docker compose run --rm -e COVERAGE_FILE=/tmp/.coverage backend /app/.venv/bin/python -m pytest --cov=src --cov-report=html:/app/htmlcov src/test/
+
+# Run a specific test file: make test-file FILE=src/test/test_routes_health.py
+test-file:
+	docker compose run --rm backend /app/.venv/bin/python -m pytest $(FILE)
+
+# Run tests matching a keyword: make test-k K=embedding
+test-k:
+	docker compose run --rm backend /app/.venv/bin/python -m pytest -k "$(K)" src/test/
+
 # Install docs dependencies
 docs-install:
 	cd docs && npm install
@@ -23,4 +39,3 @@ docs:
 # Build docs for production
 docs-build:
 	cd docs && npm run build
-

@@ -88,8 +88,8 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["src/test"]
 python_files = ["test_*.py"]
-python_classes = ["Test*"]
 python_functions = ["test_*"]
+asyncio_mode = "auto"
 addopts = [
     "-v",
     "--tb=short",
@@ -97,8 +97,10 @@ addopts = [
     "--disable-warnings"
 ]
 markers = [
-    "pipeline: pipeline functionality tests",
-    "api: API and web server tests",
+    "route: API route endpoint tests",
+    "db: database operation tests",
+    "client: external service client tests",
+    "worker: Celery worker task tests",
     "integration: end-to-end workflow tests"
 ]
 
