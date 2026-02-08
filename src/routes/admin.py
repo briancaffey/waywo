@@ -8,7 +8,7 @@ from src.settings import (
     RERANK_URL,
     REDIS_URL,
 )
-from src.db.client import get_database_stats, reset_all_data
+from src.db.client import compute_umap_clusters, get_database_stats, reset_all_data
 
 router = APIRouter()
 
@@ -237,6 +237,28 @@ async def get_workflow_prompts():
         "steps": WORKFLOW_STEPS,
         "total": len(WORKFLOW_STEPS),
     }
+
+
+@router.post("/api/admin/compute-clusters", tags=["admin"])
+async def compute_clusters():
+    """
+    Run UMAP + HDBSCAN on all project embeddings to compute
+    2D coordinates and cluster labels for the cluster map visualization.
+    """
+    try:
+        count = compute_umap_clusters()
+        return JSONResponse(
+            content={
+                "status": "success",
+                "message": f"Computed clusters for {count} projects",
+                "projects_updated": count,
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to compute clusters: {str(e)}",
+        )
 
 
 @router.post("/api/admin/rebuild-vector-index", tags=["admin"])

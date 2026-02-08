@@ -111,6 +111,18 @@ export interface ResultMessage {
   details?: any
 }
 
+export interface ClusterMapProject {
+  id: number
+  title: string
+  short_description: string
+  hashtags: string[]
+  idea_score: number
+  complexity_score: number
+  cluster_label: number | null
+  umap_x: number
+  umap_y: number
+}
+
 export interface WorkflowStep {
   step: number
   name: string

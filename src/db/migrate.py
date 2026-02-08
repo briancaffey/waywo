@@ -70,6 +70,24 @@ def run_migrations():
             else:
                 logger.warning(f"Could not add screenshot_path column: {e}")
 
+        # Add UMAP cluster map columns
+        for col_name, col_def in [
+            ("umap_x", "REAL"),
+            ("umap_y", "REAL"),
+            ("cluster_label", "INTEGER"),
+        ]:
+            try:
+                conn.execute(
+                    text(f"ALTER TABLE waywo_projects ADD COLUMN {col_name} {col_def}")
+                )
+                conn.commit()
+                logger.info(f"Added {col_name} column to waywo_projects")
+            except Exception as e:
+                if "duplicate column name" in str(e).lower():
+                    logger.info(f"{col_name} column already exists")
+                else:
+                    logger.warning(f"Could not add {col_name} column: {e}")
+
     # Explicitly re-run vector search init to ensure it's set up
     # This is idempotent - safe to run multiple times
     logger.info("Initializing vector search indexes...")

@@ -1,15 +1,19 @@
 """Project CRUD operations."""
 
 import json
+import logging
 from datetime import datetime
 from typing import Optional
 
+import numpy as np
 from sqlalchemy import func, or_
 
 from src.db.database import SessionLocal
 from src.clients.embedding import embedding_to_blob
 from src.db.models import WaywoCommentDB, WaywoProjectDB
 from src.models import WaywoProject
+
+logger = logging.getLogger(__name__)
 
 
 def get_db_session():
@@ -353,5 +357,128 @@ def get_all_hashtags() -> list[str]:
                 tags = json.loads(hashtags)
                 all_tags.update(tags)
         return sorted(list(all_tags))
+    finally:
+        db.close()
+
+
+def get_cluster_map_data() -> list[dict]:
+    """Get lightweight project data for the cluster map visualization."""
+    db = get_db_session()
+    try:
+        results = (
+            db.query(
+                WaywoProjectDB.id,
+                WaywoProjectDB.title,
+                WaywoProjectDB.short_description,
+                WaywoProjectDB.hashtags,
+                WaywoProjectDB.idea_score,
+                WaywoProjectDB.complexity_score,
+                WaywoProjectDB.cluster_label,
+                WaywoProjectDB.umap_x,
+                WaywoProjectDB.umap_y,
+            )
+            .filter(
+                WaywoProjectDB.is_valid_project == True,
+                WaywoProjectDB.umap_x.isnot(None),
+                WaywoProjectDB.umap_y.isnot(None),
+            )
+            .all()
+        )
+
+        return [
+            {
+                "id": r.id,
+                "title": r.title,
+                "short_description": r.short_description,
+                "hashtags": json.loads(r.hashtags) if r.hashtags else [],
+                "idea_score": r.idea_score,
+                "complexity_score": r.complexity_score,
+                "cluster_label": r.cluster_label,
+                "umap_x": r.umap_x,
+                "umap_y": r.umap_y,
+            }
+            for r in results
+        ]
+    finally:
+        db.close()
+
+
+def compute_umap_clusters() -> int:
+    """Run UMAP + HDBSCAN on all valid projects with embeddings.
+
+    Writes umap_x, umap_y, cluster_label back to each project row.
+    Returns the number of projects updated.
+    """
+    import hdbscan
+    import umap
+    from sklearn.preprocessing import StandardScaler
+
+    db = get_db_session()
+    try:
+        rows = (
+            db.query(WaywoProjectDB.id, WaywoProjectDB.description_embedding)
+            .filter(
+                WaywoProjectDB.is_valid_project == True,
+                WaywoProjectDB.description_embedding.isnot(None),
+            )
+            .all()
+        )
+
+        if not rows:
+            logger.warning("No valid projects with embeddings found")
+            return 0
+
+        ids = []
+        embeddings = []
+        target_len = None
+
+        for row_id, blob in rows:
+            vec = np.frombuffer(blob, dtype="<f4")
+            if target_len is None:
+                target_len = len(vec)
+            if len(vec) == target_len:
+                ids.append(row_id)
+                embeddings.append(vec)
+
+        if not embeddings:
+            return 0
+
+        X = np.vstack(embeddings)
+        logger.info(f"Running UMAP on {X.shape[0]} projects with dim={X.shape[1]}")
+
+        # StandardScaler + UMAP (same params as notebook)
+        X_scaled = StandardScaler(with_mean=True, with_std=True).fit_transform(X)
+
+        reducer = umap.UMAP(
+            n_components=2,
+            n_neighbors=15,
+            min_dist=0.1,
+            metric="cosine",
+            random_state=42,
+        )
+        umap_2d = reducer.fit_transform(X_scaled)
+
+        # HDBSCAN clustering on 2D projection
+        clusterer = hdbscan.HDBSCAN(
+            min_cluster_size=10,
+            min_samples=5,
+            metric="euclidean",
+            cluster_selection_method="eom",
+        )
+        labels = clusterer.fit_predict(umap_2d)
+
+        # Write results back
+        for i, project_id in enumerate(ids):
+            db.query(WaywoProjectDB).filter(WaywoProjectDB.id == project_id).update(
+                {
+                    WaywoProjectDB.umap_x: float(umap_2d[i, 0]),
+                    WaywoProjectDB.umap_y: float(umap_2d[i, 1]),
+                    WaywoProjectDB.cluster_label: int(labels[i]),
+                }
+            )
+
+        db.commit()
+        logger.info(f"Updated {len(ids)} projects with UMAP coordinates and cluster labels")
+        return len(ids)
     finally:
         db.close()

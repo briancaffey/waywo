@@ -189,7 +189,7 @@
           <Icon name="lucide:arrow-right" class="h-5 w-5 text-muted-foreground" />
         </a>
 
-        <div class="flex items-center justify-between p-4 border rounded-lg">
+        <div class="flex items-center justify-between p-4 border rounded-lg mb-4">
           <div class="flex items-center gap-3">
             <Icon name="lucide:search" class="h-5 w-5 text-muted-foreground" />
             <div>
@@ -210,6 +210,30 @@
               class="mr-2 h-4 w-4"
             />
             Rebuild
+          </Button>
+        </div>
+
+        <div class="flex items-center justify-between p-4 border rounded-lg">
+          <div class="flex items-center gap-3">
+            <Icon name="lucide:scatter-chart" class="h-5 w-5 text-muted-foreground" />
+            <div>
+              <h3 class="font-medium">Compute Clusters</h3>
+              <p class="text-sm text-muted-foreground">
+                Run UMAP + HDBSCAN to generate the project cluster map
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            @click="computeClusters"
+            :disabled="isComputingClusters"
+          >
+            <Icon
+              :name="isComputingClusters ? 'lucide:loader-2' : 'lucide:refresh-cw'"
+              :class="isComputingClusters ? 'animate-spin' : ''"
+              class="mr-2 h-4 w-4"
+            />
+            Compute
           </Button>
         </div>
       </Card>
@@ -347,6 +371,7 @@ const isLoadingStats = ref(false)
 const isLoadingServices = ref(false)
 const isResetting = ref<string | null>(null)
 const isRebuilding = ref(false)
+const isComputingClusters = ref(false)
 const lastResult = ref<ResultMessage | null>(null)
 
 // Fetch services health
@@ -393,6 +418,30 @@ async function rebuildVectorIndex() {
     }
   } finally {
     isRebuilding.value = false
+  }
+}
+
+// Compute Clusters
+async function computeClusters() {
+  isComputingClusters.value = true
+  lastResult.value = null
+
+  try {
+    const response = await $fetch<any>(`${config.public.apiBase}/api/admin/compute-clusters`, {
+      method: 'POST'
+    })
+    lastResult.value = {
+      success: true,
+      message: response.message || 'Clusters computed successfully',
+      details: { projects_updated: response.projects_updated }
+    }
+  } catch (err: any) {
+    lastResult.value = {
+      success: false,
+      message: err.data?.detail || 'Failed to compute clusters'
+    }
+  } finally {
+    isComputingClusters.value = false
   }
 }
 

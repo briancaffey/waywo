@@ -30,11 +30,13 @@ from src.db.comments import (  # noqa: F401
 )
 
 from src.db.projects import (  # noqa: F401
+    compute_umap_clusters,
     delete_project,
     delete_projects_for_comment,
     get_all_hashtags,
     get_all_projects,
     get_bookmarked_count,
+    get_cluster_map_data,
     get_project,
     get_projects_for_comment,
     get_total_project_count,

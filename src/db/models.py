@@ -9,6 +9,7 @@ from typing import Optional
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -189,6 +190,11 @@ class WaywoProjectDB(Base):
 
     # Screenshot
     screenshot_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # UMAP cluster map coordinates
+    umap_x: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    umap_y: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    cluster_label: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

@@ -17,13 +17,6 @@
           <!-- Navigation Links -->
           <div class="hidden md:flex items-center space-x-6">
             <a
-              href="/"
-              class="text-sm font-medium transition-colors hover:text-primary"
-              :class="isActive('/') ? 'text-primary' : 'text-muted-foreground'"
-            >
-              Home
-            </a>
-            <a
               href="/posts"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/posts') ? 'text-primary' : 'text-muted-foreground'"
@@ -43,6 +36,13 @@
               :class="isActive('/projects') ? 'text-primary' : 'text-muted-foreground'"
             >
               Projects
+            </a>
+            <a
+              href="/explore"
+              class="text-sm font-medium transition-colors hover:text-primary"
+              :class="isActive('/explore') ? 'text-primary' : 'text-muted-foreground'"
+            >
+              Explore
             </a>
             <a
               href="/search"
@@ -94,13 +94,6 @@
         <div v-if="mobileMenuOpen" class="md:hidden border-t py-4">
           <div class="flex flex-col space-y-2">
             <a
-              href="/"
-              class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
-              :class="isActive('/') ? 'text-primary bg-accent' : 'text-muted-foreground'"
-            >
-              Home
-            </a>
-            <a
               href="/posts"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/posts') ? 'text-primary bg-accent' : 'text-muted-foreground'"
@@ -120,6 +113,13 @@
               :class="isActive('/projects') ? 'text-primary bg-accent' : 'text-muted-foreground'"
             >
               Projects
+            </a>
+            <a
+              href="/explore"
+              class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
+              :class="isActive('/explore') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+            >
+              Explore
             </a>
             <a
               href="/search"

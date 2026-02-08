@@ -9,6 +9,7 @@ from src.db.client import (
     get_all_hashtags,
     get_all_projects,
     get_bookmarked_count,
+    get_cluster_map_data,
     get_comment,
     get_post,
     get_project,
@@ -102,6 +103,16 @@ async def list_waywo_projects(
             "bookmarked": bookmarked,
         },
     }
+
+
+@router.get("/api/waywo-projects/cluster-map", tags=["projects"])
+async def get_cluster_map():
+    """
+    Get lightweight project data for the cluster map visualization.
+    Returns projects that have UMAP coordinates computed.
+    """
+    data = get_cluster_map_data()
+    return {"projects": data, "total": len(data)}
 
 
 @router.get("/api/waywo-projects/hashtags", tags=["projects"])
