@@ -300,16 +300,20 @@
             </div>
             <Button
               variant="outline"
-              class="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              :class="[
+                btnFeedback.getFeedback('reset-sqlite') === 'confirming'
+                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90 border-destructive'
+                  : 'border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground'
+              ]"
               @click="resetSqlite"
               :disabled="isResetting"
             >
               <Icon
-                :name="isResetting === 'sqlite' ? 'lucide:loader-2' : 'lucide:trash-2'"
+                :name="isResetting === 'sqlite' ? 'lucide:loader-2' : btnFeedback.getFeedback('reset-sqlite') === 'confirming' ? 'lucide:alert-triangle' : 'lucide:trash-2'"
                 :class="isResetting === 'sqlite' ? 'animate-spin' : ''"
                 class="mr-2 h-4 w-4"
               />
-              Reset
+              {{ btnFeedback.getFeedback('reset-sqlite') === 'confirming' ? 'Sure?' : 'Reset' }}
             </Button>
           </div>
 
@@ -328,16 +332,20 @@
             </div>
             <Button
               variant="outline"
-              class="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              :class="[
+                btnFeedback.getFeedback('reset-redis') === 'confirming'
+                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90 border-destructive'
+                  : 'border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground'
+              ]"
               @click="resetRedis"
               :disabled="isResetting"
             >
               <Icon
-                :name="isResetting === 'redis' ? 'lucide:loader-2' : 'lucide:trash-2'"
+                :name="isResetting === 'redis' ? 'lucide:loader-2' : btnFeedback.getFeedback('reset-redis') === 'confirming' ? 'lucide:alert-triangle' : 'lucide:trash-2'"
                 :class="isResetting === 'redis' ? 'animate-spin' : ''"
                 class="mr-2 h-4 w-4"
               />
-              Reset
+              {{ btnFeedback.getFeedback('reset-redis') === 'confirming' ? 'Sure?' : 'Reset' }}
             </Button>
           </div>
 
@@ -358,13 +366,16 @@
               variant="destructive"
               @click="resetAll"
               :disabled="isResetting"
+              :class="{
+                'bg-destructive/80 animate-pulse': btnFeedback.getFeedback('reset-all') === 'confirming',
+              }"
             >
               <Icon
-                :name="isResetting === 'all' ? 'lucide:loader-2' : 'lucide:flame'"
+                :name="isResetting === 'all' ? 'lucide:loader-2' : btnFeedback.getFeedback('reset-all') === 'confirming' ? 'lucide:alert-triangle' : 'lucide:flame'"
                 :class="isResetting === 'all' ? 'animate-spin' : ''"
                 class="mr-2 h-4 w-4"
               />
-              Reset All
+              {{ btnFeedback.getFeedback('reset-all') === 'confirming' ? 'Click again to confirm' : 'Reset All' }}
             </Button>
           </div>
         </div>
@@ -408,6 +419,7 @@ const isLoadingServices = ref(false)
 const isResetting = ref<string | null>(null)
 const isRebuilding = ref(false)
 const lastResult = ref<ResultMessage | null>(null)
+const btnFeedback = useButtonFeedback()
 
 // Fetch services health
 async function fetchServicesHealth() {
@@ -458,9 +470,7 @@ async function rebuildVectorIndex() {
 
 // Reset SQLite
 async function resetSqlite() {
-  if (!confirm('Are you sure you want to delete ALL data from SQLite?\n\nThis will delete all posts, comments, and projects!')) {
-    return
-  }
+  if (!btnFeedback.confirmOrProceed('reset-sqlite')) return
 
   isResetting.value = 'sqlite'
   lastResult.value = null
@@ -487,9 +497,7 @@ async function resetSqlite() {
 
 // Reset Redis
 async function resetRedis() {
-  if (!confirm('Are you sure you want to flush ALL Redis data?\n\nThis will delete all Celery task history!')) {
-    return
-  }
+  if (!btnFeedback.confirmOrProceed('reset-redis')) return
 
   isResetting.value = 'redis'
   lastResult.value = null
@@ -514,20 +522,9 @@ async function resetRedis() {
   }
 }
 
-// Reset All
+// Reset All (two-click confirm)
 async function resetAll() {
-  if (!confirm('ARE YOU ABSOLUTELY SURE?\n\nThis will delete ALL data from BOTH SQLite AND Redis!\n\nType "yes" in the next prompt to confirm.')) {
-    return
-  }
-
-  const confirmation = prompt('Type "yes" to confirm deletion of ALL data:')
-  if (confirmation !== 'yes') {
-    lastResult.value = {
-      success: false,
-      message: 'Reset cancelled - confirmation not provided'
-    }
-    return
-  }
+  if (!btnFeedback.confirmOrProceed('reset-all', 5000)) return
 
   isResetting.value = 'all'
   lastResult.value = null

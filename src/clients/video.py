@@ -9,7 +9,7 @@ import struct
 from typing import Callable
 
 import numpy as np
-from moviepy import AudioFileClip, CompositeVideoClip, VideoClip, afx, vfx
+from moviepy import AudioFileClip, CompositeVideoClip, VideoClip, afx
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -193,7 +193,6 @@ def assemble_video(
 
     for i, seg in enumerate(segments):
         seg_duration = seg["audio_duration_seconds"]
-        transition = seg.get("transition", "cut")
         motion = _pick_motion(i)
 
         # Load and prepare image with Ken Burns
@@ -211,29 +210,21 @@ def assemble_video(
         audio_clip = AudioFileClip(seg["audio_path"])
         video_clip = video_clip.with_audio(audio_clip)
 
-        # Apply transition effects (skip for first segment)
-        if i > 0 and transition != "cut":
-            overlap = min(transition_duration, seg_duration * 0.5)
-
-            if transition == "fade" or transition == "zoom_in":
-                video_clip = video_clip.with_effects([vfx.CrossFadeIn(overlap)])
-            elif transition == "slide_left":
-                video_clip = video_clip.with_effects([vfx.SlideIn(overlap, "left")])
-
-            current_time -= overlap
-
         video_clip = video_clip.with_start(current_time)
         clips.append(video_clip)
         current_time += seg_duration
 
+        # Add a small silence gap between segments for natural pacing
+        if i < len(segments) - 1:
+            current_time += 0.3
+
     # Composite all clips together
     final = CompositeVideoClip(clips, size=(width, height))
 
-    # Audio fade in/out for polish
+    # Gentle audio fade-out at the end
     total_duration = final.duration
     fade_time = min(0.3, total_duration * 0.1)
     final = final.with_effects([
-        afx.AudioFadeIn(fade_time),
         afx.AudioFadeOut(fade_time),
     ])
 

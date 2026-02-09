@@ -125,39 +125,54 @@
               size="sm"
               @click="reprocessProject"
               :disabled="isReprocessing"
-              class="text-muted-foreground"
+              :class="{
+                'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20': btnFeedback.getFeedback('reprocess') === 'confirming',
+                'bg-green-500/10 text-green-600': btnFeedback.getFeedback('reprocess') === 'success',
+                'bg-destructive/10 text-destructive': btnFeedback.getFeedback('reprocess') === 'error',
+                'text-muted-foreground': !['confirming', 'success', 'error'].includes(btnFeedback.getFeedback('reprocess')),
+              }"
             >
               <Icon
-                :name="isReprocessing ? 'lucide:loader-2' : 'lucide:rotate-cw'"
+                :name="isReprocessing ? 'lucide:loader-2' : btnFeedback.getFeedback('reprocess') === 'confirming' ? 'lucide:alert-triangle' : btnFeedback.getFeedback('reprocess') === 'success' ? 'lucide:check' : btnFeedback.getFeedback('reprocess') === 'error' ? 'lucide:x' : 'lucide:rotate-cw'"
                 :class="['h-3.5 w-3.5 mr-1.5', isReprocessing ? 'animate-spin' : '']"
               />
-              {{ isReprocessing ? 'Queuing...' : 'Reprocess' }}
+              {{ isReprocessing ? 'Queuing...' : btnFeedback.getFeedback('reprocess') === 'confirming' ? 'Sure?' : btnFeedback.getFeedback('reprocess') === 'success' ? 'Queued' : btnFeedback.getFeedback('reprocess') === 'error' ? 'Failed' : 'Reprocess' }}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               @click="generateVideo"
               :disabled="isGeneratingVideo"
-              class="text-muted-foreground"
+              :class="{
+                'bg-green-500/10 text-green-600': btnFeedback.getFeedback('genvideo') === 'success',
+                'bg-destructive/10 text-destructive': btnFeedback.getFeedback('genvideo') === 'error',
+                'text-muted-foreground': !['success', 'error'].includes(btnFeedback.getFeedback('genvideo')),
+              }"
             >
               <Icon
-                :name="isGeneratingVideo ? 'lucide:loader-2' : 'lucide:video'"
+                :name="isGeneratingVideo ? 'lucide:loader-2' : btnFeedback.getFeedback('genvideo') === 'success' ? 'lucide:check' : btnFeedback.getFeedback('genvideo') === 'error' ? 'lucide:x' : 'lucide:video'"
                 :class="['h-3.5 w-3.5 mr-1.5', isGeneratingVideo ? 'animate-spin' : '']"
               />
-              {{ isGeneratingVideo ? 'Starting...' : 'Generate Video' }}
+              {{ isGeneratingVideo ? 'Starting...' : btnFeedback.getFeedback('genvideo') === 'success' ? 'Started' : btnFeedback.getFeedback('genvideo') === 'error' ? 'Failed' : 'Generate Video' }}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               @click="deleteProject"
               :disabled="isDeleting"
-              class="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              :class="[
+                btnFeedback.getFeedback('delete') === 'confirming'
+                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                  : btnFeedback.getFeedback('delete') === 'error'
+                    ? 'bg-destructive/10 text-destructive'
+                    : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10'
+              ]"
             >
               <Icon
-                :name="isDeleting ? 'lucide:loader-2' : 'lucide:trash-2'"
+                :name="isDeleting ? 'lucide:loader-2' : btnFeedback.getFeedback('delete') === 'confirming' ? 'lucide:alert-triangle' : btnFeedback.getFeedback('delete') === 'error' ? 'lucide:x' : 'lucide:trash-2'"
                 :class="['h-3.5 w-3.5 mr-1.5', isDeleting ? 'animate-spin' : '']"
               />
-              {{ isDeleting ? 'Deleting...' : 'Delete' }}
+              {{ isDeleting ? 'Deleting...' : btnFeedback.getFeedback('delete') === 'confirming' ? 'Sure?' : btnFeedback.getFeedback('delete') === 'error' ? 'Failed' : 'Delete' }}
             </Button>
           </div>
         </div>
@@ -495,6 +510,7 @@ const isLoadingSimilar = ref(false)
 const projectVideos = ref<WaywoVideo[]>([])
 const isLoadingVideos = ref(false)
 const isGeneratingVideo = ref(false)
+const btnFeedback = useButtonFeedback()
 
 // Fetch project from API
 async function fetchProject() {
@@ -542,10 +558,7 @@ async function fetchSimilarProjects() {
 // Delete project
 async function deleteProject() {
   if (isDeleting.value) return
-
-  if (!confirm('Are you sure you want to delete this project?')) {
-    return
-  }
+  if (!btnFeedback.confirmOrProceed('delete')) return
 
   isDeleting.value = true
 
@@ -553,11 +566,10 @@ async function deleteProject() {
     await $fetch(`${config.public.apiBase}/api/waywo-projects/${projectId.value}`, {
       method: 'DELETE'
     })
-    // Redirect to projects list after deletion
     window.location.href = '/projects'
   } catch (err) {
     console.error('Failed to delete project:', err)
-    alert('Failed to delete project. Please try again.')
+    btnFeedback.showError('delete')
     isDeleting.value = false
   }
 }
@@ -565,10 +577,7 @@ async function deleteProject() {
 // Reprocess project (reprocess the source comment)
 async function reprocessProject() {
   if (isReprocessing.value || !project.value) return
-
-  if (!confirm('This will delete all projects from this comment and reprocess it. Continue?')) {
-    return
-  }
+  if (!btnFeedback.confirmOrProceed('reprocess')) return
 
   isReprocessing.value = true
 
@@ -576,10 +585,10 @@ async function reprocessProject() {
     await $fetch(`${config.public.apiBase}/api/waywo-comments/${project.value.source_comment_id}/process`, {
       method: 'POST'
     })
-    alert(`Reprocessing queued for comment ${project.value.source_comment_id}. Refresh later to see updated projects.`)
+    btnFeedback.showSuccess('reprocess')
   } catch (err) {
     console.error('Failed to reprocess project:', err)
-    alert('Failed to queue reprocessing. Please try again.')
+    btnFeedback.showError('reprocess')
   } finally {
     isReprocessing.value = false
   }
@@ -631,11 +640,11 @@ async function generateVideo() {
     await $fetch(`${config.public.apiBase}/api/waywo-projects/${projectId.value}/generate-video`, {
       method: 'POST'
     })
-    alert('Video generation started! Refresh later to see progress.')
+    btnFeedback.showSuccess('genvideo')
     fetchProjectVideos()
   } catch (err) {
     console.error('Failed to generate video:', err)
-    alert('Failed to start video generation. Please try again.')
+    btnFeedback.showError('genvideo')
   } finally {
     isGeneratingVideo.value = false
   }

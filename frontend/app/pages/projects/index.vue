@@ -341,40 +341,55 @@
                 size="sm"
                 @click.stop="reprocessProject(project)"
                 :disabled="reprocessingProjectId === project.id"
+                :class="{
+                  'border-amber-500 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20': btnFeedback.getFeedback('reprocess-' + project.id) === 'confirming',
+                  'border-green-500 bg-green-500/10 text-green-600': btnFeedback.getFeedback('reprocess-' + project.id) === 'success',
+                  'border-destructive bg-destructive/10 text-destructive': btnFeedback.getFeedback('reprocess-' + project.id) === 'error',
+                }"
               >
                 <Icon
-                  :name="reprocessingProjectId === project.id ? 'lucide:loader-2' : 'lucide:rotate-cw'"
+                  :name="reprocessingProjectId === project.id ? 'lucide:loader-2' : btnFeedback.getFeedback('reprocess-' + project.id) === 'confirming' ? 'lucide:alert-triangle' : btnFeedback.getFeedback('reprocess-' + project.id) === 'success' ? 'lucide:check' : btnFeedback.getFeedback('reprocess-' + project.id) === 'error' ? 'lucide:x' : 'lucide:rotate-cw'"
                   :class="reprocessingProjectId === project.id ? 'animate-spin' : ''"
                   class="mr-1 h-3 w-3"
                 />
-                {{ reprocessingProjectId === project.id ? 'Queuing...' : 'Reprocess' }}
+                {{ reprocessingProjectId === project.id ? 'Queuing...' : btnFeedback.getFeedback('reprocess-' + project.id) === 'confirming' ? 'Sure?' : btnFeedback.getFeedback('reprocess-' + project.id) === 'success' ? 'Queued' : btnFeedback.getFeedback('reprocess-' + project.id) === 'error' ? 'Failed' : 'Reprocess' }}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 @click.stop="generateVideoForProject(project.id)"
                 :disabled="generatingVideoProjectId === project.id"
+                :class="{
+                  'border-green-500 bg-green-500/10 text-green-600': btnFeedback.getFeedback('genvideo-' + project.id) === 'success',
+                  'border-destructive bg-destructive/10 text-destructive': btnFeedback.getFeedback('genvideo-' + project.id) === 'error',
+                }"
               >
                 <Icon
-                  :name="generatingVideoProjectId === project.id ? 'lucide:loader-2' : 'lucide:video'"
+                  :name="generatingVideoProjectId === project.id ? 'lucide:loader-2' : btnFeedback.getFeedback('genvideo-' + project.id) === 'success' ? 'lucide:check' : btnFeedback.getFeedback('genvideo-' + project.id) === 'error' ? 'lucide:x' : 'lucide:video'"
                   :class="generatingVideoProjectId === project.id ? 'animate-spin' : ''"
                   class="mr-1 h-3 w-3"
                 />
-                {{ generatingVideoProjectId === project.id ? 'Starting...' : 'Video' }}
+                {{ generatingVideoProjectId === project.id ? 'Starting...' : btnFeedback.getFeedback('genvideo-' + project.id) === 'success' ? 'Started' : btnFeedback.getFeedback('genvideo-' + project.id) === 'error' ? 'Failed' : 'Video' }}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                class="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                :class="[
+                  btnFeedback.getFeedback('delete-' + project.id) === 'confirming'
+                    ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90 border-destructive'
+                    : btnFeedback.getFeedback('delete-' + project.id) === 'error'
+                      ? 'border-destructive bg-destructive/10 text-destructive'
+                      : 'text-destructive hover:bg-destructive hover:text-destructive-foreground'
+                ]"
                 @click.stop="deleteProject(project.id)"
                 :disabled="deletingProjectId === project.id"
               >
                 <Icon
-                  :name="deletingProjectId === project.id ? 'lucide:loader-2' : 'lucide:trash-2'"
+                  :name="deletingProjectId === project.id ? 'lucide:loader-2' : btnFeedback.getFeedback('delete-' + project.id) === 'confirming' ? 'lucide:alert-triangle' : btnFeedback.getFeedback('delete-' + project.id) === 'error' ? 'lucide:x' : 'lucide:trash-2'"
                   :class="deletingProjectId === project.id ? 'animate-spin' : ''"
                   class="mr-1 h-3 w-3"
                 />
-                {{ deletingProjectId === project.id ? 'Deleting...' : 'Delete' }}
+                {{ deletingProjectId === project.id ? 'Deleting...' : btnFeedback.getFeedback('delete-' + project.id) === 'confirming' ? 'Sure?' : btnFeedback.getFeedback('delete-' + project.id) === 'error' ? 'Failed' : 'Delete' }}
               </Button>
               <a
                 :href="`/projects/${project.id}`"
@@ -497,6 +512,9 @@ const togglingBookmarkId = ref<number | null>(null)
 
 // Generate video state
 const generatingVideoProjectId = ref<number | null>(null)
+
+// Button feedback
+const btnFeedback = useButtonFeedback()
 
 // Extract hostname from URL
 function getHostname(url: string): string {
@@ -716,10 +734,7 @@ function viewProject(projectId: number) {
 // Delete project
 async function deleteProject(projectId: number) {
   if (deletingProjectId.value === projectId) return
-
-  if (!confirm('Are you sure you want to delete this project?')) {
-    return
-  }
+  if (!btnFeedback.confirmOrProceed('delete-' + projectId)) return
 
   deletingProjectId.value = projectId
 
@@ -732,7 +747,7 @@ async function deleteProject(projectId: number) {
     total.value -= 1
   } catch (err) {
     console.error('Failed to delete project:', err)
-    alert('Failed to delete project. Please try again.')
+    btnFeedback.showError('delete-' + projectId)
   } finally {
     deletingProjectId.value = null
   }
@@ -741,10 +756,7 @@ async function deleteProject(projectId: number) {
 // Reprocess project (reprocess the source comment)
 async function reprocessProject(project: WaywoProject) {
   if (reprocessingProjectId.value === project.id) return
-
-  if (!confirm('This will delete all projects from this comment and reprocess it. Continue?')) {
-    return
-  }
+  if (!btnFeedback.confirmOrProceed('reprocess-' + project.id)) return
 
   reprocessingProjectId.value = project.id
 
@@ -756,10 +768,10 @@ async function reprocessProject(project: WaywoProject) {
     const removedIds = projects.value.filter(p => p.source_comment_id === project.source_comment_id).map(p => p.id)
     projects.value = projects.value.filter(p => p.source_comment_id !== project.source_comment_id)
     total.value -= removedIds.length
-    alert(`Reprocessing queued for comment ${project.source_comment_id}. Refresh later to see updated projects.`)
+    btnFeedback.showSuccess('reprocess-' + project.id)
   } catch (err) {
     console.error('Failed to reprocess project:', err)
-    alert('Failed to queue reprocessing. Please try again.')
+    btnFeedback.showError('reprocess-' + project.id)
   } finally {
     reprocessingProjectId.value = null
   }
@@ -775,10 +787,10 @@ async function generateVideoForProject(projectId: number) {
     await $fetch(`${config.public.apiBase}/api/waywo-projects/${projectId}/generate-video`, {
       method: 'POST'
     })
-    alert('Video generation started! Check the Videos page for progress.')
+    btnFeedback.showSuccess('genvideo-' + projectId)
   } catch (err) {
     console.error('Failed to generate video:', err)
-    alert('Failed to start video generation. Please try again.')
+    btnFeedback.showError('genvideo-' + projectId)
   } finally {
     generatingVideoProjectId.value = null
   }

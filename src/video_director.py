@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # Prompt template
 # ---------------------------------------------------------------------------
 
-VIDEO_SCRIPT_TEMPLATE = """You are a creative director writing short-form video scripts that introduce tech projects to a broad audience. Each video will be narrated by a text-to-speech engine and illustrated with AI-generated images.
+VIDEO_SCRIPT_TEMPLATE = """You are a presenter introducing a tech project to a smart, tech-savvy audience. Your job is to clearly explain what this project does, why it's interesting, and who it's for. Each video will be narrated by a text-to-speech engine and illustrated with AI-generated images.
 
 PROJECT:
 Title: {title}
@@ -36,21 +36,31 @@ Pick a video style that fits this project:
 Write 4-6 segments. The total narration MUST be between 80 and 150 words so the video runs 30-60 seconds.
 
 SEGMENT TYPES (use each at most once, in this order):
-1. "hook" — REQUIRED. One punchy sentence that grabs attention in under 3 seconds. Do NOT start with "Have you ever", "Imagine", "What if", or "In a world". Instead try: a bold claim, a surprising stat, a direct challenge, a vivid metaphor, or a short provocative question.
-2. "introduction" — REQUIRED. Explain what the project is and who made it. 1-2 sentences.
-3. "features" — Highlight 1-3 standout capabilities. Keep it concrete.
-4. "audience" — Who is this for and why should they care?
-5. "closing" — REQUIRED. End with a memorable line: a call to action, a thought-provoking question, or an excited sign-off. Keep it to one sentence.
+1. "hook" — REQUIRED. One sentence that leads with the project's core value proposition or most striking capability. Be specific and direct — tell the viewer what this project actually does. Do NOT start with "Have you ever", "Imagine", "What if", or "In a world". Do NOT use vague creative hooks like metaphors, rhetorical questions, or dramatic stats.
+2. "introduction" — REQUIRED. Name the project and explain what it is in plain terms. 1-2 sentences.
+3. "features" — Highlight 1-3 specific, concrete capabilities. Describe what each feature does, not how it makes the user feel.
+4. "audience" — Who is this for and what problem does it solve for them?
+5. "closing" — REQUIRED. End with a concise call to action or summary of why this project matters. One sentence.
 
 NARRATION RULES:
 - Write for the SPOKEN word. Use contractions, short sentences, natural rhythm.
 - Never use markdown, bullet points, or formatting — pure speech.
 - Mention the project name at least once.
-- Avoid clichés: "game-changer", "revolutionary", "next-level", "takes X to the next level".
+- Be direct and informative. State what things do, not how they feel.
+- Avoid clichés: "game-changer", "revolutionary", "next-level", "takes X to the next level", "the future of", "reimagining".
+- Avoid vague praise: "elegant", "seamless", "powerful", "beautiful". Use specific descriptions instead.
 - Each segment: 1-3 sentences, 15-35 words.
 
 SCENE DESCRIPTION RULES:
 Each scene_description will be used verbatim as a FLUX 2 Klein image generation prompt. FLUX Klein does NOT auto-enhance prompts — what you write is exactly what you get. Write each scene as flowing prose, like a novelist describing a painting. NEVER use comma-separated keyword lists.
+
+CRITICAL: Each scene must visually relate to the actual project content — the domain, technology, or what's being built. Think about what the project does and create images that conceptually represent that subject matter. For example:
+- A code editor project → an artful arrangement of mechanical typewriter keys or precision instruments
+- A weather app → dramatic cloudscapes, atmospheric phenomena, meteorological instruments
+- A music tool → sculptural audio waveforms, resonating strings, analog dials
+- A database tool → crystalline storage structures, organized mineral formations, archival shelves
+
+The image should connect to what's being narrated in that specific segment.
 
 Structure: Subject first → Setting → Details (textures, materials) → Lighting → Atmosphere.
 
@@ -62,7 +72,6 @@ LIGHTING IS MANDATORY in every scene. Describe:
 - Direction: side-lit, backlit, overhead, rim-lit, from below
 - Temperature: warm golden, cool blue, neutral white, amber
 - Interaction: how light catches surfaces, casts shadows, creates reflections
-Example: "soft golden light filtering from the upper left, catching the brushed metal edges and casting long diffused shadows across the surface"
 
 Include textures and material qualities: brushed metal, frosted glass, weathered wood, liquid mercury, woven fabric, cracked stone. Sensory details make scenes tangible.
 
@@ -95,7 +104,7 @@ Return ONLY valid JSON, no other text:
       "segment_id": 1,
       "segment_type": "hook",
       "narration_text": "Spoken narration here...",
-      "scene_description": "A cluster of translucent data spheres floats above a dark reflective surface, each sphere pulsing with faint internal light. Soft cool illumination from above catches their curved edges while warm amber light from below reflects off the glossy floor. Style: cinematic sci-fi. Mood: wonder, discovery.",
+      "scene_description": "A mechanical compass resting on a weathered topographic map, its brass needle catching warm side-light from the left. Fine engraved gridlines and elevation contours spread beneath it, with soft shadows pooling in the paper's creases. Style: cinematic still life. Mood: precision, exploration.",
       "visual_style": "abstract | cinematic | minimal | vibrant",
       "transition": "fade | cut | slide_left | zoom_in"
     }}

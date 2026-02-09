@@ -258,13 +258,13 @@ def test_assemble_video_cut_transition_no_overlap():
             segments, out_path, width=270, height=480, fps=10
         )
 
-        # Two 2s cuts = 4s total, no overlap
-        assert abs(duration - 4.0) < 0.1
+        # Two 2s segments + 0.3s gap = 4.3s total
+        assert abs(duration - 4.3) < 0.1
 
 
 @pytest.mark.client
-def test_assemble_video_fade_transition_has_overlap():
-    """Fade transitions reduce total duration via overlap."""
+def test_assemble_video_fade_transition_no_overlap():
+    """Fade transitions now use hard cuts with gap (no overlap)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         segments = []
         for i in range(2):
@@ -287,6 +287,5 @@ def test_assemble_video_fade_transition_has_overlap():
             transition_duration=0.5,
         )
 
-        # Two 2s segments with 0.5s fade overlap = 3.5s
-        assert duration < 4.0
-        assert abs(duration - 3.5) < 0.1
+        # Two 2s segments + 0.3s gap = 4.3s (no overlap regardless of transition)
+        assert abs(duration - 4.3) < 0.1

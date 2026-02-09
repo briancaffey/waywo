@@ -144,13 +144,19 @@
               size="sm"
               @click="deleteVideo"
               :disabled="isDeleting"
-              class="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              :class="[
+                btnFeedback.getFeedback('delete') === 'confirming'
+                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                  : btnFeedback.getFeedback('delete') === 'error'
+                    ? 'text-destructive'
+                    : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10'
+              ]"
             >
               <Icon
-                :name="isDeleting ? 'lucide:loader-2' : 'lucide:trash-2'"
+                :name="isDeleting ? 'lucide:loader-2' : btnFeedback.getFeedback('delete') === 'confirming' ? 'lucide:alert-triangle' : btnFeedback.getFeedback('delete') === 'error' ? 'lucide:x' : 'lucide:trash-2'"
                 :class="['h-3.5 w-3.5 mr-1.5', isDeleting ? 'animate-spin' : '']"
               />
-              {{ isDeleting ? 'Deleting...' : 'Delete' }}
+              {{ isDeleting ? 'Deleting...' : btnFeedback.getFeedback('delete') === 'confirming' ? 'Sure?' : btnFeedback.getFeedback('delete') === 'error' ? 'Failed' : 'Delete' }}
             </Button>
           </div>
         </div>
@@ -211,12 +217,16 @@
                           size="sm"
                           @click="saveNarration(segment.id)"
                           :disabled="!hasNarrationChanged(segment.id) || savingNarration === segment.id"
+                          :class="{
+                            'bg-green-600 hover:bg-green-600 text-white': btnFeedback.getFeedback('narration-' + segment.id) === 'success',
+                            'bg-destructive hover:bg-destructive text-destructive-foreground': btnFeedback.getFeedback('narration-' + segment.id) === 'error',
+                          }"
                         >
                           <Icon
-                            :name="savingNarration === segment.id ? 'lucide:loader-2' : 'lucide:save'"
+                            :name="savingNarration === segment.id ? 'lucide:loader-2' : btnFeedback.getFeedback('narration-' + segment.id) === 'success' ? 'lucide:check' : btnFeedback.getFeedback('narration-' + segment.id) === 'error' ? 'lucide:x' : 'lucide:save'"
                             :class="['h-3 w-3 mr-1', savingNarration === segment.id ? 'animate-spin' : '']"
                           />
-                          Save
+                          {{ btnFeedback.getFeedback('narration-' + segment.id) === 'success' ? 'Saved' : btnFeedback.getFeedback('narration-' + segment.id) === 'error' ? 'Failed' : 'Save' }}
                         </Button>
                         <span v-if="hasNarrationChanged(segment.id)" class="text-xs text-amber-600 dark:text-amber-400">
                           Unsaved changes
@@ -237,12 +247,16 @@
                           size="sm"
                           @click="saveImagePrompt(segment.id)"
                           :disabled="!hasImagePromptChanged(segment.id) || savingImagePrompt === segment.id"
+                          :class="{
+                            'bg-green-600 hover:bg-green-600 text-white': btnFeedback.getFeedback('imgprompt-' + segment.id) === 'success',
+                            'bg-destructive hover:bg-destructive text-destructive-foreground': btnFeedback.getFeedback('imgprompt-' + segment.id) === 'error',
+                          }"
                         >
                           <Icon
-                            :name="savingImagePrompt === segment.id ? 'lucide:loader-2' : 'lucide:save'"
+                            :name="savingImagePrompt === segment.id ? 'lucide:loader-2' : btnFeedback.getFeedback('imgprompt-' + segment.id) === 'success' ? 'lucide:check' : btnFeedback.getFeedback('imgprompt-' + segment.id) === 'error' ? 'lucide:x' : 'lucide:save'"
                             :class="['h-3 w-3 mr-1', savingImagePrompt === segment.id ? 'animate-spin' : '']"
                           />
-                          Save
+                          {{ btnFeedback.getFeedback('imgprompt-' + segment.id) === 'success' ? 'Saved' : btnFeedback.getFeedback('imgprompt-' + segment.id) === 'error' ? 'Failed' : 'Save' }}
                         </Button>
                         <span v-if="hasImagePromptChanged(segment.id)" class="text-xs text-amber-600 dark:text-amber-400">
                           Unsaved changes
@@ -345,6 +359,7 @@ const isDeleting = ref(false)
 const isTogglingFavorite = ref(false)
 const savingNarration = ref<number | null>(null)
 const savingImagePrompt = ref<number | null>(null)
+const btnFeedback = useButtonFeedback()
 
 // Track edits per segment: keyed by segment ID
 const segmentEdits = reactive<Record<number, { narration_text: string; image_prompt: string }>>({})
@@ -425,8 +440,7 @@ async function toggleFavorite() {
 
 async function deleteVideo() {
   if (isDeleting.value) return
-
-  if (!confirm('Are you sure you want to delete this video?')) return
+  if (!btnFeedback.confirmOrProceed('delete')) return
 
   isDeleting.value = true
 
@@ -437,7 +451,7 @@ async function deleteVideo() {
     window.location.href = '/videos'
   } catch (err) {
     console.error('Failed to delete video:', err)
-    alert('Failed to delete video. Please try again.')
+    btnFeedback.showError('delete')
     isDeleting.value = false
   }
 }
@@ -467,9 +481,10 @@ async function saveNarration(segmentId: number) {
         Object.assign(seg, response.segment)
       }
     }
+    btnFeedback.showSuccess('narration-' + segmentId)
   } catch (err) {
     console.error('Failed to save narration:', err)
-    alert('Failed to save narration. Please try again.')
+    btnFeedback.showError('narration-' + segmentId)
   } finally {
     savingNarration.value = null
   }
@@ -500,9 +515,10 @@ async function saveImagePrompt(segmentId: number) {
         Object.assign(seg, response.segment)
       }
     }
+    btnFeedback.showSuccess('imgprompt-' + segmentId)
   } catch (err) {
     console.error('Failed to save image prompt:', err)
-    alert('Failed to save image prompt. Please try again.')
+    btnFeedback.showError('imgprompt-' + segmentId)
   } finally {
     savingImagePrompt.value = null
   }
