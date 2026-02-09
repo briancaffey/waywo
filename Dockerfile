@@ -18,6 +18,7 @@ RUN apt-get update && apt-get clean && apt-get install -y --no-install-recommend
     libffi-dev \
     libssl-dev \
     graphviz \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user

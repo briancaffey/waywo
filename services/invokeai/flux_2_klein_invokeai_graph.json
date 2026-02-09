@@ -1,0 +1,205 @@
+{
+    "id": "flux_graph:scp50VxYZi",
+    "nodes": {
+        "positive_prompt:CjR0mYpz31": {
+            "id": "positive_prompt:CjR0mYpz31",
+            "is_intermediate": true,
+            "use_cache": true,
+            "value": "prompt goes here...",
+            "type": "string"
+        },
+        "seed:B3us1QPx5h": {
+            "id": "seed:B3us1QPx5h",
+            "is_intermediate": true,
+            "use_cache": true,
+            "value": 744813716,
+            "type": "integer"
+        },
+        "flux2_klein_model_loader:vVjCkJJqjL": {
+            "id": "flux2_klein_model_loader:vVjCkJJqjL",
+            "is_intermediate": true,
+            "use_cache": true,
+            "model": {
+                "key"          : "8b8bdeff-0671-424a-b3b5-2ce490438445",
+                "hash"         : "blake3:c3ee838d71d99497db01fae6f304eafd9e734e935f3b783e968d50febb56be2c",
+                "name"         : "FLUX.2 Klein 4B (GGUF Q4)",
+                "base"         : "flux2",
+                "type"         : "main",
+                "submodel_type": null
+            },
+            "vae_model": {
+                "key"          : "574e7a50-b904-403f-90a7-c5868dd13124",
+                "hash"         : "blake3:531855de70db993d0f6181f82cde27d15411d58b7ffa3b2fdce2b9434c0173c2",
+                "name"         : "FLUX.2 VAE",
+                "base"         : "flux2",
+                "type"         : "vae",
+                "submodel_type": null
+            },
+            "qwen3_encoder_model": {
+                "key"          : "4cbb7cfb-52d5-4b50-9791-a44d81ac30b8",
+                "hash"         : "blake3:af5840e6770dc99f678e69867949c8b9264835915eb82a990e940fa6e4fa6c81",
+                "name"         : "FLUX.2 Klein Qwen3 4B Encoder",
+                "base"         : "any",
+                "type"         : "qwen3_encoder",
+                "submodel_type": null
+            },
+            "qwen3_source_model": null,
+            "max_seq_len": 512,
+            "type": "flux2_klein_model_loader"
+        },
+        "flux2_klein_text_encoder:TKf6RWlSqq": {
+            "id": "flux2_klein_text_encoder:TKf6RWlSqq",
+            "is_intermediate": true,
+            "use_cache": true,
+            "prompt": null,
+            "qwen3_encoder": null,
+            "max_seq_len": 512,
+            "mask": null,
+            "type": "flux2_klein_text_encoder"
+        },
+        "flux2_denoise:oTqFW3KTNk": {
+            "id": "flux2_denoise:oTqFW3KTNk",
+            "is_intermediate": true,
+            "use_cache": true,
+            "latents": null,
+            "denoise_mask": null,
+            "denoising_start": 0,
+            "denoising_end": 1,
+            "add_noise": true,
+            "transformer": null,
+            "positive_text_conditioning": null,
+            "negative_text_conditioning": null,
+            "cfg_scale": 1,
+            "width": 1024,
+            "height": 1024,
+            "num_steps": 16,
+            "scheduler": "euler",
+            "seed": 0,
+            "vae": null,
+            "kontext_conditioning": null,
+            "type": "flux2_denoise"
+        },
+        "core_metadata:azr5jlV6MZ": {
+            "id": "core_metadata:azr5jlV6MZ",
+            "is_intermediate": true,
+            "use_cache": true,
+            "generation_mode": "flux2_txt2img",
+            "positive_prompt": null,
+            "negative_prompt": null,
+            "width": 1024,
+            "height": 1024,
+            "seed": null,
+            "rand_device": null,
+            "cfg_scale": null,
+            "cfg_rescale_multiplier": null,
+            "steps": 16,
+            "scheduler": null,
+            "seamless_x": null,
+            "seamless_y": null,
+            "clip_skip": null,
+            "model": {
+                "key"          : "8b8bdeff-0671-424a-b3b5-2ce490438445",
+                "hash"         : "blake3:c3ee838d71d99497db01fae6f304eafd9e734e935f3b783e968d50febb56be2c",
+                "name"         : "FLUX.2 Klein 4B (GGUF Q4)",
+                "base"         : "flux2",
+                "type"         : "main",
+                "submodel_type": null
+            },
+            "controlnets": null,
+            "ipAdapters": null,
+            "t2iAdapters": null,
+            "loras": null,
+            "strength": null,
+            "init_image": null,
+            "vae": {
+                "key"          : "574e7a50-b904-403f-90a7-c5868dd13124",
+                "hash"         : "blake3:531855de70db993d0f6181f82cde27d15411d58b7ffa3b2fdce2b9434c0173c2",
+                "name"         : "FLUX.2 VAE",
+                "base"         : "flux2",
+                "type"         : "vae",
+                "submodel_type": null
+            },
+            "qwen3_encoder": {
+                "key"          : "4cbb7cfb-52d5-4b50-9791-a44d81ac30b8",
+                "hash"         : "blake3:af5840e6770dc99f678e69867949c8b9264835915eb82a990e940fa6e4fa6c81",
+                "name"         : "FLUX.2 Klein Qwen3 4B Encoder",
+                "base"         : "any",
+                "type"         : "qwen3_encoder",
+                "submodel_type": null
+            },
+            "hrf_enabled": null,
+            "hrf_method": null,
+            "hrf_strength": null,
+            "positive_style_prompt": null,
+            "negative_style_prompt": null,
+            "refiner_model": null,
+            "refiner_cfg_scale": null,
+            "refiner_steps": null,
+            "refiner_scheduler": null,
+            "refiner_positive_aesthetic_score": null,
+            "refiner_negative_aesthetic_score": null,
+            "refiner_start": null,
+            "type": "core_metadata"
+        },
+        "canvas_output:rHGkBPcPOE": {
+            "board": {"board_id": "d5f9e3ae-df06-451f-b538-4bb58a6cc43e"},
+            "metadata": null,
+            "id": "canvas_output:rHGkBPcPOE",
+            "is_intermediate": false,
+            "use_cache": false,
+            "latents": null,
+            "vae": null,
+            "type": "flux2_vae_decode"
+        }
+    },
+    "edges": [
+        {
+            "source"     : {"node_id": "flux2_klein_model_loader:vVjCkJJqjL", "field": "qwen3_encoder"},
+            "destination": {"node_id": "flux2_klein_text_encoder:TKf6RWlSqq", "field": "qwen3_encoder"}
+        },
+        {
+            "source"     : {"node_id": "flux2_klein_model_loader:vVjCkJJqjL", "field": "max_seq_len"},
+            "destination": {"node_id": "flux2_klein_text_encoder:TKf6RWlSqq", "field": "max_seq_len"}
+        },
+        {
+            "source"     : {"node_id": "flux2_klein_model_loader:vVjCkJJqjL", "field": "transformer"},
+            "destination": {"node_id": "flux2_denoise:oTqFW3KTNk",            "field": "transformer"}
+        },
+        {
+            "source"     : {"node_id": "flux2_klein_model_loader:vVjCkJJqjL", "field": "vae"},
+            "destination": {"node_id": "flux2_denoise:oTqFW3KTNk",            "field": "vae"}
+        },
+        {
+            "source"     : {"node_id": "flux2_klein_model_loader:vVjCkJJqjL", "field": "vae"},
+            "destination": {"node_id": "canvas_output:rHGkBPcPOE",            "field": "vae"}
+        },
+        {
+            "source"     : {"node_id": "positive_prompt:CjR0mYpz31",          "field": "value" },
+            "destination": {"node_id": "flux2_klein_text_encoder:TKf6RWlSqq", "field": "prompt"}
+        },
+        {
+            "source"     : {"node_id": "flux2_klein_text_encoder:TKf6RWlSqq", "field": "conditioning"              },
+            "destination": {"node_id": "flux2_denoise:oTqFW3KTNk",            "field": "positive_text_conditioning"}
+        },
+        {
+            "source"     : {"node_id": "seed:B3us1QPx5h",          "field": "value"},
+            "destination": {"node_id": "flux2_denoise:oTqFW3KTNk", "field": "seed" }
+        },
+        {
+            "source"     : {"node_id": "flux2_denoise:oTqFW3KTNk", "field": "latents"},
+            "destination": {"node_id": "canvas_output:rHGkBPcPOE", "field": "latents"}
+        },
+        {
+            "source"     : {"node_id": "seed:B3us1QPx5h",          "field": "value"},
+            "destination": {"node_id": "core_metadata:azr5jlV6MZ", "field": "seed" }
+        },
+        {
+            "source"     : {"node_id": "positive_prompt:CjR0mYpz31", "field": "value"          },
+            "destination": {"node_id": "core_metadata:azr5jlV6MZ",   "field": "positive_prompt"}
+        },
+        {
+            "source"     : {"node_id": "core_metadata:azr5jlV6MZ", "field": "metadata"},
+            "destination": {"node_id": "canvas_output:rHGkBPcPOE", "field": "metadata"}
+        }
+    ]
+}

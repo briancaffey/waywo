@@ -83,7 +83,13 @@ def init_db():
     Initialize the database by creating all tables.
     Call this on application startup.
     """
-    from src.db.models import WaywoCommentDB, WaywoPostDB, WaywoProjectDB
+    from src.db.models import (  # noqa: F401
+        WaywoCommentDB,
+        WaywoPostDB,
+        WaywoProjectDB,
+        WaywoVideoDB,
+        WaywoVideoSegmentDB,
+    )
 
     Base.metadata.create_all(bind=engine)
     print(f"📦 Database initialized at {DATABASE_PATH}")

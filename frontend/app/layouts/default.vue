@@ -45,6 +45,13 @@
               Projects
             </a>
             <a
+              href="/videos"
+              class="text-sm font-medium transition-colors hover:text-primary"
+              :class="isActive('/videos') ? 'text-primary' : 'text-muted-foreground'"
+            >
+              Videos
+            </a>
+            <a
               href="/search"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/search') ? 'text-primary' : 'text-muted-foreground'"
@@ -120,6 +127,13 @@
               :class="isActive('/projects') ? 'text-primary bg-accent' : 'text-muted-foreground'"
             >
               Projects
+            </a>
+            <a
+              href="/videos"
+              class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
+              :class="isActive('/videos') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+            >
+              Videos
             </a>
             <a
               href="/search"

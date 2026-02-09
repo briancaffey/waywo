@@ -30,7 +30,7 @@
           <Icon name="lucide:loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
 
-        <div v-else-if="servicesHealth" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div v-else-if="servicesHealth" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <!-- LLM Server -->
           <div class="p-4 border rounded-lg">
             <div class="flex items-center gap-2 mb-2">
@@ -87,6 +87,66 @@
               </p>
               <p v-if="servicesHealth.reranker?.error" class="text-destructive">
                 Error: {{ servicesHealth.reranker.error }}
+              </p>
+            </div>
+          </div>
+
+          <!-- InvokeAI Server -->
+          <div class="p-4 border rounded-lg">
+            <div class="flex items-center gap-2 mb-2">
+              <Icon
+                :name="servicesHealth.invokeai?.status === 'healthy' ? 'lucide:check-circle' : 'lucide:x-circle'"
+                :class="servicesHealth.invokeai?.status === 'healthy' ? 'text-green-500' : 'text-destructive'"
+                class="h-5 w-5"
+              />
+              <span class="font-medium">InvokeAI</span>
+            </div>
+            <div class="text-sm text-muted-foreground space-y-1">
+              <p class="truncate" :title="servicesHealth.invokeai?.url">{{ servicesHealth.invokeai?.url }}</p>
+              <p v-if="servicesHealth.invokeai?.status === 'healthy' && servicesHealth.invokeai?.queue_size != null">
+                Queue: <span class="font-mono text-xs">{{ servicesHealth.invokeai.queue_size }}</span>
+              </p>
+              <p v-if="servicesHealth.invokeai?.error" class="text-destructive">
+                Error: {{ servicesHealth.invokeai.error }}
+              </p>
+            </div>
+          </div>
+
+          <!-- TTS Server -->
+          <div class="p-4 border rounded-lg">
+            <div class="flex items-center gap-2 mb-2">
+              <Icon
+                :name="servicesHealth.tts?.status === 'healthy' ? 'lucide:check-circle' : 'lucide:x-circle'"
+                :class="servicesHealth.tts?.status === 'healthy' ? 'text-green-500' : 'text-destructive'"
+                class="h-5 w-5"
+              />
+              <span class="font-medium">Text-to-Speech</span>
+            </div>
+            <div class="text-sm text-muted-foreground space-y-1">
+              <p class="truncate" :title="servicesHealth.tts?.url">{{ servicesHealth.tts?.url }}</p>
+              <p v-if="servicesHealth.tts?.status === 'healthy' && servicesHealth.tts?.voices != null">
+                Voices: <span class="font-mono text-xs">{{ servicesHealth.tts.voices }}</span>
+              </p>
+              <p v-if="servicesHealth.tts?.error" class="text-destructive">
+                Error: {{ servicesHealth.tts.error }}
+              </p>
+            </div>
+          </div>
+
+          <!-- STT Server -->
+          <div class="p-4 border rounded-lg">
+            <div class="flex items-center gap-2 mb-2">
+              <Icon
+                :name="servicesHealth.stt?.status === 'healthy' ? 'lucide:check-circle' : 'lucide:x-circle'"
+                :class="servicesHealth.stt?.status === 'healthy' ? 'text-green-500' : 'text-destructive'"
+                class="h-5 w-5"
+              />
+              <span class="font-medium">Speech-to-Text</span>
+            </div>
+            <div class="text-sm text-muted-foreground space-y-1">
+              <p class="truncate" :title="servicesHealth.stt?.url">{{ servicesHealth.stt?.url }}</p>
+              <p v-if="servicesHealth.stt?.error" class="text-destructive">
+                Error: {{ servicesHealth.stt.error }}
               </p>
             </div>
           </div>

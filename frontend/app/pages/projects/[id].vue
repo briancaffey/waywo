@@ -136,6 +136,19 @@
             <Button
               variant="ghost"
               size="sm"
+              @click="generateVideo"
+              :disabled="isGeneratingVideo"
+              class="text-muted-foreground"
+            >
+              <Icon
+                :name="isGeneratingVideo ? 'lucide:loader-2' : 'lucide:video'"
+                :class="['h-3.5 w-3.5 mr-1.5', isGeneratingVideo ? 'animate-spin' : '']"
+              />
+              {{ isGeneratingVideo ? 'Starting...' : 'Generate Video' }}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               @click="deleteProject"
               :disabled="isDeleting"
               class="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
@@ -392,6 +405,59 @@
             </Card>
           </section>
 
+          <!-- Videos -->
+          <section>
+            <div class="flex items-center gap-2.5 mb-3">
+              <Icon name="lucide:video" class="h-5 w-5 text-muted-foreground" />
+              <h2 class="text-lg font-semibold">Videos</h2>
+              <Badge v-if="projectVideos.length > 0" variant="secondary">{{ projectVideos.length }}</Badge>
+            </div>
+            <Card>
+              <div v-if="isLoadingVideos" class="flex items-center gap-2.5 text-muted-foreground p-6">
+                <Icon name="lucide:loader-2" class="h-4 w-4 animate-spin" />
+                <span class="text-sm">Loading videos...</span>
+              </div>
+              <div v-else-if="projectVideos.length === 0" class="text-sm text-muted-foreground p-6">
+                No videos generated yet.
+              </div>
+              <div v-else class="divide-y">
+                <a
+                  v-for="vid in projectVideos"
+                  :key="vid.id"
+                  :href="`/videos/${vid.id}`"
+                  class="flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                >
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium text-sm truncate">
+                        {{ vid.video_title || `Video #${vid.id}` }}
+                      </span>
+                      <Badge variant="outline" class="text-xs flex-shrink-0">v{{ vid.version }}</Badge>
+                    </div>
+                    <div class="text-xs text-muted-foreground mt-0.5">
+                      {{ formatISODate(vid.created_at) }}
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 flex-shrink-0">
+                    <Icon
+                      name="lucide:star"
+                      :class="[
+                        'h-4 w-4',
+                        vid.is_favorited ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/30'
+                      ]"
+                    />
+                    <Badge
+                      :variant="vid.status === 'completed' ? 'default' : vid.status === 'failed' ? 'destructive' : 'secondary'"
+                      class="text-xs"
+                    >
+                      {{ vid.status }}
+                    </Badge>
+                  </div>
+                </a>
+              </div>
+            </Card>
+          </section>
+
         </div>
       </div>
     </div>
@@ -399,7 +465,7 @@
 </template>
 
 <script setup lang="ts">
-import type { WaywoProject, WaywoComment, WaywoPost } from '~/types/models'
+import type { WaywoProject, WaywoComment, WaywoPost, WaywoVideo } from '~/types/models'
 
 // Get route params
 const route = useRoute()
@@ -426,6 +492,9 @@ const isReprocessing = ref(false)
 const isTogglingBookmark = ref(false)
 const similarProjects = ref<{ project: WaywoProject; similarity: number }[]>([])
 const isLoadingSimilar = ref(false)
+const projectVideos = ref<WaywoVideo[]>([])
+const isLoadingVideos = ref(false)
+const isGeneratingVideo = ref(false)
 
 // Fetch project from API
 async function fetchProject() {
@@ -443,8 +512,9 @@ async function fetchProject() {
     sourceComment.value = response.source_comment
     parentPost.value = response.parent_post
 
-    // Fetch similar projects in parallel (non-blocking)
+    // Fetch similar projects and videos in parallel (non-blocking)
     fetchSimilarProjects()
+    fetchProjectVideos()
   } catch (err) {
     console.error('Failed to fetch project:', err)
     fetchError.value = 'Failed to fetch project. It may not exist.'
@@ -531,6 +601,43 @@ async function toggleBookmark() {
     console.error('Failed to toggle bookmark:', err)
   } finally {
     isTogglingBookmark.value = false
+  }
+}
+
+// Fetch videos for this project
+async function fetchProjectVideos() {
+  isLoadingVideos.value = true
+  try {
+    const response = await $fetch<{
+      videos: WaywoVideo[]
+      total: number
+      project_id: number
+    }>(`${config.public.apiBase}/api/waywo-projects/${projectId.value}/videos`)
+    projectVideos.value = response.videos
+  } catch (err) {
+    console.error('Failed to fetch project videos:', err)
+  } finally {
+    isLoadingVideos.value = false
+  }
+}
+
+// Generate video for this project
+async function generateVideo() {
+  if (isGeneratingVideo.value) return
+
+  isGeneratingVideo.value = true
+
+  try {
+    await $fetch(`${config.public.apiBase}/api/waywo-projects/${projectId.value}/generate-video`, {
+      method: 'POST'
+    })
+    alert('Video generation started! Refresh later to see progress.')
+    fetchProjectVideos()
+  } catch (err) {
+    console.error('Failed to generate video:', err)
+    alert('Failed to start video generation. Please try again.')
+  } finally {
+    isGeneratingVideo.value = false
   }
 }
 

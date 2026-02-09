@@ -352,6 +352,19 @@
               <Button
                 variant="outline"
                 size="sm"
+                @click.stop="generateVideoForProject(project.id)"
+                :disabled="generatingVideoProjectId === project.id"
+              >
+                <Icon
+                  :name="generatingVideoProjectId === project.id ? 'lucide:loader-2' : 'lucide:video'"
+                  :class="generatingVideoProjectId === project.id ? 'animate-spin' : ''"
+                  class="mr-1 h-3 w-3"
+                />
+                {{ generatingVideoProjectId === project.id ? 'Starting...' : 'Video' }}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 class="text-destructive hover:bg-destructive hover:text-destructive-foreground"
                 @click.stop="deleteProject(project.id)"
                 :disabled="deletingProjectId === project.id"
@@ -481,6 +494,9 @@ const reprocessingProjectId = ref<number | null>(null)
 
 // Bookmark state
 const togglingBookmarkId = ref<number | null>(null)
+
+// Generate video state
+const generatingVideoProjectId = ref<number | null>(null)
 
 // Extract hostname from URL
 function getHostname(url: string): string {
@@ -746,6 +762,25 @@ async function reprocessProject(project: WaywoProject) {
     alert('Failed to queue reprocessing. Please try again.')
   } finally {
     reprocessingProjectId.value = null
+  }
+}
+
+// Generate video for a project
+async function generateVideoForProject(projectId: number) {
+  if (generatingVideoProjectId.value === projectId) return
+
+  generatingVideoProjectId.value = projectId
+
+  try {
+    await $fetch(`${config.public.apiBase}/api/waywo-projects/${projectId}/generate-video`, {
+      method: 'POST'
+    })
+    alert('Video generation started! Check the Videos page for progress.')
+  } catch (err) {
+    console.error('Failed to generate video:', err)
+    alert('Failed to start video generation. Please try again.')
+  } finally {
+    generatingVideoProjectId.value = null
   }
 }
 

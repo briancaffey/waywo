@@ -28,6 +28,20 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 DATA_DIR = os.getenv("DATA_DIR", "/app/data")
 MEDIA_DIR = os.getenv("MEDIA_DIR", "/app/media")
 
+# InvokeAI image generation
+INVOKEAI_URL = os.getenv("INVOKEAI_URL", "http://192.168.5.173:9090")
+
+# Text-to-Speech (NVIDIA Magpie NIM)
+TTS_URL = os.getenv("TTS_URL", "http://192.168.6.3:9000")
+
+# Speech-to-Text (Nemotron Speech Streaming)
+STT_URL = os.getenv("STT_URL", "http://192.168.5.96:8001")
+
+# Video generation defaults
+VIDEO_WIDTH = int(os.getenv("VIDEO_WIDTH", "1080"))
+VIDEO_HEIGHT = int(os.getenv("VIDEO_HEIGHT", "1920"))
+VIDEO_FPS = int(os.getenv("VIDEO_FPS", "30"))
+
 # Phoenix observability
 PHOENIX_HOST = os.getenv("PHOENIX_HOST", "localhost")
 PHOENIX_PORT = os.getenv("PHOENIX_PORT", "6006")

@@ -9,6 +9,7 @@ from typing import Optional
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -261,3 +262,163 @@ class WaywoProjectDB(Base):
     def set_workflow_logs_list(self, logs: list[str]) -> None:
         """Serialize list to JSON string."""
         self.workflow_logs = json.dumps(logs) if logs else None
+
+
+class WaywoVideoDB(Base):
+    """SQLAlchemy model for generated project videos."""
+
+    __tablename__ = "waywo_videos"
+
+    # Auto-generated primary key
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Link to source project
+    project_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("waywo_projects.id"), nullable=False
+    )
+
+    # Version tracking (auto-increment per project to keep old videos)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+    # Script metadata (from LLM)
+    video_title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    video_style: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    script_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Full LLM output
+
+    # Voice used for TTS
+    voice_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    # Generation status
+    status: Mapped[str] = mapped_column(
+        String(50), default="pending", nullable=False
+    )  # pending | script_generated | generating | completed | failed
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Output paths
+    video_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    thumbnail_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Video metadata
+    duration_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    width: Mapped[int] = mapped_column(Integer, default=1080, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, default=1920, nullable=False)
+
+    # Workflow logs
+    workflow_logs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array
+
+    # User interaction
+    view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_favorited: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Relationships
+    project: Mapped["WaywoProjectDB"] = relationship(
+        "WaywoProjectDB", backref="videos"
+    )
+    segments: Mapped[list["WaywoVideoSegmentDB"]] = relationship(
+        "WaywoVideoSegmentDB",
+        back_populates="video",
+        order_by="WaywoVideoSegmentDB.segment_index",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("ix_waywo_videos_project_id", "project_id"),
+        Index("ix_waywo_videos_status", "status"),
+        Index("ix_waywo_videos_created_at", "created_at"),
+    )
+
+    def get_workflow_logs_list(self) -> list[str]:
+        """Parse workflow_logs JSON string to list."""
+        if self.workflow_logs is None:
+            return []
+        return json.loads(self.workflow_logs)
+
+    def set_workflow_logs_list(self, logs: list[str]) -> None:
+        """Serialize list to JSON string."""
+        self.workflow_logs = json.dumps(logs) if logs else None
+
+
+class WaywoVideoSegmentDB(Base):
+    """SQLAlchemy model for individual segments within a video."""
+
+    __tablename__ = "waywo_video_segments"
+
+    # Auto-generated primary key
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Link to parent video
+    video_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("waywo_videos.id"), nullable=False
+    )
+
+    # Ordering
+    segment_index: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Script data (from LLM)
+    segment_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # hook | introduction | features | audience | closing
+    narration_text: Mapped[str] = mapped_column(Text, nullable=False)
+    scene_description: Mapped[str] = mapped_column(Text, nullable=False)  # Original from LLM
+    image_prompt: Mapped[str] = mapped_column(Text, nullable=False)  # Editable, defaults to scene_description
+    visual_style: Mapped[str] = mapped_column(
+        String(50), default="abstract", nullable=False
+    )  # abstract | screenshot | text_overlay
+    transition: Mapped[str] = mapped_column(
+        String(50), default="fade", nullable=False
+    )  # fade | cut | slide_left | zoom_in
+
+    # Audio data
+    audio_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    audio_duration_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    # Image data
+    image_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    image_name: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )  # InvokeAI image name
+
+    # Transcription data (word-level timestamps)
+    transcription_json: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # JSON: {"text": "...", "words": [...]}
+
+    # Segment generation status
+    status: Mapped[str] = mapped_column(
+        String(50), default="pending", nullable=False
+    )  # pending | audio_generated | image_generated | complete | failed
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    # Relationships
+    video: Mapped["WaywoVideoDB"] = relationship(
+        "WaywoVideoDB", back_populates="segments"
+    )
+
+    __table_args__ = (
+        Index("ix_waywo_video_segments_video_id", "video_id"),
+        Index("ix_waywo_video_segments_status", "status"),
+    )
+
+    def get_transcription_dict(self) -> dict | None:
+        """Parse transcription_json to dict."""
+        if self.transcription_json is None:
+            return None
+        return json.loads(self.transcription_json)
+
+    def set_transcription_dict(self, data: dict | None) -> None:
+        """Serialize dict to JSON string."""
+        self.transcription_json = json.dumps(data) if data else None

@@ -1,5 +1,34 @@
 """Shared test fixtures for the waywo test suite."""
 
+# ---------------------------------------------------------------------------
+# Work around llama_index / pytest path conflict
+# ---------------------------------------------------------------------------
+# llama_index.core.workflow.context does ``from workflows.context import Context``
+# which relies on the pip ``workflows`` package.  Under pytest the project root
+# is prepended to sys.path, so ``import workflows`` resolves to src/workflows
+# (our package) instead of site-packages/workflows.  Pre-importing the correct
+# ``workflows`` package from site-packages prevents the collision.
+import importlib
+import importlib.util
+import sys
+from pathlib import Path
+
+if "workflows" not in sys.modules:
+    # Locate the site-packages 'workflows' package by scanning sys.path
+    for _p in sys.path:
+        _candidate = Path(_p) / "workflows" / "__init__.py"
+        if _candidate.exists() and "site-packages" in str(_candidate):
+            _spec = importlib.util.spec_from_file_location(
+                "workflows",
+                str(_candidate),
+                submodule_search_locations=[str(_candidate.parent)],
+            )
+            if _spec and _spec.loader:
+                _mod = importlib.util.module_from_spec(_spec)
+                sys.modules["workflows"] = _mod
+                _spec.loader.exec_module(_mod)
+            break
+
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 

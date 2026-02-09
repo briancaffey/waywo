@@ -144,3 +144,86 @@ class WaywoProjectListFilters(BaseModel):
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
     is_valid: Optional[bool] = None
+
+
+# ---------------------------------------------------------------------------
+# Video models
+# ---------------------------------------------------------------------------
+
+
+class WaywoVideoSegment(BaseModel):
+    """A single segment within a generated video."""
+
+    id: int
+    video_id: int
+    segment_index: int
+
+    # Script data
+    segment_type: str  # hook | introduction | features | audience | closing
+    narration_text: str
+    scene_description: str  # Original from LLM (preserved)
+    image_prompt: str  # Editable, defaults to scene_description
+    visual_style: str = "abstract"
+    transition: str = "fade"
+
+    # Audio
+    audio_path: Optional[str] = None
+    audio_duration_seconds: Optional[float] = None
+
+    # Image
+    image_path: Optional[str] = None
+    image_name: Optional[str] = None  # InvokeAI image name
+
+    # Transcription (word-level timestamps)
+    transcription: Optional[dict] = None
+
+    # Status
+    status: str = "pending"
+    error_message: Optional[str] = None
+
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime
+
+
+class WaywoVideo(BaseModel):
+    """A generated video for a project."""
+
+    id: int
+    project_id: int
+    version: int = 1
+
+    # Script metadata
+    video_title: Optional[str] = None
+    video_style: Optional[str] = None
+    script_json: Optional[dict] = None
+
+    # Voice
+    voice_name: Optional[str] = None
+
+    # Status
+    status: str = "pending"
+    error_message: Optional[str] = None
+
+    # Output
+    video_path: Optional[str] = None
+    thumbnail_path: Optional[str] = None
+
+    # Video metadata
+    duration_seconds: Optional[float] = None
+    width: int = 1080
+    height: int = 1920
+
+    # Workflow
+    workflow_logs: list[str] = Field(default_factory=list)
+
+    # User interaction
+    view_count: int = 0
+    is_favorited: bool = False
+
+    # Timestamps
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+    # Segments (populated when fetching with detail)
+    segments: list[WaywoVideoSegment] = Field(default_factory=list)

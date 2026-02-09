@@ -97,12 +97,17 @@ export interface ServiceHealth {
   configured_model?: string
   available_models?: string[]
   device?: string
+  queue_size?: number
+  voices?: number | string
 }
 
 export interface ServicesHealth {
   llm: ServiceHealth
   embedder: ServiceHealth
   reranker: ServiceHealth
+  invokeai: ServiceHealth
+  tts: ServiceHealth
+  stt: ServiceHealth
 }
 
 export interface ResultMessage {
@@ -121,4 +126,48 @@ export interface WorkflowStep {
   output_event: string
   prompt_template: string | null
   template_variables: string[]
+}
+
+export interface WaywoVideoSegment {
+  id: number
+  video_id: number
+  segment_index: number
+  segment_type: string
+  narration_text: string
+  scene_description: string
+  image_prompt: string
+  visual_style: string
+  transition: string
+  audio_path: string | null
+  audio_duration_seconds: number | null
+  image_path: string | null
+  image_name: string | null
+  transcription: Record<string, any> | null
+  status: string
+  error_message: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WaywoVideo {
+  id: number
+  project_id: number
+  version: number
+  video_title: string | null
+  video_style: string | null
+  script_json: Record<string, any> | null
+  voice_name: string | null
+  status: string
+  error_message: string | null
+  video_path: string | null
+  thumbnail_path: string | null
+  duration_seconds: number | null
+  width: number
+  height: number
+  workflow_logs: string[]
+  view_count: number
+  is_favorited: boolean
+  created_at: string
+  completed_at: string | null
+  segments: WaywoVideoSegment[]
 }

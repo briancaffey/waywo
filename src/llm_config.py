@@ -69,3 +69,31 @@ def get_llm_for_structured_output() -> OpenAILike:
     )
 
     return llm
+
+
+def get_llm_for_creative_output() -> OpenAILike:
+    """
+    Get a configured LLM instance optimized for creative content generation.
+
+    Uses higher temperature (0.8) to produce varied, creative outputs
+    while still maintaining coherence. Used for video script generation.
+
+    Returns:
+        OpenAILike: Configured LLM client for creative output.
+    """
+    logger.info(f"🤖 Initializing LLM (creative): {LLM_MODEL_NAME}")
+
+    llm = OpenAILike(
+        api_base=LLM_BASE_URL,
+        api_key=LLM_API_KEY,
+        model=LLM_MODEL_NAME,
+        temperature=0.8,  # Higher temperature for creative variety
+        max_tokens=LLM_MAX_TOKENS,
+        is_chat_model=True,
+        is_function_calling_model=False,
+        additional_kwargs={
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}}
+        },
+    )
+
+    return llm
