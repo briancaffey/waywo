@@ -77,9 +77,7 @@ class WaywoVideoWorkflow(Workflow):
         return os.path.join(self.media_dir, "videos", str(video_id))
 
     def _segment_dir(self, video_id: int, segment_index: int) -> str:
-        return os.path.join(
-            self._video_dir(video_id), "segments", str(segment_index)
-        )
+        return os.path.join(self._video_dir(video_id), "segments", str(segment_index))
 
     def _relative_path(self, absolute_path: str) -> str:
         """Convert an absolute media path to a path relative to media_dir.
@@ -119,9 +117,7 @@ class WaywoVideoWorkflow(Workflow):
     # ------------------------------------------------------------------
 
     @step
-    async def generate_script(
-        self, ev: ProjectLoadedEvent
-    ) -> ScriptGeneratedEvent:
+    async def generate_script(self, ev: ProjectLoadedEvent) -> ScriptGeneratedEvent:
         self._log(ev.video_id, "Generating video script via LLM")
 
         script = await generate_video_script(
@@ -162,9 +158,7 @@ class WaywoVideoWorkflow(Workflow):
                     "segment_type": seg["segment_type"],
                     "narration_text": seg["narration_text"],
                     "scene_description": seg["scene_description"],
-                    "image_prompt": seg.get(
-                        "image_prompt", seg["scene_description"]
-                    ),
+                    "image_prompt": seg.get("image_prompt", seg["scene_description"]),
                     "visual_style": seg.get("visual_style", "abstract"),
                     "transition": seg.get("transition", "fade"),
                 }
@@ -197,9 +191,7 @@ class WaywoVideoWorkflow(Workflow):
     # ------------------------------------------------------------------
 
     @step
-    async def generate_audio(
-        self, ev: ScriptGeneratedEvent
-    ) -> AudioGeneratedEvent:
+    async def generate_audio(self, ev: ScriptGeneratedEvent) -> AudioGeneratedEvent:
         self._log(ev.video_id, "Generating TTS audio for all segments")
 
         audio_paths: list[str] = []
@@ -323,9 +315,7 @@ class WaywoVideoWorkflow(Workflow):
     # ------------------------------------------------------------------
 
     @step
-    async def generate_images(
-        self, ev: AudioTranscribedEvent
-    ) -> ImagesGeneratedEvent:
+    async def generate_images(self, ev: AudioTranscribedEvent) -> ImagesGeneratedEvent:
         self._log(ev.video_id, "Generating images for all segments")
 
         image_paths: list[str] = []
@@ -384,9 +374,7 @@ class WaywoVideoWorkflow(Workflow):
     # ------------------------------------------------------------------
 
     @step
-    async def assemble_video_step(
-        self, ev: ImagesGeneratedEvent
-    ) -> StopEvent:
+    async def assemble_video_step(self, ev: ImagesGeneratedEvent) -> StopEvent:
         self._log(ev.video_id, "Assembling final video")
 
         video_dir = self._video_dir(ev.video_id)

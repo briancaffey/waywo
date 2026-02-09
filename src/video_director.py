@@ -281,9 +281,7 @@ async def generate_video_script(
     script = _parse_llm_json(response_text)
     script = _validate_script(script)
 
-    total_words = sum(
-        len(seg["narration_text"].split()) for seg in script["segments"]
-    )
+    total_words = sum(len(seg["narration_text"].split()) for seg in script["segments"])
     logger.info(
         f"🎬 Script generated: {script['video_title']} "
         f"({len(script['segments'])} segments, {total_words} words, "

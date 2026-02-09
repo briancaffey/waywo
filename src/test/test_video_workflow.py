@@ -21,7 +21,6 @@ from src.workflows.waywo_video_workflow import WaywoVideoWorkflow
 # Module reference for patch.object calls
 import src.workflows.waywo_video_workflow as _wf_mod
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
@@ -219,9 +218,7 @@ async def test_workflow_start_step_project_not_found(tmp_path):
 async def test_workflow_generate_script_step(tmp_path):
     """Generate script step calls LLM, picks voice, persists to DB."""
     mock_gen_script = AsyncMock(return_value=FAKE_SCRIPT)
-    mock_list_voices = AsyncMock(
-        return_value=[{"name": "English-US.Female-1"}]
-    )
+    mock_list_voices = AsyncMock(return_value=[{"name": "English-US.Female-1"}])
     mock_update_script = MagicMock()
     mock_create_segs = MagicMock(return_value=[1, 2])
     mock_update_status = MagicMock()

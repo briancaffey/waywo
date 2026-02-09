@@ -204,32 +204,62 @@ _TXT2IMG_GRAPH = {
     },
     "edges": [
         {
-            "source": {"node_id": "flux2_klein_model_loader:vVjCkJJqjL", "field": "qwen3_encoder"},
-            "destination": {"node_id": "flux2_klein_text_encoder:TKf6RWlSqq", "field": "qwen3_encoder"},
+            "source": {
+                "node_id": "flux2_klein_model_loader:vVjCkJJqjL",
+                "field": "qwen3_encoder",
+            },
+            "destination": {
+                "node_id": "flux2_klein_text_encoder:TKf6RWlSqq",
+                "field": "qwen3_encoder",
+            },
         },
         {
-            "source": {"node_id": "flux2_klein_model_loader:vVjCkJJqjL", "field": "max_seq_len"},
-            "destination": {"node_id": "flux2_klein_text_encoder:TKf6RWlSqq", "field": "max_seq_len"},
+            "source": {
+                "node_id": "flux2_klein_model_loader:vVjCkJJqjL",
+                "field": "max_seq_len",
+            },
+            "destination": {
+                "node_id": "flux2_klein_text_encoder:TKf6RWlSqq",
+                "field": "max_seq_len",
+            },
         },
         {
-            "source": {"node_id": "flux2_klein_model_loader:vVjCkJJqjL", "field": "transformer"},
+            "source": {
+                "node_id": "flux2_klein_model_loader:vVjCkJJqjL",
+                "field": "transformer",
+            },
             "destination": {"node_id": _TXT2IMG_DENOISE_NODE, "field": "transformer"},
         },
         {
-            "source": {"node_id": "flux2_klein_model_loader:vVjCkJJqjL", "field": "vae"},
+            "source": {
+                "node_id": "flux2_klein_model_loader:vVjCkJJqjL",
+                "field": "vae",
+            },
             "destination": {"node_id": _TXT2IMG_DENOISE_NODE, "field": "vae"},
         },
         {
-            "source": {"node_id": "flux2_klein_model_loader:vVjCkJJqjL", "field": "vae"},
+            "source": {
+                "node_id": "flux2_klein_model_loader:vVjCkJJqjL",
+                "field": "vae",
+            },
             "destination": {"node_id": _TXT2IMG_OUTPUT_NODE, "field": "vae"},
         },
         {
             "source": {"node_id": _TXT2IMG_PROMPT_NODE, "field": "value"},
-            "destination": {"node_id": "flux2_klein_text_encoder:TKf6RWlSqq", "field": "prompt"},
+            "destination": {
+                "node_id": "flux2_klein_text_encoder:TKf6RWlSqq",
+                "field": "prompt",
+            },
         },
         {
-            "source": {"node_id": "flux2_klein_text_encoder:TKf6RWlSqq", "field": "conditioning"},
-            "destination": {"node_id": _TXT2IMG_DENOISE_NODE, "field": "positive_text_conditioning"},
+            "source": {
+                "node_id": "flux2_klein_text_encoder:TKf6RWlSqq",
+                "field": "conditioning",
+            },
+            "destination": {
+                "node_id": _TXT2IMG_DENOISE_NODE,
+                "field": "positive_text_conditioning",
+            },
         },
         {
             "source": {"node_id": _TXT2IMG_SEED_NODE, "field": "value"},
@@ -245,7 +275,10 @@ _TXT2IMG_GRAPH = {
         },
         {
             "source": {"node_id": _TXT2IMG_PROMPT_NODE, "field": "value"},
-            "destination": {"node_id": _TXT2IMG_METADATA_NODE, "field": "positive_prompt"},
+            "destination": {
+                "node_id": _TXT2IMG_METADATA_NODE,
+                "field": "positive_prompt",
+            },
         },
         {
             "source": {"node_id": _TXT2IMG_METADATA_NODE, "field": "metadata"},
@@ -435,32 +468,62 @@ _REF_IMG_GRAPH = {
     },
     "edges": [
         {
-            "source": {"node_id": "flux2_klein_model_loader:mNbHzTdH2U", "field": "qwen3_encoder"},
-            "destination": {"node_id": "flux2_klein_text_encoder:tFXaGTvC5p", "field": "qwen3_encoder"},
+            "source": {
+                "node_id": "flux2_klein_model_loader:mNbHzTdH2U",
+                "field": "qwen3_encoder",
+            },
+            "destination": {
+                "node_id": "flux2_klein_text_encoder:tFXaGTvC5p",
+                "field": "qwen3_encoder",
+            },
         },
         {
-            "source": {"node_id": "flux2_klein_model_loader:mNbHzTdH2U", "field": "max_seq_len"},
-            "destination": {"node_id": "flux2_klein_text_encoder:tFXaGTvC5p", "field": "max_seq_len"},
+            "source": {
+                "node_id": "flux2_klein_model_loader:mNbHzTdH2U",
+                "field": "max_seq_len",
+            },
+            "destination": {
+                "node_id": "flux2_klein_text_encoder:tFXaGTvC5p",
+                "field": "max_seq_len",
+            },
         },
         {
-            "source": {"node_id": "flux2_klein_model_loader:mNbHzTdH2U", "field": "transformer"},
+            "source": {
+                "node_id": "flux2_klein_model_loader:mNbHzTdH2U",
+                "field": "transformer",
+            },
             "destination": {"node_id": _REF_DENOISE_NODE, "field": "transformer"},
         },
         {
-            "source": {"node_id": "flux2_klein_model_loader:mNbHzTdH2U", "field": "vae"},
+            "source": {
+                "node_id": "flux2_klein_model_loader:mNbHzTdH2U",
+                "field": "vae",
+            },
             "destination": {"node_id": _REF_DENOISE_NODE, "field": "vae"},
         },
         {
-            "source": {"node_id": "flux2_klein_model_loader:mNbHzTdH2U", "field": "vae"},
+            "source": {
+                "node_id": "flux2_klein_model_loader:mNbHzTdH2U",
+                "field": "vae",
+            },
             "destination": {"node_id": _REF_OUTPUT_NODE, "field": "vae"},
         },
         {
             "source": {"node_id": _REF_PROMPT_NODE, "field": "value"},
-            "destination": {"node_id": "flux2_klein_text_encoder:tFXaGTvC5p", "field": "prompt"},
+            "destination": {
+                "node_id": "flux2_klein_text_encoder:tFXaGTvC5p",
+                "field": "prompt",
+            },
         },
         {
-            "source": {"node_id": "flux2_klein_text_encoder:tFXaGTvC5p", "field": "conditioning"},
-            "destination": {"node_id": _REF_DENOISE_NODE, "field": "positive_text_conditioning"},
+            "source": {
+                "node_id": "flux2_klein_text_encoder:tFXaGTvC5p",
+                "field": "conditioning",
+            },
+            "destination": {
+                "node_id": _REF_DENOISE_NODE,
+                "field": "positive_text_conditioning",
+            },
         },
         {
             "source": {"node_id": _REF_SEED_NODE, "field": "value"},
@@ -484,7 +547,10 @@ _REF_IMG_GRAPH = {
         },
         {
             "source": {"node_id": _REF_KONTEXT_COLLECT_NODE, "field": "collection"},
-            "destination": {"node_id": _REF_DENOISE_NODE, "field": "kontext_conditioning"},
+            "destination": {
+                "node_id": _REF_DENOISE_NODE,
+                "field": "kontext_conditioning",
+            },
         },
         {
             "source": {"node_id": _REF_METADATA_NODE, "field": "metadata"},
@@ -630,7 +696,9 @@ async def generate_image(
 
     batch_payload = _build_txt2img_batch(prompt, width, height, num_steps, seed)
     batch_info = await _submit_batch(batch_payload, invokeai_url, max_retries)
-    image_name = await _poll_for_result(batch_info, invokeai_url, poll_interval, timeout)
+    image_name = await _poll_for_result(
+        batch_info, invokeai_url, poll_interval, timeout
+    )
     image_bytes = await _download_image(image_name, invokeai_url, max_retries)
 
     return GeneratedImage(
@@ -684,7 +752,9 @@ async def generate_image_with_reference(
         prompt, reference_image_name, width, height, num_steps, seed
     )
     batch_info = await _submit_batch(batch_payload, invokeai_url, max_retries)
-    image_name = await _poll_for_result(batch_info, invokeai_url, poll_interval, timeout)
+    image_name = await _poll_for_result(
+        batch_info, invokeai_url, poll_interval, timeout
+    )
     image_bytes = await _download_image(image_name, invokeai_url, max_retries)
 
     return GeneratedImage(
@@ -927,11 +997,11 @@ async def _download_image(
                     )
 
         except Exception as e:
-            logger.warning(
-                f"Download attempt {attempt + 1}/{max_retries} failed: {e}"
-            )
+            logger.warning(f"Download attempt {attempt + 1}/{max_retries} failed: {e}")
 
         if attempt < max_retries - 1:
             await asyncio.sleep(2**attempt)
 
-    raise InvokeAIError(f"Failed to download image {image_name} after {max_retries} attempts")
+    raise InvokeAIError(
+        f"Failed to download image {image_name} after {max_retries} attempts"
+    )

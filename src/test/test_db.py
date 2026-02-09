@@ -639,14 +639,17 @@ def test_delete_video_cascades_segments(sample_post, sample_comment):
     project_id = _setup_project(sample_post, sample_comment)
     video_id = create_video(project_id)
 
-    create_segments(video_id, [
-        {
-            "segment_index": 0,
-            "segment_type": "hook",
-            "narration_text": "Hello!",
-            "scene_description": "A cool scene",
-        },
-    ])
+    create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello!",
+                "scene_description": "A cool scene",
+            },
+        ],
+    )
 
     assert delete_video(video_id) is True
     assert get_video(video_id) is None
@@ -657,7 +660,12 @@ def test_delete_video_cascades_segments(sample_post, sample_comment):
 @pytest.mark.db
 def test_get_video_feed(sample_post, sample_comment):
     """get_video_feed returns completed videos, newest first."""
-    from src.db.videos import create_video, update_video_status, get_video_feed, get_video_count
+    from src.db.videos import (
+        create_video,
+        update_video_status,
+        get_video_feed,
+        get_video_count,
+    )
 
     project_id = _setup_project(sample_post, sample_comment)
 
@@ -689,24 +697,27 @@ def test_create_and_get_segments(sample_post, sample_comment):
     project_id = _setup_project(sample_post, sample_comment)
     video_id = create_video(project_id)
 
-    segment_ids = create_segments(video_id, [
-        {
-            "segment_index": 0,
-            "segment_type": "hook",
-            "narration_text": "Ever wondered...",
-            "scene_description": "Abstract neon visualization",
-            "visual_style": "abstract",
-            "transition": "fade",
-        },
-        {
-            "segment_index": 1,
-            "segment_type": "features",
-            "narration_text": "It features...",
-            "scene_description": "Screenshot of the app",
-            "visual_style": "screenshot",
-            "transition": "cut",
-        },
-    ])
+    segment_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Ever wondered...",
+                "scene_description": "Abstract neon visualization",
+                "visual_style": "abstract",
+                "transition": "fade",
+            },
+            {
+                "segment_index": 1,
+                "segment_type": "features",
+                "narration_text": "It features...",
+                "scene_description": "Screenshot of the app",
+                "visual_style": "screenshot",
+                "transition": "cut",
+            },
+        ],
+    )
 
     assert len(segment_ids) == 2
 
@@ -715,7 +726,9 @@ def test_create_and_get_segments(sample_post, sample_comment):
     assert segments[0].segment_index == 0
     assert segments[0].segment_type == "hook"
     assert segments[0].narration_text == "Ever wondered..."
-    assert segments[0].image_prompt == "Abstract neon visualization"  # defaults to scene_description
+    assert (
+        segments[0].image_prompt == "Abstract neon visualization"
+    )  # defaults to scene_description
     assert segments[0].status == "pending"
     assert segments[1].segment_index == 1
     assert segments[1].transition == "cut"
@@ -729,15 +742,18 @@ def test_create_segments_custom_image_prompt(sample_post, sample_comment):
     project_id = _setup_project(sample_post, sample_comment)
     video_id = create_video(project_id)
 
-    seg_ids = create_segments(video_id, [
-        {
-            "segment_index": 0,
-            "segment_type": "hook",
-            "narration_text": "Hello",
-            "scene_description": "Original LLM description",
-            "image_prompt": "Custom edited prompt",
-        },
-    ])
+    seg_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello",
+                "scene_description": "Original LLM description",
+                "image_prompt": "Custom edited prompt",
+            },
+        ],
+    )
 
     seg = get_segment(seg_ids[0])
     assert seg.scene_description == "Original LLM description"
@@ -758,14 +774,17 @@ def test_update_segment_narration(sample_post, sample_comment):
     project_id = _setup_project(sample_post, sample_comment)
     video_id = create_video(project_id)
 
-    seg_ids = create_segments(video_id, [
-        {
-            "segment_index": 0,
-            "segment_type": "hook",
-            "narration_text": "Original text",
-            "scene_description": "A scene",
-        },
-    ])
+    seg_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Original text",
+                "scene_description": "A scene",
+            },
+        ],
+    )
 
     # Simulate audio generation
     update_segment_audio(seg_ids[0], "/audio/seg0.wav", 5.2, {"text": "Original text"})
@@ -798,14 +817,17 @@ def test_update_segment_image_prompt(sample_post, sample_comment):
     project_id = _setup_project(sample_post, sample_comment)
     video_id = create_video(project_id)
 
-    seg_ids = create_segments(video_id, [
-        {
-            "segment_index": 0,
-            "segment_type": "hook",
-            "narration_text": "Hello",
-            "scene_description": "Original scene",
-        },
-    ])
+    seg_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello",
+                "scene_description": "Original scene",
+            },
+        ],
+    )
 
     # Simulate complete segment
     update_segment_audio(seg_ids[0], "/audio/seg0.wav", 5.2)
@@ -826,19 +848,27 @@ def test_update_segment_image_prompt(sample_post, sample_comment):
 @pytest.mark.db
 def test_update_segment_audio(sample_post, sample_comment):
     """update_segment_audio stores audio data and transcription."""
-    from src.db.videos import create_video, create_segments, get_segment, update_segment_audio
+    from src.db.videos import (
+        create_video,
+        create_segments,
+        get_segment,
+        update_segment_audio,
+    )
 
     project_id = _setup_project(sample_post, sample_comment)
     video_id = create_video(project_id)
 
-    seg_ids = create_segments(video_id, [
-        {
-            "segment_index": 0,
-            "segment_type": "hook",
-            "narration_text": "Hello world",
-            "scene_description": "A scene",
-        },
-    ])
+    seg_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello world",
+                "scene_description": "A scene",
+            },
+        ],
+    )
 
     transcription = {
         "text": "hello world",
@@ -870,14 +900,17 @@ def test_update_segment_image(sample_post, sample_comment):
     project_id = _setup_project(sample_post, sample_comment)
     video_id = create_video(project_id)
 
-    seg_ids = create_segments(video_id, [
-        {
-            "segment_index": 0,
-            "segment_type": "hook",
-            "narration_text": "Hello",
-            "scene_description": "A scene",
-        },
-    ])
+    seg_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello",
+                "scene_description": "A scene",
+            },
+        ],
+    )
 
     # Image without audio -> image_generated
     update_segment_image(seg_ids[0], "/images/seg0.png", "invoke-123.png")
@@ -905,20 +938,23 @@ def test_delete_segment(sample_post, sample_comment):
     project_id = _setup_project(sample_post, sample_comment)
     video_id = create_video(project_id)
 
-    seg_ids = create_segments(video_id, [
-        {
-            "segment_index": 0,
-            "segment_type": "hook",
-            "narration_text": "Hello",
-            "scene_description": "A scene",
-        },
-        {
-            "segment_index": 1,
-            "segment_type": "closing",
-            "narration_text": "Goodbye",
-            "scene_description": "Another scene",
-        },
-    ])
+    seg_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello",
+                "scene_description": "A scene",
+            },
+            {
+                "segment_index": 1,
+                "segment_type": "closing",
+                "narration_text": "Goodbye",
+                "scene_description": "Another scene",
+            },
+        ],
+    )
 
     assert delete_segment(seg_ids[0]) is True
     assert get_segment(seg_ids[0]) is None
@@ -934,20 +970,23 @@ def test_get_video_with_segments(sample_post, sample_comment):
     project_id = _setup_project(sample_post, sample_comment)
     video_id = create_video(project_id)
 
-    create_segments(video_id, [
-        {
-            "segment_index": 1,
-            "segment_type": "closing",
-            "narration_text": "Goodbye",
-            "scene_description": "End scene",
-        },
-        {
-            "segment_index": 0,
-            "segment_type": "hook",
-            "narration_text": "Hello",
-            "scene_description": "Start scene",
-        },
-    ])
+    create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 1,
+                "segment_type": "closing",
+                "narration_text": "Goodbye",
+                "scene_description": "End scene",
+            },
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello",
+                "scene_description": "Start scene",
+            },
+        ],
+    )
 
     video = get_video(video_id, include_segments=True)
     assert len(video.segments) == 2

@@ -68,17 +68,13 @@ async def generate_speech(
     for attempt in range(max_retries):
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                logger.info(
-                    f"Generating speech ({len(text)} chars, lang={language})"
-                )
+                logger.info(f"Generating speech ({len(text)} chars, lang={language})")
 
                 response = await client.post(endpoint, data=data)
                 response.raise_for_status()
 
                 audio_bytes = response.content
-                logger.info(
-                    f"Speech generated: {len(audio_bytes)} bytes"
-                )
+                logger.info(f"Speech generated: {len(audio_bytes)} bytes")
                 return audio_bytes
 
         except httpx.TimeoutException as e:
@@ -86,9 +82,7 @@ async def generate_speech(
             if attempt < max_retries - 1:
                 await asyncio.sleep(2**attempt)
             else:
-                raise TTSError(
-                    f"TTS request timed out after {max_retries} attempts"
-                )
+                raise TTSError(f"TTS request timed out after {max_retries} attempts")
 
         except httpx.HTTPStatusError as e:
             logger.error(f"TTS service HTTP error: {e.response.status_code}")

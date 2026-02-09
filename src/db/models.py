@@ -283,7 +283,9 @@ class WaywoVideoDB(Base):
     # Script metadata (from LLM)
     video_title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     video_style: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    script_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Full LLM output
+    script_json: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # Full LLM output
 
     # Voice used for TTS
     voice_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
@@ -304,7 +306,9 @@ class WaywoVideoDB(Base):
     height: Mapped[int] = mapped_column(Integer, default=1920, nullable=False)
 
     # Workflow logs
-    workflow_logs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array
+    workflow_logs: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # JSON array
 
     # User interaction
     view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -317,9 +321,7 @@ class WaywoVideoDB(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
-    project: Mapped["WaywoProjectDB"] = relationship(
-        "WaywoProjectDB", backref="videos"
-    )
+    project: Mapped["WaywoProjectDB"] = relationship("WaywoProjectDB", backref="videos")
     segments: Mapped[list["WaywoVideoSegmentDB"]] = relationship(
         "WaywoVideoSegmentDB",
         back_populates="video",
@@ -365,8 +367,12 @@ class WaywoVideoSegmentDB(Base):
         String(50), nullable=False
     )  # hook | introduction | features | audience | closing
     narration_text: Mapped[str] = mapped_column(Text, nullable=False)
-    scene_description: Mapped[str] = mapped_column(Text, nullable=False)  # Original from LLM
-    image_prompt: Mapped[str] = mapped_column(Text, nullable=False)  # Editable, defaults to scene_description
+    scene_description: Mapped[str] = mapped_column(
+        Text, nullable=False
+    )  # Original from LLM
+    image_prompt: Mapped[str] = mapped_column(
+        Text, nullable=False
+    )  # Editable, defaults to scene_description
     visual_style: Mapped[str] = mapped_column(
         String(50), default="abstract", nullable=False
     )  # abstract | screenshot | text_overlay
@@ -376,7 +382,9 @@ class WaywoVideoSegmentDB(Base):
 
     # Audio data
     audio_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    audio_duration_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    audio_duration_seconds: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
 
     # Image data
     image_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

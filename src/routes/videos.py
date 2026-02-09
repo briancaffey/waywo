@@ -28,6 +28,7 @@ class UpdateNarrationRequest(BaseModel):
 class UpdateImagePromptRequest(BaseModel):
     image_prompt: str
 
+
 router = APIRouter()
 
 

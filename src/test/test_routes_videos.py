@@ -66,7 +66,9 @@ def test_list_videos(app_client, sample_video):
 def test_list_videos_with_status(app_client, sample_video):
     """GET /api/waywo-videos?status=completed filters by status."""
     with (
-        patch("src.routes.videos.get_all_videos", return_value=[sample_video]) as mock_get,
+        patch(
+            "src.routes.videos.get_all_videos", return_value=[sample_video]
+        ) as mock_get,
         patch("src.routes.videos.get_video_count", return_value=1),
     ):
         response = app_client.get("/api/waywo-videos?status=completed")
@@ -235,7 +237,9 @@ def sample_segment():
 @pytest.mark.route
 def test_update_segment_narration(app_client, sample_segment):
     """PATCH /api/waywo-videos/segments/{id}/narration updates narration."""
-    updated = sample_segment.model_copy(update={"narration_text": "New narration", "status": "pending"})
+    updated = sample_segment.model_copy(
+        update={"narration_text": "New narration", "status": "pending"}
+    )
     with (
         patch("src.routes.videos.get_segment", side_effect=[sample_segment, updated]),
         patch("src.routes.videos.update_segment_narration", return_value=True),
@@ -277,7 +281,9 @@ def test_update_segment_narration_missing_body(app_client):
 @pytest.mark.route
 def test_update_segment_image_prompt(app_client, sample_segment):
     """PATCH /api/waywo-videos/segments/{id}/image-prompt updates image prompt."""
-    updated = sample_segment.model_copy(update={"image_prompt": "New prompt", "image_path": None})
+    updated = sample_segment.model_copy(
+        update={"image_prompt": "New prompt", "image_path": None}
+    )
     with (
         patch("src.routes.videos.get_segment", side_effect=[sample_segment, updated]),
         patch("src.routes.videos.update_segment_image_prompt", return_value=True),

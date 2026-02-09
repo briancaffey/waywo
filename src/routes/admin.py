@@ -100,9 +100,7 @@ async def get_services_health():
     # Check InvokeAI server
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                f"{INVOKEAI_URL}/api/v1/queue/default/status"
-            )
+            response = await client.get(f"{INVOKEAI_URL}/api/v1/queue/default/status")
             if response.status_code == 200:
                 data = response.json()
                 services["invokeai"] = {
@@ -130,11 +128,15 @@ async def get_services_health():
             if response.status_code == 200:
                 data = response.json()
                 # Response is a dict keyed by language group, each with a "voices" list
-                voice_count = sum(
-                    len(v.get("voices", []))
-                    for v in data.values()
-                    if isinstance(v, dict)
-                ) if isinstance(data, dict) else len(data) if isinstance(data, list) else 0
+                voice_count = (
+                    sum(
+                        len(v.get("voices", []))
+                        for v in data.values()
+                        if isinstance(v, dict)
+                    )
+                    if isinstance(data, dict)
+                    else len(data) if isinstance(data, list) else 0
+                )
                 services["tts"] = {
                     "status": "healthy",
                     "url": TTS_URL,

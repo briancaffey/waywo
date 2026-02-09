@@ -16,7 +16,6 @@ from src.clients.video import (
     assemble_video,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures — synthetic images and audio
 # ---------------------------------------------------------------------------
@@ -37,7 +36,9 @@ def _make_silent_wav(path: str, duration: float = 2.0, sample_rate: int = 44100)
         f.write(struct.pack("<4sI4s", b"RIFF", 36 + data_size, b"WAVE"))
         # fmt chunk
         f.write(
-            struct.pack("<4sIHHIIHH", b"fmt ", 16, 1, 1, sample_rate, sample_rate * 2, 2, 16)
+            struct.pack(
+                "<4sIHHIIHH", b"fmt ", 16, 1, 1, sample_rate, sample_rate * 2, 2, 16
+            )
         )
         # data chunk
         f.write(struct.pack("<4sI", b"data", data_size))
@@ -192,9 +193,7 @@ def test_assemble_video_single_segment():
             }
         ]
 
-        duration = assemble_video(
-            segments, out_path, width=270, height=480, fps=10
-        )
+        duration = assemble_video(segments, out_path, width=270, height=480, fps=10)
 
         assert os.path.exists(out_path)
         assert os.path.getsize(out_path) > 0
@@ -224,9 +223,7 @@ def test_assemble_video_multiple_segments():
             )
 
         out_path = os.path.join(tmpdir, "output.mp4")
-        duration = assemble_video(
-            segments, out_path, width=270, height=480, fps=10
-        )
+        duration = assemble_video(segments, out_path, width=270, height=480, fps=10)
 
         assert os.path.exists(out_path)
         assert os.path.getsize(out_path) > 0
@@ -254,9 +251,7 @@ def test_assemble_video_cut_transition_no_overlap():
             )
 
         out_path = os.path.join(tmpdir, "output.mp4")
-        duration = assemble_video(
-            segments, out_path, width=270, height=480, fps=10
-        )
+        duration = assemble_video(segments, out_path, width=270, height=480, fps=10)
 
         # Two 2s segments + 0.3s gap = 4.3s total
         assert abs(duration - 4.3) < 0.1
@@ -283,7 +278,11 @@ def test_assemble_video_fade_transition_no_overlap():
 
         out_path = os.path.join(tmpdir, "output.mp4")
         duration = assemble_video(
-            segments, out_path, width=270, height=480, fps=10,
+            segments,
+            out_path,
+            width=270,
+            height=480,
+            fps=10,
             transition_duration=0.5,
         )
 

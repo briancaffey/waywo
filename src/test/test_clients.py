@@ -446,7 +446,10 @@ def test_build_ref_img_batch():
     metadata_node = graph["nodes"]["core_metadata:pxJjogXVaB"]
     assert len(metadata_node["ref_images"]) == 1
     ref_img = metadata_node["ref_images"][0]
-    assert ref_img["config"]["image"]["original"]["image"]["image_name"] == "test-image-123.png"
+    assert (
+        ref_img["config"]["image"]["original"]["image"]["image_name"]
+        == "test-image-123.png"
+    )
 
 
 @pytest.mark.client
@@ -625,7 +628,10 @@ async def test_generate_speech_success():
     mock_client.post.assert_called_once()
     # Verify multipart form data was sent (not JSON)
     call_kwargs = mock_client.post.call_args
-    assert call_kwargs.kwargs.get("data") is not None or call_kwargs[1].get("data") is not None
+    assert (
+        call_kwargs.kwargs.get("data") is not None
+        or call_kwargs[1].get("data") is not None
+    )
 
 
 @pytest.mark.client

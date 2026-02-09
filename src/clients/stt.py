@@ -115,9 +115,7 @@ async def transcribe_audio(
             if attempt < max_retries - 1:
                 await asyncio.sleep(2**attempt)
             else:
-                raise STTError(
-                    f"STT request timed out after {max_retries} attempts"
-                )
+                raise STTError(f"STT request timed out after {max_retries} attempts")
 
         except httpx.HTTPStatusError as e:
             logger.error(f"STT service HTTP error: {e.response.status_code}")

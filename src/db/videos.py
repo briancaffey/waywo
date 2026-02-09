@@ -46,9 +46,7 @@ def _segment_from_db(s: WaywoVideoSegmentDB) -> WaywoVideoSegment:
     )
 
 
-def _video_from_db(
-    v: WaywoVideoDB, include_segments: bool = False
-) -> WaywoVideo:
+def _video_from_db(v: WaywoVideoDB, include_segments: bool = False) -> WaywoVideo:
     """Convert a WaywoVideoDB row to a WaywoVideo Pydantic model."""
     segments = []
     if include_segments:
@@ -123,9 +121,7 @@ def get_video(video_id: int, include_segments: bool = True) -> WaywoVideo | None
     """Retrieve a video by ID, optionally with segments."""
     db = get_db_session()
     try:
-        db_video = (
-            db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
-        )
+        db_video = db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
         if db_video is None:
             return None
         return _video_from_db(db_video, include_segments=include_segments)
@@ -208,9 +204,7 @@ def update_video_status(
     """Update the generation status of a video. Returns True if updated."""
     db = get_db_session()
     try:
-        db_video = (
-            db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
-        )
+        db_video = db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
         if db_video is None:
             return False
         db_video.status = status
@@ -233,9 +227,7 @@ def update_video_script(
     """Update the script data on a video after LLM generation. Returns True if updated."""
     db = get_db_session()
     try:
-        db_video = (
-            db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
-        )
+        db_video = db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
         if db_video is None:
             return False
         db_video.video_title = video_title
@@ -258,9 +250,7 @@ def update_video_output(
     """Update the output paths and duration after video assembly. Returns True if updated."""
     db = get_db_session()
     try:
-        db_video = (
-            db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
-        )
+        db_video = db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
         if db_video is None:
             return False
         db_video.video_path = video_path
@@ -276,9 +266,7 @@ def append_video_workflow_log(video_id: int, log_entry: str) -> bool:
     """Append a log entry to the video's workflow_logs. Returns True if updated."""
     db = get_db_session()
     try:
-        db_video = (
-            db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
-        )
+        db_video = db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
         if db_video is None:
             return False
         logs = json.loads(db_video.workflow_logs) if db_video.workflow_logs else []
@@ -294,9 +282,7 @@ def toggle_video_favorite(video_id: int) -> bool | None:
     """Toggle favorite status. Returns new status, or None if not found."""
     db = get_db_session()
     try:
-        db_video = (
-            db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
-        )
+        db_video = db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
         if db_video is None:
             return None
         db_video.is_favorited = not db_video.is_favorited
@@ -310,9 +296,7 @@ def increment_video_view_count(video_id: int) -> int | None:
     """Increment view count. Returns new count, or None if not found."""
     db = get_db_session()
     try:
-        db_video = (
-            db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
-        )
+        db_video = db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
         if db_video is None:
             return None
         db_video.view_count += 1
@@ -326,9 +310,7 @@ def delete_video(video_id: int) -> bool:
     """Delete a video and all its segments (cascade). Returns True if deleted."""
     db = get_db_session()
     try:
-        db_video = (
-            db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
-        )
+        db_video = db.query(WaywoVideoDB).filter(WaywoVideoDB.id == video_id).first()
         if db_video is None:
             return False
         db.delete(db_video)

@@ -224,9 +224,11 @@ def assemble_video(
     # Gentle audio fade-out at the end
     total_duration = final.duration
     fade_time = min(0.3, total_duration * 0.1)
-    final = final.with_effects([
-        afx.AudioFadeOut(fade_time),
-    ])
+    final = final.with_effects(
+        [
+            afx.AudioFadeOut(fade_time),
+        ]
+    )
 
     logger.info(f"Writing video: {total_duration:.1f}s, {width}x{height}, {fps}fps")
 
