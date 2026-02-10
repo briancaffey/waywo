@@ -1,0 +1,13 @@
+# Output files
+output/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# uv
+uv.lock
+
+# Sample audio (keep text.txt)
+# sample/*.wav
