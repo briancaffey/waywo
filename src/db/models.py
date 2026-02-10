@@ -3,6 +3,7 @@ SQLAlchemy ORM models for waywo database.
 """
 
 import json
+import uuid
 from datetime import datetime
 from typing import Optional
 
@@ -435,3 +436,66 @@ class WaywoVideoSegmentDB(Base):
     def set_transcription_dict(self, data: dict | None) -> None:
         """Serialize dict to JSON string."""
         self.transcription_json = json.dumps(data) if data else None
+
+
+class VoiceThreadDB(Base):
+    """SQLAlchemy model for voice chat threads."""
+
+    __tablename__ = "voice_threads"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    title: Mapped[str] = mapped_column(Text, default="New conversation", nullable=False)
+    system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    turns: Mapped[list["VoiceTurnDB"]] = relationship(
+        "VoiceTurnDB",
+        back_populates="thread",
+        order_by="VoiceTurnDB.created_at",
+        cascade="all, delete-orphan",
+    )
+
+
+class VoiceTurnDB(Base):
+    """SQLAlchemy model for individual turns within a voice chat thread."""
+
+    __tablename__ = "voice_turns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    thread_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("voice_threads.id", ondelete="CASCADE"), nullable=False
+    )
+
+    role: Mapped[str] = mapped_column(String(20), nullable=False)  # user | assistant
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    audio_duration_seconds: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
+    tts_voice: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    stt_raw_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    token_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    llm_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    tts_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    stt_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+    thread: Mapped["VoiceThreadDB"] = relationship(
+        "VoiceThreadDB", back_populates="turns"
+    )
+
+    __table_args__ = (
+        Index("ix_voice_turns_thread_id", "thread_id"),
+        Index("ix_voice_turns_thread_created", "thread_id", "created_at"),
+    )

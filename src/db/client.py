@@ -56,6 +56,18 @@ from src.db.stats import (  # noqa: F401
     reset_all_data,
 )
 
+from src.db.voice import (  # noqa: F401
+    create_thread,
+    create_turn,
+    delete_thread,
+    get_thread,
+    get_thread_count,
+    get_turns,
+    list_threads,
+    search_threads,
+    update_thread,
+)
+
 from src.db.videos import (  # noqa: F401
     append_video_workflow_log,
     get_all_videos,

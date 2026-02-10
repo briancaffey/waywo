@@ -227,3 +227,30 @@ class WaywoVideo(BaseModel):
 
     # Segments (populated when fetching with detail)
     segments: list[WaywoVideoSegment] = Field(default_factory=list)
+
+
+class VoiceTurn(BaseModel):
+    """A single turn in a voice chat conversation."""
+
+    id: int
+    thread_id: str
+    role: str  # user | assistant
+    text: str
+    audio_duration_seconds: Optional[float] = None
+    tts_voice: Optional[str] = None
+    token_count: Optional[int] = None
+    llm_duration_ms: Optional[int] = None
+    tts_duration_ms: Optional[int] = None
+    stt_duration_ms: Optional[int] = None
+    created_at: datetime
+
+
+class VoiceThread(BaseModel):
+    """A voice chat conversation thread."""
+
+    id: str
+    title: str
+    system_prompt: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    turns: list[VoiceTurn] = Field(default_factory=list)

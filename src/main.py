@@ -16,6 +16,7 @@ from src.routes import (
     projects,
     search,
     videos,
+    voice,
     workflows,
 )
 
@@ -49,6 +50,7 @@ app.include_router(projects.router)
 app.include_router(search.router)
 app.include_router(admin.router)
 app.include_router(videos.router)
+app.include_router(voice.router)
 app.include_router(workflows.router)
 
 

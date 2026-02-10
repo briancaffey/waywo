@@ -36,6 +36,11 @@ TTS_URL = os.getenv("TTS_URL", "http://192.168.6.3:9000")
 
 # Speech-to-Text (Nemotron Speech Streaming)
 STT_URL = os.getenv("STT_URL", "http://192.168.5.96:8001")
+STT_WS_URL = os.getenv(
+    "STT_WS_URL",
+    STT_URL.replace("http://", "ws://").replace("https://", "wss://")
+    + "/ws/transcribe",
+)
 
 # Video generation defaults
 VIDEO_WIDTH = int(os.getenv("VIDEO_WIDTH", "1080"))

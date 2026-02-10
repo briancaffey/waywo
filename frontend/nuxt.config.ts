@@ -9,6 +9,11 @@ export default defineNuxtConfig({
       prefix: 'Waywo',
       extensions: ['.vue'],
     },
+    {
+      path: '~/components/voice',
+      prefix: 'Voice',
+      extensions: ['.vue'],
+    },
   ],
   css: ['~/assets/css/tailwind.css'],
   vite: {

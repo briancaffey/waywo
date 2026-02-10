@@ -86,7 +86,7 @@ What's inside
   [Nuxt 4 Frontend]{.text-primary}
 
   #description
-  Modern SPA with 11 pages built on Nuxt 4, shadcn/ui, and Tailwind CSS. Browse, filter, search, and chat with your project data.
+  Modern SPA with 12 pages built on Nuxt 4, shadcn/ui, and Tailwind CSS. Browse, filter, search, chat, and talk to your project data.
   :::
 
   :::u-page-feature
@@ -99,6 +99,18 @@ What's inside
 
   #description
   45+ endpoints covering posts, comments, projects, semantic search, chatbot, admin operations, and workflow inspection.
+  :::
+
+  :::u-page-feature
+  ---
+  icon: i-lucide-audio-waveform
+  to: /voice-mode/overview
+  ---
+  #title
+  [Voice Mode]{.text-primary}
+
+  #description
+  Speech-to-speech LLM interaction over WebSocket with real-time STT, TTS voice selection, persistent threads, and debug telemetry.
   :::
 
   :::u-page-feature
