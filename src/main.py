@@ -8,7 +8,16 @@ from src.db.database import init_db
 from src.settings import MEDIA_DIR
 from src.tracing import init_tracing
 
-from src.routes import admin, comments, health, posts, projects, search, workflows
+from src.routes import (
+    admin,
+    comments,
+    health,
+    posts,
+    projects,
+    search,
+    videos,
+    workflows,
+)
 
 app = FastAPI(
     title="Waywo Backend",
@@ -39,6 +48,7 @@ app.include_router(comments.router)
 app.include_router(projects.router)
 app.include_router(search.router)
 app.include_router(admin.router)
+app.include_router(videos.router)
 app.include_router(workflows.router)
 
 

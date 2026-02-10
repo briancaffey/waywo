@@ -55,3 +55,28 @@ from src.db.stats import (  # noqa: F401
     get_database_stats,
     reset_all_data,
 )
+
+from src.db.videos import (  # noqa: F401
+    append_video_workflow_log,
+    get_all_videos,
+    create_segments,
+    create_video,
+    delete_segment,
+    delete_video,
+    get_segment,
+    get_segments_for_video,
+    get_video,
+    get_video_count,
+    get_video_feed,
+    get_videos_for_project,
+    increment_video_view_count,
+    toggle_video_favorite,
+    update_segment_audio,
+    update_segment_image,
+    update_segment_image_prompt,
+    update_segment_narration,
+    update_segment_status,
+    update_video_output,
+    update_video_script,
+    update_video_status,
+)

@@ -26,6 +26,27 @@ from src.clients.firecrawl import (
     should_skip_url,
 )
 from src.clients.hn import fetch_item
+from src.clients.invokeai import (
+    InvokeAIError,
+    GeneratedImage,
+    generate_image,
+    check_invokeai_health,
+    _build_txt2img_batch,
+    _build_ref_img_batch,
+)
+from src.clients.tts import (
+    TTSError,
+    generate_speech,
+    list_voices,
+    check_tts_health,
+)
+from src.clients.stt import (
+    STTError,
+    WordTimestamp,
+    TranscriptionResult,
+    transcribe_audio,
+    check_stt_health,
+)
 
 # ---------------------------------------------------------------------------
 # Embedding client tests
@@ -357,3 +378,480 @@ def test_hn_fetch_item_null_response():
         result = fetch_item(12345)
 
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# InvokeAI client tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.client
+def test_build_txt2img_batch():
+    """_build_txt2img_batch creates a valid batch payload."""
+    batch = _build_txt2img_batch(
+        prompt="a red cat",
+        width=512,
+        height=768,
+        num_steps=8,
+        seed=42,
+    )
+
+    assert batch["queue_id"] == "default"
+    graph = batch["batch"]["graph"]
+
+    # Check prompt was set
+    prompt_node = graph["nodes"]["positive_prompt:CjR0mYpz31"]
+    assert prompt_node["value"] == "a red cat"
+
+    # Check seed was set
+    seed_node = graph["nodes"]["seed:B3us1QPx5h"]
+    assert seed_node["value"] == 42
+
+    # Check dimensions and steps on denoise node
+    denoise_node = graph["nodes"]["flux2_denoise:oTqFW3KTNk"]
+    assert denoise_node["width"] == 512
+    assert denoise_node["height"] == 768
+    assert denoise_node["num_steps"] == 8
+
+    # Check dimensions and steps on metadata node
+    metadata_node = graph["nodes"]["core_metadata:azr5jlV6MZ"]
+    assert metadata_node["width"] == 512
+    assert metadata_node["height"] == 768
+    assert metadata_node["steps"] == 8
+
+
+@pytest.mark.client
+def test_build_ref_img_batch():
+    """_build_ref_img_batch creates a valid batch payload with reference image."""
+    batch = _build_ref_img_batch(
+        prompt="cartoon style",
+        reference_image_name="test-image-123.png",
+        width=1024,
+        height=1024,
+        num_steps=16,
+        seed=99,
+    )
+
+    graph = batch["batch"]["graph"]
+
+    # Check prompt was set
+    prompt_node = graph["nodes"]["positive_prompt:DpqaYB9S7t"]
+    assert prompt_node["value"] == "cartoon style"
+
+    # Check reference image was set on kontext node
+    kontext_node = graph["nodes"]["flux_kontext:HYkcPvWDua"]
+    assert kontext_node["image"]["image_name"] == "test-image-123.png"
+
+    # Check ref_images in metadata
+    metadata_node = graph["nodes"]["core_metadata:pxJjogXVaB"]
+    assert len(metadata_node["ref_images"]) == 1
+    ref_img = metadata_node["ref_images"][0]
+    assert (
+        ref_img["config"]["image"]["original"]["image"]["image_name"]
+        == "test-image-123.png"
+    )
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_generate_image_success():
+    """generate_image returns a GeneratedImage on success."""
+    # Mock the three stages: submit -> poll -> extract -> download
+
+    # 1. Submit batch response
+    submit_response = MagicMock()
+    submit_response.status_code = 200
+    submit_response.json.return_value = {
+        "batch": {"batch_id": "batch-123"},
+        "item_ids": [1],
+        "queue_id": "default",
+    }
+    submit_response.raise_for_status = MagicMock()
+
+    # 2. Batch status response (completed)
+    status_response = MagicMock()
+    status_response.status_code = 200
+    status_response.json.return_value = {
+        "completed": 1,
+        "failed": 0,
+        "total": 1,
+    }
+
+    # 3. Queue item response (with image result)
+    item_response = MagicMock()
+    item_response.status_code = 200
+    item_response.json.return_value = {
+        "session": {
+            "results": {
+                "canvas_output:rHGkBPcPOE": {
+                    "type": "image_output",
+                    "image": {"image_name": "generated-abc.png"},
+                    "width": 1024,
+                    "height": 1024,
+                }
+            }
+        }
+    }
+
+    # 4. Download response
+    download_response = MagicMock()
+    download_response.status_code = 200
+    download_response.content = b"fake-image-bytes"
+
+    mock_client = AsyncMock()
+    # First call: POST (submit), then GET (status), GET (item), GET (download)
+    mock_client.post.return_value = submit_response
+    mock_client.get.side_effect = [status_response, item_response, download_response]
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await generate_image(
+            prompt="a blue sky",
+            width=1024,
+            height=1024,
+            seed=42,
+            invokeai_url="http://fake:9090",
+            max_retries=1,
+        )
+
+    assert isinstance(result, GeneratedImage)
+    assert result.image_name == "generated-abc.png"
+    assert result.image_bytes == b"fake-image-bytes"
+    assert result.width == 1024
+    assert result.height == 1024
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_generate_image_batch_failure():
+    """generate_image raises InvokeAIError when batch fails."""
+    # Submit succeeds
+    submit_response = MagicMock()
+    submit_response.status_code = 200
+    submit_response.json.return_value = {
+        "batch": {"batch_id": "batch-fail"},
+        "item_ids": [1],
+        "queue_id": "default",
+    }
+    submit_response.raise_for_status = MagicMock()
+
+    # Status shows failure
+    status_response = MagicMock()
+    status_response.status_code = 200
+    status_response.json.return_value = {
+        "completed": 0,
+        "failed": 1,
+        "total": 1,
+    }
+
+    mock_client = AsyncMock()
+    mock_client.post.return_value = submit_response
+    mock_client.get.return_value = status_response
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("httpx.AsyncClient", return_value=mock_client),
+        pytest.raises(InvokeAIError, match="failed"),
+    ):
+        await generate_image(
+            prompt="a blue sky",
+            seed=42,
+            invokeai_url="http://fake:9090",
+            max_retries=1,
+        )
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_check_invokeai_health_healthy():
+    """check_invokeai_health returns True when service is up."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await check_invokeai_health("http://fake:9090")
+
+    assert result is True
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_check_invokeai_health_down():
+    """check_invokeai_health returns False when service is down."""
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = httpx.ConnectError("Connection refused")
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await check_invokeai_health("http://fake:9090")
+
+    assert result is False
+
+
+# ---------------------------------------------------------------------------
+# TTS client tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_generate_speech_success():
+    """generate_speech returns WAV bytes on success."""
+    fake_wav = b"RIFF\x00\x00\x00\x00WAVEfmt fake-audio-data"
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.content = fake_wav
+    mock_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await generate_speech(
+            text="Hello world",
+            tts_url="http://fake:9000",
+            max_retries=1,
+        )
+
+    assert result == fake_wav
+    mock_client.post.assert_called_once()
+    # Verify multipart form data was sent (not JSON)
+    call_kwargs = mock_client.post.call_args
+    assert (
+        call_kwargs.kwargs.get("data") is not None
+        or call_kwargs[1].get("data") is not None
+    )
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_generate_speech_empty_text():
+    """generate_speech raises TTSError for empty text."""
+    with pytest.raises(TTSError, match="Text cannot be empty"):
+        await generate_speech(text="", tts_url="http://fake:9000")
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_generate_speech_timeout_retry():
+    """generate_speech retries on timeout."""
+    mock_client = AsyncMock()
+    mock_client.post.side_effect = httpx.TimeoutException("timeout")
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("httpx.AsyncClient", return_value=mock_client),
+        pytest.raises(TTSError, match="timed out"),
+    ):
+        await generate_speech(
+            text="Hello",
+            tts_url="http://fake:9000",
+            max_retries=2,
+        )
+
+    assert mock_client.post.call_count == 2
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_list_voices_success():
+    """list_voices returns voice list on success."""
+    fake_voices = [{"name": "English-US.Female-1"}, {"name": "English-US.Male-1"}]
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = fake_voices
+    mock_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await list_voices(tts_url="http://fake:9000")
+
+    assert result == fake_voices
+    assert len(result) == 2
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_check_tts_health_healthy():
+    """check_tts_health returns True when service is up."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await check_tts_health("http://fake:9000")
+
+    assert result is True
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_check_tts_health_down():
+    """check_tts_health returns False when service is down."""
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = httpx.ConnectError("Connection refused")
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await check_tts_health("http://fake:9000")
+
+    assert result is False
+
+
+# ---------------------------------------------------------------------------
+# STT client tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_transcribe_audio_success():
+    """transcribe_audio returns TranscriptionResult on success."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "text": "hello world",
+    }
+    mock_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await transcribe_audio(
+            audio_bytes=b"fake-audio-data",
+            timestamps=False,
+            stt_url="http://fake:8001",
+            max_retries=1,
+        )
+
+    assert isinstance(result, TranscriptionResult)
+    assert result.text == "hello world"
+    assert result.words is None
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_transcribe_audio_with_timestamps():
+    """transcribe_audio parses word-level timestamps."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "text": "hello world",
+        "words": [
+            {"word": "hello", "start": 0.0, "end": 0.32},
+            {"word": "world", "start": 0.35, "end": 0.72},
+        ],
+    }
+    mock_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await transcribe_audio(
+            audio_bytes=b"fake-audio-data",
+            timestamps=True,
+            stt_url="http://fake:8001",
+            max_retries=1,
+        )
+
+    assert isinstance(result, TranscriptionResult)
+    assert result.text == "hello world"
+    assert result.words is not None
+    assert len(result.words) == 2
+    assert result.words[0].word == "hello"
+    assert result.words[0].start == 0.0
+    assert result.words[0].end == 0.32
+    assert result.words[1].word == "world"
+    assert result.words[1].start == 0.35
+    assert result.words[1].end == 0.72
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_transcribe_audio_empty_bytes():
+    """transcribe_audio raises STTError for empty audio."""
+    with pytest.raises(STTError, match="Audio bytes cannot be empty"):
+        await transcribe_audio(audio_bytes=b"", stt_url="http://fake:8001")
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_transcribe_audio_timeout_retry():
+    """transcribe_audio retries on timeout."""
+    mock_client = AsyncMock()
+    mock_client.post.side_effect = httpx.TimeoutException("timeout")
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("httpx.AsyncClient", return_value=mock_client),
+        pytest.raises(STTError, match="timed out"),
+    ):
+        await transcribe_audio(
+            audio_bytes=b"fake-audio",
+            stt_url="http://fake:8001",
+            max_retries=2,
+        )
+
+    assert mock_client.post.call_count == 2
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_check_stt_health_healthy():
+    """check_stt_health returns True when service is up."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await check_stt_health("http://fake:8001")
+
+    assert result is True
+
+
+@pytest.mark.client
+@pytest.mark.asyncio
+async def test_check_stt_health_down():
+    """check_stt_health returns False when service is down."""
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = httpx.ConnectError("Connection refused")
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await check_stt_health("http://fake:8001")
+
+    assert result is False

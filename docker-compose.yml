@@ -7,6 +7,9 @@ x-common-env: &common-env
   RERANK_URL: http://192.168.5.173:8001
   LLM_BASE_URL: http://192.168.6.19:8002/v1
   LLM_MODEL_NAME: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+  INVOKEAI_URL: ${INVOKEAI_URL:-http://192.168.5.173:9090}
+  TTS_URL: ${TTS_URL:-http://192.168.6.3:9000}
+  STT_URL: ${STT_URL:-http://192.168.5.96:8001}
   DATA_DIR: /app/data
   LOG_LEVEL: DEBUG
   # Phoenix observability
@@ -17,7 +20,6 @@ x-common-volumes: &common-volumes
   - ./src:/app/src
   - ./media:/app/media
   - ./data:/app/data
-  - ./waywo.yml:/app/waywo.yml:ro
   - /app/.venv
 
 x-common-depends: &common-depends
@@ -91,7 +93,7 @@ services:
     environment:
       <<: *common-env
     volumes: *common-volumes
-    command: /app/.venv/bin/watchmedo auto-restart --directory=/app/src --pattern=*.py --recursive -- /app/.venv/bin/celery -A src.worker.app worker --loglevel=info --queues=waywo --concurrency=1
+    command: /app/.venv/bin/watchmedo auto-restart --directory=/app/src --pattern=*.py --recursive -- /app/.venv/bin/celery -A src.worker.app worker --loglevel=info --queues=waywo --concurrency=4
     depends_on:
       redis:
         condition: service_healthy
@@ -102,12 +104,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test:
-        [
-          "CMD",
-          "/app/.venv/bin/python",
-          "/app/src/worker/healthcheck.py",
-        ]
+      test: ["CMD", "/app/.venv/bin/python", "/app/src/worker/healthcheck.py"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -122,7 +119,6 @@ services:
       - ./src:/app/src
       - ./media:/app/media
       - ./data:/app/data
-      - ./waywo.yml:/app/waywo.yml:ro
       - /app/.venv
       - celery-beat-data:/app/celery-data
     command: /app/.venv/bin/watchmedo auto-restart --directory=/app/src --pattern=*.py --recursive -- /app/.venv/bin/celery -A src.worker.app beat --loglevel=info
@@ -134,8 +130,7 @@ services:
     networks:
       - waywo-network
     healthcheck:
-      test:
-        ["CMD", "/app/.venv/bin/python", "/app/src/worker/healthcheck.py"]
+      test: ["CMD", "/app/.venv/bin/python", "/app/src/worker/healthcheck.py"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -200,7 +195,6 @@ services:
       - ./media:/app/media
       - ./data:/app/data
       - ./notebooks:/app/notebooks
-      - ./waywo.yml:/app/waywo.yml:ro
       - /app/.venv
     command: /app/.venv/bin/python -m jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --NotebookApp.token='' --NotebookApp.password='' --notebook-dir=/app/notebooks --allow-root
     depends_on:

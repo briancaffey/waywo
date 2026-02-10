@@ -62,28 +62,44 @@ async def index():
 
 class TranscribeBase64Request(BaseModel):
     audio_base64: str
+    timestamps: bool = False
+
+
+class WordTimestamp(BaseModel):
+    word: str
+    start: float
+    end: float
 
 
 class TranscribeResponse(BaseModel):
     text: str
+    words: list[WordTimestamp] | None = None
 
 
-def transcribe_audio_file(audio_path: str) -> str:
-    """Transcribe a single audio file and return the text."""
+def transcribe_audio_file(audio_path: str, timestamps: bool = False) -> dict:
+    """Transcribe a single audio file and return the text and optional word timestamps."""
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
     try:
-        results = model.transcribe([audio_path])
+        results = model.transcribe([audio_path], timestamps=timestamps)
         if isinstance(results, tuple):
             results = results[0]
         if not results:
-            return ""
+            return {"text": "", "words": None}
         result = results[0]
-        # Handle Hypothesis objects from NeMo
-        if hasattr(result, "text"):
-            return result.text
-        return str(result)
+
+        text = result.text if hasattr(result, "text") else str(result)
+
+        words = None
+        if timestamps and hasattr(result, "timestamp") and result.timestamp:
+            word_ts = result.timestamp.get("word", [])
+            words = [
+                {"word": w["word"], "start": w["start"], "end": w["end"]}
+                for w in word_ts
+            ]
+
+        return {"text": text, "words": words}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
@@ -131,8 +147,8 @@ async def stream_transcription(audio_path: str):
 
 
 @app.post("/transcribe", response_model=TranscribeResponse)
-async def transcribe_upload(file: UploadFile = File(...)):
-    """Transcribe an uploaded WAV audio file."""
+async def transcribe_upload(file: UploadFile = File(...), timestamps: bool = False):
+    """Transcribe an uploaded WAV audio file. Set timestamps=true for word-level timing."""
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
@@ -145,15 +161,15 @@ async def transcribe_upload(file: UploadFile = File(...)):
         tmp_path = tmp.name
 
     try:
-        text = transcribe_audio_file(tmp_path)
-        return TranscribeResponse(text=text)
+        result = transcribe_audio_file(tmp_path, timestamps=timestamps)
+        return TranscribeResponse(**result)
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
 
 @app.post("/transcribe/base64", response_model=TranscribeResponse)
 async def transcribe_base64(request: TranscribeBase64Request):
-    """Transcribe base64-encoded WAV audio."""
+    """Transcribe base64-encoded WAV audio. Set timestamps=true in the request body for word-level timing."""
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
@@ -167,8 +183,8 @@ async def transcribe_base64(request: TranscribeBase64Request):
         tmp_path = tmp.name
 
     try:
-        text = transcribe_audio_file(tmp_path)
-        return TranscribeResponse(text=text)
+        result = transcribe_audio_file(tmp_path, timestamps=request.timestamps)
+        return TranscribeResponse(**result)
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 

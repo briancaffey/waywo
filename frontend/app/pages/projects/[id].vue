@@ -125,26 +125,54 @@
               size="sm"
               @click="reprocessProject"
               :disabled="isReprocessing"
-              class="text-muted-foreground"
+              :class="{
+                'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20': btnFeedback.getFeedback('reprocess') === 'confirming',
+                'bg-green-500/10 text-green-600': btnFeedback.getFeedback('reprocess') === 'success',
+                'bg-destructive/10 text-destructive': btnFeedback.getFeedback('reprocess') === 'error',
+                'text-muted-foreground': !['confirming', 'success', 'error'].includes(btnFeedback.getFeedback('reprocess')),
+              }"
             >
               <Icon
-                :name="isReprocessing ? 'lucide:loader-2' : 'lucide:rotate-cw'"
+                :name="isReprocessing ? 'lucide:loader-2' : btnFeedback.getFeedback('reprocess') === 'confirming' ? 'lucide:alert-triangle' : btnFeedback.getFeedback('reprocess') === 'success' ? 'lucide:check' : btnFeedback.getFeedback('reprocess') === 'error' ? 'lucide:x' : 'lucide:rotate-cw'"
                 :class="['h-3.5 w-3.5 mr-1.5', isReprocessing ? 'animate-spin' : '']"
               />
-              {{ isReprocessing ? 'Queuing...' : 'Reprocess' }}
+              {{ isReprocessing ? 'Queuing...' : btnFeedback.getFeedback('reprocess') === 'confirming' ? 'Sure?' : btnFeedback.getFeedback('reprocess') === 'success' ? 'Queued' : btnFeedback.getFeedback('reprocess') === 'error' ? 'Failed' : 'Reprocess' }}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              @click="generateVideo"
+              :disabled="isGeneratingVideo"
+              :class="{
+                'bg-green-500/10 text-green-600': btnFeedback.getFeedback('genvideo') === 'success',
+                'bg-destructive/10 text-destructive': btnFeedback.getFeedback('genvideo') === 'error',
+                'text-muted-foreground': !['success', 'error'].includes(btnFeedback.getFeedback('genvideo')),
+              }"
+            >
+              <Icon
+                :name="isGeneratingVideo ? 'lucide:loader-2' : btnFeedback.getFeedback('genvideo') === 'success' ? 'lucide:check' : btnFeedback.getFeedback('genvideo') === 'error' ? 'lucide:x' : 'lucide:video'"
+                :class="['h-3.5 w-3.5 mr-1.5', isGeneratingVideo ? 'animate-spin' : '']"
+              />
+              {{ isGeneratingVideo ? 'Starting...' : btnFeedback.getFeedback('genvideo') === 'success' ? 'Started' : btnFeedback.getFeedback('genvideo') === 'error' ? 'Failed' : 'Generate Video' }}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               @click="deleteProject"
               :disabled="isDeleting"
-              class="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              :class="[
+                btnFeedback.getFeedback('delete') === 'confirming'
+                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                  : btnFeedback.getFeedback('delete') === 'error'
+                    ? 'bg-destructive/10 text-destructive'
+                    : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10'
+              ]"
             >
               <Icon
-                :name="isDeleting ? 'lucide:loader-2' : 'lucide:trash-2'"
+                :name="isDeleting ? 'lucide:loader-2' : btnFeedback.getFeedback('delete') === 'confirming' ? 'lucide:alert-triangle' : btnFeedback.getFeedback('delete') === 'error' ? 'lucide:x' : 'lucide:trash-2'"
                 :class="['h-3.5 w-3.5 mr-1.5', isDeleting ? 'animate-spin' : '']"
               />
-              {{ isDeleting ? 'Deleting...' : 'Delete' }}
+              {{ isDeleting ? 'Deleting...' : btnFeedback.getFeedback('delete') === 'confirming' ? 'Sure?' : btnFeedback.getFeedback('delete') === 'error' ? 'Failed' : 'Delete' }}
             </Button>
           </div>
         </div>
@@ -392,6 +420,59 @@
             </Card>
           </section>
 
+          <!-- Videos -->
+          <section>
+            <div class="flex items-center gap-2.5 mb-3">
+              <Icon name="lucide:video" class="h-5 w-5 text-muted-foreground" />
+              <h2 class="text-lg font-semibold">Videos</h2>
+              <Badge v-if="projectVideos.length > 0" variant="secondary">{{ projectVideos.length }}</Badge>
+            </div>
+            <Card>
+              <div v-if="isLoadingVideos" class="flex items-center gap-2.5 text-muted-foreground p-6">
+                <Icon name="lucide:loader-2" class="h-4 w-4 animate-spin" />
+                <span class="text-sm">Loading videos...</span>
+              </div>
+              <div v-else-if="projectVideos.length === 0" class="text-sm text-muted-foreground p-6">
+                No videos generated yet.
+              </div>
+              <div v-else class="divide-y">
+                <a
+                  v-for="vid in projectVideos"
+                  :key="vid.id"
+                  :href="`/videos/${vid.id}`"
+                  class="flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                >
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium text-sm truncate">
+                        {{ vid.video_title || `Video #${vid.id}` }}
+                      </span>
+                      <Badge variant="outline" class="text-xs flex-shrink-0">v{{ vid.version }}</Badge>
+                    </div>
+                    <div class="text-xs text-muted-foreground mt-0.5">
+                      {{ formatISODate(vid.created_at) }}
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 flex-shrink-0">
+                    <Icon
+                      name="lucide:star"
+                      :class="[
+                        'h-4 w-4',
+                        vid.is_favorited ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/30'
+                      ]"
+                    />
+                    <Badge
+                      :variant="vid.status === 'completed' ? 'default' : vid.status === 'failed' ? 'destructive' : 'secondary'"
+                      class="text-xs"
+                    >
+                      {{ vid.status }}
+                    </Badge>
+                  </div>
+                </a>
+              </div>
+            </Card>
+          </section>
+
         </div>
       </div>
     </div>
@@ -399,7 +480,7 @@
 </template>
 
 <script setup lang="ts">
-import type { WaywoProject, WaywoComment, WaywoPost } from '~/types/models'
+import type { WaywoProject, WaywoComment, WaywoPost, WaywoVideo } from '~/types/models'
 
 // Get route params
 const route = useRoute()
@@ -426,6 +507,10 @@ const isReprocessing = ref(false)
 const isTogglingBookmark = ref(false)
 const similarProjects = ref<{ project: WaywoProject; similarity: number }[]>([])
 const isLoadingSimilar = ref(false)
+const projectVideos = ref<WaywoVideo[]>([])
+const isLoadingVideos = ref(false)
+const isGeneratingVideo = ref(false)
+const btnFeedback = useButtonFeedback()
 
 // Fetch project from API
 async function fetchProject() {
@@ -443,8 +528,9 @@ async function fetchProject() {
     sourceComment.value = response.source_comment
     parentPost.value = response.parent_post
 
-    // Fetch similar projects in parallel (non-blocking)
+    // Fetch similar projects and videos in parallel (non-blocking)
     fetchSimilarProjects()
+    fetchProjectVideos()
   } catch (err) {
     console.error('Failed to fetch project:', err)
     fetchError.value = 'Failed to fetch project. It may not exist.'
@@ -472,10 +558,7 @@ async function fetchSimilarProjects() {
 // Delete project
 async function deleteProject() {
   if (isDeleting.value) return
-
-  if (!confirm('Are you sure you want to delete this project?')) {
-    return
-  }
+  if (!btnFeedback.confirmOrProceed('delete')) return
 
   isDeleting.value = true
 
@@ -483,11 +566,10 @@ async function deleteProject() {
     await $fetch(`${config.public.apiBase}/api/waywo-projects/${projectId.value}`, {
       method: 'DELETE'
     })
-    // Redirect to projects list after deletion
     window.location.href = '/projects'
   } catch (err) {
     console.error('Failed to delete project:', err)
-    alert('Failed to delete project. Please try again.')
+    btnFeedback.showError('delete')
     isDeleting.value = false
   }
 }
@@ -495,10 +577,7 @@ async function deleteProject() {
 // Reprocess project (reprocess the source comment)
 async function reprocessProject() {
   if (isReprocessing.value || !project.value) return
-
-  if (!confirm('This will delete all projects from this comment and reprocess it. Continue?')) {
-    return
-  }
+  if (!btnFeedback.confirmOrProceed('reprocess')) return
 
   isReprocessing.value = true
 
@@ -506,10 +585,10 @@ async function reprocessProject() {
     await $fetch(`${config.public.apiBase}/api/waywo-comments/${project.value.source_comment_id}/process`, {
       method: 'POST'
     })
-    alert(`Reprocessing queued for comment ${project.value.source_comment_id}. Refresh later to see updated projects.`)
+    btnFeedback.showSuccess('reprocess')
   } catch (err) {
     console.error('Failed to reprocess project:', err)
-    alert('Failed to queue reprocessing. Please try again.')
+    btnFeedback.showError('reprocess')
   } finally {
     isReprocessing.value = false
   }
@@ -531,6 +610,43 @@ async function toggleBookmark() {
     console.error('Failed to toggle bookmark:', err)
   } finally {
     isTogglingBookmark.value = false
+  }
+}
+
+// Fetch videos for this project
+async function fetchProjectVideos() {
+  isLoadingVideos.value = true
+  try {
+    const response = await $fetch<{
+      videos: WaywoVideo[]
+      total: number
+      project_id: number
+    }>(`${config.public.apiBase}/api/waywo-projects/${projectId.value}/videos`)
+    projectVideos.value = response.videos
+  } catch (err) {
+    console.error('Failed to fetch project videos:', err)
+  } finally {
+    isLoadingVideos.value = false
+  }
+}
+
+// Generate video for this project
+async function generateVideo() {
+  if (isGeneratingVideo.value) return
+
+  isGeneratingVideo.value = true
+
+  try {
+    await $fetch(`${config.public.apiBase}/api/waywo-projects/${projectId.value}/generate-video`, {
+      method: 'POST'
+    })
+    btnFeedback.showSuccess('genvideo')
+    fetchProjectVideos()
+  } catch (err) {
+    console.error('Failed to generate video:', err)
+    btnFeedback.showError('genvideo')
+  } finally {
+    isGeneratingVideo.value = false
   }
 }
 

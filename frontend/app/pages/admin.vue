@@ -30,7 +30,7 @@
           <Icon name="lucide:loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
 
-        <div v-else-if="servicesHealth" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div v-else-if="servicesHealth" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <!-- LLM Server -->
           <div class="p-4 border rounded-lg">
             <div class="flex items-center gap-2 mb-2">
@@ -87,6 +87,66 @@
               </p>
               <p v-if="servicesHealth.reranker?.error" class="text-destructive">
                 Error: {{ servicesHealth.reranker.error }}
+              </p>
+            </div>
+          </div>
+
+          <!-- InvokeAI Server -->
+          <div class="p-4 border rounded-lg">
+            <div class="flex items-center gap-2 mb-2">
+              <Icon
+                :name="servicesHealth.invokeai?.status === 'healthy' ? 'lucide:check-circle' : 'lucide:x-circle'"
+                :class="servicesHealth.invokeai?.status === 'healthy' ? 'text-green-500' : 'text-destructive'"
+                class="h-5 w-5"
+              />
+              <span class="font-medium">InvokeAI</span>
+            </div>
+            <div class="text-sm text-muted-foreground space-y-1">
+              <p class="truncate" :title="servicesHealth.invokeai?.url">{{ servicesHealth.invokeai?.url }}</p>
+              <p v-if="servicesHealth.invokeai?.status === 'healthy' && servicesHealth.invokeai?.queue_size != null">
+                Queue: <span class="font-mono text-xs">{{ servicesHealth.invokeai.queue_size }}</span>
+              </p>
+              <p v-if="servicesHealth.invokeai?.error" class="text-destructive">
+                Error: {{ servicesHealth.invokeai.error }}
+              </p>
+            </div>
+          </div>
+
+          <!-- TTS Server -->
+          <div class="p-4 border rounded-lg">
+            <div class="flex items-center gap-2 mb-2">
+              <Icon
+                :name="servicesHealth.tts?.status === 'healthy' ? 'lucide:check-circle' : 'lucide:x-circle'"
+                :class="servicesHealth.tts?.status === 'healthy' ? 'text-green-500' : 'text-destructive'"
+                class="h-5 w-5"
+              />
+              <span class="font-medium">Text-to-Speech</span>
+            </div>
+            <div class="text-sm text-muted-foreground space-y-1">
+              <p class="truncate" :title="servicesHealth.tts?.url">{{ servicesHealth.tts?.url }}</p>
+              <p v-if="servicesHealth.tts?.status === 'healthy' && servicesHealth.tts?.voices != null">
+                Voices: <span class="font-mono text-xs">{{ servicesHealth.tts.voices }}</span>
+              </p>
+              <p v-if="servicesHealth.tts?.error" class="text-destructive">
+                Error: {{ servicesHealth.tts.error }}
+              </p>
+            </div>
+          </div>
+
+          <!-- STT Server -->
+          <div class="p-4 border rounded-lg">
+            <div class="flex items-center gap-2 mb-2">
+              <Icon
+                :name="servicesHealth.stt?.status === 'healthy' ? 'lucide:check-circle' : 'lucide:x-circle'"
+                :class="servicesHealth.stt?.status === 'healthy' ? 'text-green-500' : 'text-destructive'"
+                class="h-5 w-5"
+              />
+              <span class="font-medium">Speech-to-Text</span>
+            </div>
+            <div class="text-sm text-muted-foreground space-y-1">
+              <p class="truncate" :title="servicesHealth.stt?.url">{{ servicesHealth.stt?.url }}</p>
+              <p v-if="servicesHealth.stt?.error" class="text-destructive">
+                Error: {{ servicesHealth.stt.error }}
               </p>
             </div>
           </div>
@@ -264,16 +324,20 @@
             </div>
             <Button
               variant="outline"
-              class="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              :class="[
+                btnFeedback.getFeedback('reset-sqlite') === 'confirming'
+                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90 border-destructive'
+                  : 'border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground'
+              ]"
               @click="resetSqlite"
               :disabled="isResetting"
             >
               <Icon
-                :name="isResetting === 'sqlite' ? 'lucide:loader-2' : 'lucide:trash-2'"
+                :name="isResetting === 'sqlite' ? 'lucide:loader-2' : btnFeedback.getFeedback('reset-sqlite') === 'confirming' ? 'lucide:alert-triangle' : 'lucide:trash-2'"
                 :class="isResetting === 'sqlite' ? 'animate-spin' : ''"
                 class="mr-2 h-4 w-4"
               />
-              Reset
+              {{ btnFeedback.getFeedback('reset-sqlite') === 'confirming' ? 'Sure?' : 'Reset' }}
             </Button>
           </div>
 
@@ -292,16 +356,20 @@
             </div>
             <Button
               variant="outline"
-              class="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              :class="[
+                btnFeedback.getFeedback('reset-redis') === 'confirming'
+                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90 border-destructive'
+                  : 'border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground'
+              ]"
               @click="resetRedis"
               :disabled="isResetting"
             >
               <Icon
-                :name="isResetting === 'redis' ? 'lucide:loader-2' : 'lucide:trash-2'"
+                :name="isResetting === 'redis' ? 'lucide:loader-2' : btnFeedback.getFeedback('reset-redis') === 'confirming' ? 'lucide:alert-triangle' : 'lucide:trash-2'"
                 :class="isResetting === 'redis' ? 'animate-spin' : ''"
                 class="mr-2 h-4 w-4"
               />
-              Reset
+              {{ btnFeedback.getFeedback('reset-redis') === 'confirming' ? 'Sure?' : 'Reset' }}
             </Button>
           </div>
 
@@ -322,13 +390,16 @@
               variant="destructive"
               @click="resetAll"
               :disabled="isResetting"
+              :class="{
+                'bg-destructive/80 animate-pulse': btnFeedback.getFeedback('reset-all') === 'confirming',
+              }"
             >
               <Icon
-                :name="isResetting === 'all' ? 'lucide:loader-2' : 'lucide:flame'"
+                :name="isResetting === 'all' ? 'lucide:loader-2' : btnFeedback.getFeedback('reset-all') === 'confirming' ? 'lucide:alert-triangle' : 'lucide:flame'"
                 :class="isResetting === 'all' ? 'animate-spin' : ''"
                 class="mr-2 h-4 w-4"
               />
-              Reset All
+              {{ btnFeedback.getFeedback('reset-all') === 'confirming' ? 'Click again to confirm' : 'Reset All' }}
             </Button>
           </div>
         </div>
@@ -373,6 +444,7 @@ const isResetting = ref<string | null>(null)
 const isRebuilding = ref(false)
 const isComputingClusters = ref(false)
 const lastResult = ref<ResultMessage | null>(null)
+const btnFeedback = useButtonFeedback()
 
 // Fetch services health
 async function fetchServicesHealth() {
@@ -447,9 +519,7 @@ async function computeClusters() {
 
 // Reset SQLite
 async function resetSqlite() {
-  if (!confirm('Are you sure you want to delete ALL data from SQLite?\n\nThis will delete all posts, comments, and projects!')) {
-    return
-  }
+  if (!btnFeedback.confirmOrProceed('reset-sqlite')) return
 
   isResetting.value = 'sqlite'
   lastResult.value = null
@@ -476,9 +546,7 @@ async function resetSqlite() {
 
 // Reset Redis
 async function resetRedis() {
-  if (!confirm('Are you sure you want to flush ALL Redis data?\n\nThis will delete all Celery task history!')) {
-    return
-  }
+  if (!btnFeedback.confirmOrProceed('reset-redis')) return
 
   isResetting.value = 'redis'
   lastResult.value = null
@@ -503,20 +571,9 @@ async function resetRedis() {
   }
 }
 
-// Reset All
+// Reset All (two-click confirm)
 async function resetAll() {
-  if (!confirm('ARE YOU ABSOLUTELY SURE?\n\nThis will delete ALL data from BOTH SQLite AND Redis!\n\nType "yes" in the next prompt to confirm.')) {
-    return
-  }
-
-  const confirmation = prompt('Type "yes" to confirm deletion of ALL data:')
-  if (confirmation !== 'yes') {
-    lastResult.value = {
-      success: false,
-      message: 'Reset cancelled - confirmation not provided'
-    }
-    return
-  }
+  if (!btnFeedback.confirmOrProceed('reset-all', 5000)) return
 
   isResetting.value = 'all'
   lastResult.value = null

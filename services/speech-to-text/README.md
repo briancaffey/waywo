@@ -56,7 +56,29 @@ Response:
 
 ```json
 {
-  "text": "transcribed text here"
+  "text": "transcribed text here",
+  "words": null
+}
+```
+
+#### With Word-Level Timestamps
+
+Pass `timestamps=true` as a query parameter to get start/end times (in seconds) for each word:
+
+```bash
+curl -X POST "http://localhost:8001/transcribe?timestamps=true" \
+  -F "file=@audio.wav"
+```
+
+Response:
+
+```json
+{
+  "text": "hello world",
+  "words": [
+    {"word": "hello", "start": 0.0, "end": 0.32},
+    {"word": "world", "start": 0.64, "end": 0.88}
+  ]
 }
 ```
 
@@ -66,6 +88,16 @@ Response:
 curl -X POST http://localhost:8001/transcribe/base64 \
   -H "Content-Type: application/json" \
   -d '{"audio_base64": "<base64-encoded-wav>"}'
+```
+
+#### With Word-Level Timestamps
+
+Pass `"timestamps": true` in the request body:
+
+```bash
+curl -X POST http://localhost:8001/transcribe/base64 \
+  -H "Content-Type: application/json" \
+  -d '{"audio_base64": "<base64-encoded-wav>", "timestamps": true}'
 ```
 
 ### Streaming Transcription (File Upload)

@@ -9,7 +9,13 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from src.db.database import Base
-from src.db.models import WaywoCommentDB, WaywoPostDB, WaywoProjectDB
+from src.db.models import (
+    WaywoCommentDB,
+    WaywoPostDB,
+    WaywoProjectDB,
+    WaywoVideoDB,
+    WaywoVideoSegmentDB,
+)
 from src.models import WaywoComment, WaywoPost, WaywoProject
 
 # ---------------------------------------------------------------------------
@@ -48,6 +54,7 @@ def patch_db_sessions(test_session):
         patch("src.db.projects.get_db_session", test_session),
         patch("src.db.stats.get_db_session", test_session),
         patch("src.db.search.get_db_session", test_session),
+        patch("src.db.videos.get_db_session", test_session),
     ):
         yield
 
@@ -428,3 +435,567 @@ def test_reset_all_data(sample_post, sample_comment):
     assert result["projects_deleted"] == 1
 
     assert get_all_post_ids() == []
+
+
+# ---------------------------------------------------------------------------
+# Video tests
+# ---------------------------------------------------------------------------
+
+
+def _setup_project(sample_post, sample_comment):
+    """Helper: create a post + comment + project, return project_id."""
+    from src.db.posts import save_post
+    from src.db.comments import save_comment
+    from src.db.projects import save_project
+
+    save_post(sample_post)
+    save_comment(sample_comment)
+    return save_project(_make_project())
+
+
+@pytest.mark.db
+def test_create_video(sample_post, sample_comment):
+    """create_video creates a video with auto-incrementing version."""
+    from src.db.videos import create_video, get_video
+
+    project_id = _setup_project(sample_post, sample_comment)
+
+    video_id = create_video(project_id)
+    assert video_id > 0
+
+    video = get_video(video_id)
+    assert video is not None
+    assert video.project_id == project_id
+    assert video.version == 1
+    assert video.status == "pending"
+    assert video.width == 1080
+    assert video.height == 1920
+
+
+@pytest.mark.db
+def test_create_video_auto_version(sample_post, sample_comment):
+    """create_video auto-increments version for the same project."""
+    from src.db.videos import create_video, get_video
+
+    project_id = _setup_project(sample_post, sample_comment)
+
+    vid1 = create_video(project_id)
+    vid2 = create_video(project_id)
+
+    v1 = get_video(vid1)
+    v2 = get_video(vid2)
+    assert v1.version == 1
+    assert v2.version == 2
+
+
+@pytest.mark.db
+def test_get_videos_for_project(sample_post, sample_comment):
+    """get_videos_for_project returns all versions, newest first."""
+    from src.db.videos import create_video, get_videos_for_project
+
+    project_id = _setup_project(sample_post, sample_comment)
+
+    create_video(project_id)
+    create_video(project_id)
+
+    videos = get_videos_for_project(project_id)
+    assert len(videos) == 2
+    assert videos[0].version == 2
+    assert videos[1].version == 1
+
+
+@pytest.mark.db
+def test_update_video_status(sample_post, sample_comment):
+    """update_video_status changes status and sets completed_at."""
+    from src.db.videos import create_video, get_video, update_video_status
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    assert update_video_status(video_id, "generating") is True
+    assert get_video(video_id).status == "generating"
+
+    assert update_video_status(video_id, "completed") is True
+    video = get_video(video_id)
+    assert video.status == "completed"
+    assert video.completed_at is not None
+
+    # Non-existent video
+    assert update_video_status(99999, "failed") is False
+
+
+@pytest.mark.db
+def test_update_video_status_failed(sample_post, sample_comment):
+    """update_video_status stores error message on failure."""
+    from src.db.videos import create_video, get_video, update_video_status
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    update_video_status(video_id, "failed", error_message="TTS service unavailable")
+    video = get_video(video_id)
+    assert video.status == "failed"
+    assert video.error_message == "TTS service unavailable"
+
+
+@pytest.mark.db
+def test_update_video_script(sample_post, sample_comment):
+    """update_video_script stores script metadata."""
+    from src.db.videos import create_video, get_video, update_video_script
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    script = {"segments": [{"narration_text": "Hello"}]}
+    update_video_script(
+        video_id,
+        video_title="Test Video",
+        video_style="energetic",
+        script_json=script,
+        voice_name="Magpie-Multilingual.EN-US.Mia.Happy",
+    )
+
+    video = get_video(video_id)
+    assert video.video_title == "Test Video"
+    assert video.video_style == "energetic"
+    assert video.script_json == script
+    assert video.voice_name == "Magpie-Multilingual.EN-US.Mia.Happy"
+    assert video.status == "script_generated"
+
+
+@pytest.mark.db
+def test_update_video_output(sample_post, sample_comment):
+    """update_video_output stores output paths and duration."""
+    from src.db.videos import create_video, get_video, update_video_output
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    update_video_output(
+        video_id,
+        video_path="/media/videos/1/video.mp4",
+        thumbnail_path="/media/videos/1/thumb.jpg",
+        duration_seconds=42.5,
+    )
+
+    video = get_video(video_id)
+    assert video.video_path == "/media/videos/1/video.mp4"
+    assert video.thumbnail_path == "/media/videos/1/thumb.jpg"
+    assert video.duration_seconds == 42.5
+
+
+@pytest.mark.db
+def test_append_video_workflow_log(sample_post, sample_comment):
+    """append_video_workflow_log accumulates log entries."""
+    from src.db.videos import create_video, get_video, append_video_workflow_log
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    append_video_workflow_log(video_id, "Script generated")
+    append_video_workflow_log(video_id, "Audio generated")
+
+    video = get_video(video_id)
+    assert video.workflow_logs == ["Script generated", "Audio generated"]
+
+
+@pytest.mark.db
+def test_toggle_video_favorite(sample_post, sample_comment):
+    """toggle_video_favorite flips favorite status."""
+    from src.db.videos import create_video, toggle_video_favorite
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    assert toggle_video_favorite(video_id) is True
+    assert toggle_video_favorite(video_id) is False
+    assert toggle_video_favorite(99999) is None
+
+
+@pytest.mark.db
+def test_increment_video_view_count(sample_post, sample_comment):
+    """increment_video_view_count increments and returns new count."""
+    from src.db.videos import create_video, increment_video_view_count
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    assert increment_video_view_count(video_id) == 1
+    assert increment_video_view_count(video_id) == 2
+    assert increment_video_view_count(99999) is None
+
+
+@pytest.mark.db
+def test_delete_video_cascades_segments(sample_post, sample_comment):
+    """delete_video removes video and all its segments."""
+    from src.db.videos import (
+        create_video,
+        create_segments,
+        delete_video,
+        get_video,
+        get_segments_for_video,
+    )
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello!",
+                "scene_description": "A cool scene",
+            },
+        ],
+    )
+
+    assert delete_video(video_id) is True
+    assert get_video(video_id) is None
+    assert get_segments_for_video(video_id) == []
+    assert delete_video(99999) is False
+
+
+@pytest.mark.db
+def test_get_video_feed(sample_post, sample_comment):
+    """get_video_feed returns completed videos, newest first."""
+    from src.db.videos import (
+        create_video,
+        update_video_status,
+        get_video_feed,
+        get_video_count,
+    )
+
+    project_id = _setup_project(sample_post, sample_comment)
+
+    vid1 = create_video(project_id)
+    vid2 = create_video(project_id)
+    create_video(project_id)  # stays pending
+
+    update_video_status(vid1, "completed")
+    update_video_status(vid2, "completed")
+
+    feed = get_video_feed(limit=10)
+    assert len(feed) == 2
+
+    assert get_video_count() == 3
+    assert get_video_count(status="completed") == 2
+    assert get_video_count(status="pending") == 1
+
+
+# ---------------------------------------------------------------------------
+# Video Segment tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.db
+def test_create_and_get_segments(sample_post, sample_comment):
+    """create_segments bulk-creates and get_segments_for_video retrieves them."""
+    from src.db.videos import create_video, create_segments, get_segments_for_video
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    segment_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Ever wondered...",
+                "scene_description": "Abstract neon visualization",
+                "visual_style": "abstract",
+                "transition": "fade",
+            },
+            {
+                "segment_index": 1,
+                "segment_type": "features",
+                "narration_text": "It features...",
+                "scene_description": "Screenshot of the app",
+                "visual_style": "screenshot",
+                "transition": "cut",
+            },
+        ],
+    )
+
+    assert len(segment_ids) == 2
+
+    segments = get_segments_for_video(video_id)
+    assert len(segments) == 2
+    assert segments[0].segment_index == 0
+    assert segments[0].segment_type == "hook"
+    assert segments[0].narration_text == "Ever wondered..."
+    assert (
+        segments[0].image_prompt == "Abstract neon visualization"
+    )  # defaults to scene_description
+    assert segments[0].status == "pending"
+    assert segments[1].segment_index == 1
+    assert segments[1].transition == "cut"
+
+
+@pytest.mark.db
+def test_create_segments_custom_image_prompt(sample_post, sample_comment):
+    """create_segments respects explicit image_prompt."""
+    from src.db.videos import create_video, create_segments, get_segment
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    seg_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello",
+                "scene_description": "Original LLM description",
+                "image_prompt": "Custom edited prompt",
+            },
+        ],
+    )
+
+    seg = get_segment(seg_ids[0])
+    assert seg.scene_description == "Original LLM description"
+    assert seg.image_prompt == "Custom edited prompt"
+
+
+@pytest.mark.db
+def test_update_segment_narration(sample_post, sample_comment):
+    """update_segment_narration clears audio and resets status."""
+    from src.db.videos import (
+        create_video,
+        create_segments,
+        get_segment,
+        update_segment_audio,
+        update_segment_narration,
+    )
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    seg_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Original text",
+                "scene_description": "A scene",
+            },
+        ],
+    )
+
+    # Simulate audio generation
+    update_segment_audio(seg_ids[0], "/audio/seg0.wav", 5.2, {"text": "Original text"})
+    seg = get_segment(seg_ids[0])
+    assert seg.status == "audio_generated"
+    assert seg.audio_path is not None
+
+    # Edit narration - should clear audio
+    update_segment_narration(seg_ids[0], "New edited text")
+    seg = get_segment(seg_ids[0])
+    assert seg.narration_text == "New edited text"
+    assert seg.audio_path is None
+    assert seg.audio_duration_seconds is None
+    assert seg.transcription is None
+    assert seg.status == "pending"
+
+
+@pytest.mark.db
+def test_update_segment_image_prompt(sample_post, sample_comment):
+    """update_segment_image_prompt clears image and adjusts status."""
+    from src.db.videos import (
+        create_video,
+        create_segments,
+        get_segment,
+        update_segment_audio,
+        update_segment_image,
+        update_segment_image_prompt,
+    )
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    seg_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello",
+                "scene_description": "Original scene",
+            },
+        ],
+    )
+
+    # Simulate complete segment
+    update_segment_audio(seg_ids[0], "/audio/seg0.wav", 5.2)
+    update_segment_image(seg_ids[0], "/images/seg0.png", "invoke-abc.png")
+    seg = get_segment(seg_ids[0])
+    assert seg.status == "complete"
+
+    # Edit image prompt - should clear image but keep audio
+    update_segment_image_prompt(seg_ids[0], "New image prompt")
+    seg = get_segment(seg_ids[0])
+    assert seg.image_prompt == "New image prompt"
+    assert seg.scene_description == "Original scene"  # preserved
+    assert seg.image_path is None
+    assert seg.image_name is None
+    assert seg.status == "audio_generated"  # reverted since audio still exists
+
+
+@pytest.mark.db
+def test_update_segment_audio(sample_post, sample_comment):
+    """update_segment_audio stores audio data and transcription."""
+    from src.db.videos import (
+        create_video,
+        create_segments,
+        get_segment,
+        update_segment_audio,
+    )
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    seg_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello world",
+                "scene_description": "A scene",
+            },
+        ],
+    )
+
+    transcription = {
+        "text": "hello world",
+        "words": [
+            {"word": "hello", "start": 0.0, "end": 0.32},
+            {"word": "world", "start": 0.35, "end": 0.72},
+        ],
+    }
+    update_segment_audio(seg_ids[0], "/audio/seg0.wav", 0.72, transcription)
+
+    seg = get_segment(seg_ids[0])
+    assert seg.audio_path == "/audio/seg0.wav"
+    assert seg.audio_duration_seconds == 0.72
+    assert seg.transcription == transcription
+    assert seg.status == "audio_generated"
+
+
+@pytest.mark.db
+def test_update_segment_image(sample_post, sample_comment):
+    """update_segment_image stores image data and completes segment if audio exists."""
+    from src.db.videos import (
+        create_video,
+        create_segments,
+        get_segment,
+        update_segment_audio,
+        update_segment_image,
+    )
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    seg_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello",
+                "scene_description": "A scene",
+            },
+        ],
+    )
+
+    # Image without audio -> image_generated
+    update_segment_image(seg_ids[0], "/images/seg0.png", "invoke-123.png")
+    seg = get_segment(seg_ids[0])
+    assert seg.status == "image_generated"
+
+    # Now add audio -> complete
+    update_segment_audio(seg_ids[0], "/audio/seg0.wav", 3.0)
+    update_segment_image(seg_ids[0], "/images/seg0.png", "invoke-123.png")
+    seg = get_segment(seg_ids[0])
+    assert seg.status == "complete"
+
+
+@pytest.mark.db
+def test_delete_segment(sample_post, sample_comment):
+    """delete_segment removes a single segment."""
+    from src.db.videos import (
+        create_video,
+        create_segments,
+        delete_segment,
+        get_segment,
+        get_segments_for_video,
+    )
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    seg_ids = create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello",
+                "scene_description": "A scene",
+            },
+            {
+                "segment_index": 1,
+                "segment_type": "closing",
+                "narration_text": "Goodbye",
+                "scene_description": "Another scene",
+            },
+        ],
+    )
+
+    assert delete_segment(seg_ids[0]) is True
+    assert get_segment(seg_ids[0]) is None
+    assert len(get_segments_for_video(video_id)) == 1
+    assert delete_segment(99999) is False
+
+
+@pytest.mark.db
+def test_get_video_with_segments(sample_post, sample_comment):
+    """get_video with include_segments=True returns segments in order."""
+    from src.db.videos import create_video, create_segments, get_video
+
+    project_id = _setup_project(sample_post, sample_comment)
+    video_id = create_video(project_id)
+
+    create_segments(
+        video_id,
+        [
+            {
+                "segment_index": 1,
+                "segment_type": "closing",
+                "narration_text": "Goodbye",
+                "scene_description": "End scene",
+            },
+            {
+                "segment_index": 0,
+                "segment_type": "hook",
+                "narration_text": "Hello",
+                "scene_description": "Start scene",
+            },
+        ],
+    )
+
+    video = get_video(video_id, include_segments=True)
+    assert len(video.segments) == 2
+    # Ordered by segment_index
+    assert video.segments[0].segment_index == 0
+    assert video.segments[0].narration_text == "Hello"
+    assert video.segments[1].segment_index == 1
+    assert video.segments[1].narration_text == "Goodbye"
+
+    # Without segments
+    video_no_seg = get_video(video_id, include_segments=False)
+    assert video_no_seg.segments == []

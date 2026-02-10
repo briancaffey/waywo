@@ -3,10 +3,13 @@ from fastapi.responses import JSONResponse
 
 from src.settings import (
     EMBEDDING_URL,
+    INVOKEAI_URL,
     LLM_BASE_URL,
     LLM_MODEL_NAME,
     RERANK_URL,
     REDIS_URL,
+    STT_URL,
+    TTS_URL,
 )
 from src.db.client import compute_umap_clusters, get_database_stats, reset_all_data
 
@@ -91,6 +94,86 @@ async def get_services_health():
         services["reranker"] = {
             "status": "unhealthy",
             "url": RERANK_URL,
+            "error": str(e),
+        }
+
+    # Check InvokeAI server
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{INVOKEAI_URL}/api/v1/queue/default/status")
+            if response.status_code == 200:
+                data = response.json()
+                services["invokeai"] = {
+                    "status": "healthy",
+                    "url": INVOKEAI_URL,
+                    "queue_size": data.get("queue_size", 0),
+                }
+            else:
+                services["invokeai"] = {
+                    "status": "unhealthy",
+                    "url": INVOKEAI_URL,
+                    "error": f"HTTP {response.status_code}",
+                }
+    except Exception as e:
+        services["invokeai"] = {
+            "status": "unhealthy",
+            "url": INVOKEAI_URL,
+            "error": str(e),
+        }
+
+    # Check TTS server
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{TTS_URL}/v1/audio/list_voices")
+            if response.status_code == 200:
+                data = response.json()
+                # Response is a dict keyed by language group, each with a "voices" list
+                voice_count = (
+                    sum(
+                        len(v.get("voices", []))
+                        for v in data.values()
+                        if isinstance(v, dict)
+                    )
+                    if isinstance(data, dict)
+                    else len(data) if isinstance(data, list) else 0
+                )
+                services["tts"] = {
+                    "status": "healthy",
+                    "url": TTS_URL,
+                    "voices": voice_count,
+                }
+            else:
+                services["tts"] = {
+                    "status": "unhealthy",
+                    "url": TTS_URL,
+                    "error": f"HTTP {response.status_code}",
+                }
+    except Exception as e:
+        services["tts"] = {
+            "status": "unhealthy",
+            "url": TTS_URL,
+            "error": str(e),
+        }
+
+    # Check STT server
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{STT_URL}/health")
+            if response.status_code == 200:
+                services["stt"] = {
+                    "status": "healthy",
+                    "url": STT_URL,
+                }
+            else:
+                services["stt"] = {
+                    "status": "unhealthy",
+                    "url": STT_URL,
+                    "error": f"HTTP {response.status_code}",
+                }
+    except Exception as e:
+        services["stt"] = {
+            "status": "unhealthy",
+            "url": STT_URL,
             "error": str(e),
         }
 

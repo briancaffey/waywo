@@ -22,11 +22,12 @@ celery_app.conf.update(
         "debug_task": {"queue": "waywo"},
         "process_waywo_posts": {"queue": "waywo"},
         "process_waywo_post": {"queue": "waywo"},
+        "generate_video": {"queue": "waywo"},
     },
     # Store beat schedule file in celery-data directory with proper permissions
     beat_schedule_filename="/app/celery-data/celerybeat-schedule",
     # Import tasks module to register tasks with Celery
-    imports=["src.worker.tasks"],
+    imports=["src.worker.tasks", "src.worker.video_tasks"],
 )
 
 # Import beat schedule configuration
