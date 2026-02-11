@@ -67,7 +67,8 @@ class WaywoProject(BaseModel):
     """Extracted project data from a WaywoComment."""
 
     id: int
-    source_comment_id: int
+    source_comment_id: Optional[int] = None
+    source: Optional[str] = None
 
     # Validation
     is_valid_project: bool = True
@@ -108,7 +109,8 @@ class WaywoProjectSummary(BaseModel):
     """Summary of a WaywoProject for list views."""
 
     id: int
-    source_comment_id: int
+    source_comment_id: Optional[int] = None
+    source: Optional[str] = None
     title: str
     short_description: str
     hashtags: list[str]
@@ -144,6 +146,7 @@ class WaywoProjectListFilters(BaseModel):
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
     is_valid: Optional[bool] = None
+    source: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +230,22 @@ class WaywoVideo(BaseModel):
 
     # Segments (populated when fetching with detail)
     segments: list[WaywoVideoSegment] = Field(default_factory=list)
+
+
+class GenerateIdeasRequest(BaseModel):
+    """Request body for POST /api/generate-ideas."""
+
+    num_ideas: int = Field(default=5, ge=1, le=50)
+    seed_tags: Optional[list[str]] = None
+    creativity: float = Field(default=0.85, ge=0.1, le=1.5)
+
+
+class GenerateIdeasResponse(BaseModel):
+    """Response body for POST /api/generate-ideas."""
+
+    task_id: str
+    num_requested: int
+    seed_tags: list[str]
 
 
 class VoiceTurn(BaseModel):

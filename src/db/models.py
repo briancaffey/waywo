@@ -143,10 +143,13 @@ class WaywoProjectDB(Base):
     # Auto-generated primary key
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    # Link to source comment
-    source_comment_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("waywo_comments.id"), nullable=False
+    # Link to source comment (nullable for generated projects)
+    source_comment_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("waywo_comments.id"), nullable=True
     )
+
+    # Source of this project: "hn", "nemo_data_designer", or NULL (legacy, treated as "hn")
+    source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Validation status
     is_valid_project: Mapped[bool] = mapped_column(
@@ -206,7 +209,7 @@ class WaywoProjectDB(Base):
     )
 
     # Relationships
-    source_comment: Mapped["WaywoCommentDB"] = relationship(
+    source_comment: Mapped[Optional["WaywoCommentDB"]] = relationship(
         "WaywoCommentDB", back_populates="projects"
     )
 
@@ -216,6 +219,7 @@ class WaywoProjectDB(Base):
         Index("ix_waywo_projects_complexity_score", "complexity_score"),
         Index("ix_waywo_projects_is_valid", "is_valid_project"),
         Index("ix_waywo_projects_created_at", "created_at"),
+        Index("ix_waywo_projects_source", "source"),
     )
 
     # JSON field helpers

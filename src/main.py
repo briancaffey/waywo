@@ -11,6 +11,7 @@ from src.tracing import init_tracing
 from src.routes import (
     admin,
     comments,
+    generate,
     health,
     posts,
     projects,
@@ -52,6 +53,7 @@ app.include_router(admin.router)
 app.include_router(videos.router)
 app.include_router(voice.router)
 app.include_router(workflows.router)
+app.include_router(generate.router)
 
 
 @app.on_event("startup")

@@ -1,3 +1,4 @@
+import ast
 import asyncio
 from datetime import datetime
 from pathlib import Path
@@ -244,6 +245,7 @@ def process_waywo_comment(self, comment_id: int) -> dict:
         project = WaywoProject(
             id=0,  # Will be assigned by database
             source_comment_id=comment_id,
+            source="hn",
             is_valid_project=True,
             invalid_reason=None,
             title=proj_data.get("title", "Untitled"),
@@ -347,4 +349,197 @@ def process_waywo_comments(
         "status": "queued",
         "comments_queued": len(comments_to_process),
         "task_ids": task_ids,
+    }
+
+
+def _extract_judge_score(quality: dict, score_name: str, default: int = 5) -> int:
+    """Extract an integer score from the NDD judge output.
+
+    Judge columns return: {score_name: {"score": N, "reasoning": "..."}}
+    """
+    val = quality.get(score_name, default)
+    if isinstance(val, dict):
+        val = val.get("score", default)
+    return max(1, min(10, int(val)))
+
+
+@celery_app.task(name="generate_ideas", bind=True)
+def generate_ideas(
+    self,
+    num_ideas: int = 5,
+    seed_tags: list[str] | None = None,
+    creativity: float = 0.85,
+) -> dict:
+    """Generate synthetic project ideas using NeMo DataDesigner.
+
+    This task:
+    1. Builds tag co-occurrence from existing projects
+    2. Configures DataDesigner provider + models
+    3. Builds and runs the pipeline
+    4. Post-processes each row: generate embedding, save to DB
+
+    Args:
+        num_ideas: Number of project ideas to generate.
+        seed_tags: Optional list of tags to seed generation.
+        creativity: Temperature for the creative model (0.1-1.5).
+
+    Returns:
+        Summary of generated projects.
+    """
+    import json
+    import nest_asyncio
+
+    nest_asyncio.apply()
+
+    from src.clients.embedding import create_embedding_text, get_single_embedding
+    from src.db.projects import get_all_hashtags, get_all_projects, save_project
+    from src.ndd_config import build_ndd_models, build_ndd_provider
+    from src.ndd_pipeline import build_pipeline_config, build_tag_cooccurrence
+    from src.settings import EMBEDDING_URL
+
+    print(f"🧪 Starting NDD generation: {num_ideas} ideas, "
+          f"seed_tags={seed_tags}, creativity={creativity}")
+
+    # Update task state to STARTED with progress info
+    self.update_state(
+        state="STARTED",
+        meta={"stage": "building_pipeline", "progress": 0, "total": num_ideas},
+    )
+
+    # 1. Build tag co-occurrence from existing projects
+    projects = get_all_projects(is_valid=True)
+    all_tags = get_all_hashtags()
+    tag_cooccurrence = build_tag_cooccurrence(projects)
+
+    # 2. Configure DataDesigner
+    provider = build_ndd_provider()
+    models = build_ndd_models(creativity=creativity)
+
+    from data_designer.interface.data_designer import DataDesigner
+
+    dd = DataDesigner(
+        model_providers=[provider],
+        artifact_path="/app/data/ndd_artifacts",
+    )
+
+    # 3. Build pipeline config
+    config = build_pipeline_config(
+        models=models,
+        seed_tags=seed_tags,
+        tag_cooccurrence=tag_cooccurrence,
+        all_tags=all_tags,
+    )
+
+    # 4. Run the pipeline
+    self.update_state(
+        state="STARTED",
+        meta={"stage": "generating", "progress": 0, "total": num_ideas},
+    )
+
+    print(f"🚀 Running DataDesigner.create() for {num_ideas} records...")
+    result = dd.create(config, num_records=num_ideas)
+    df = result.load_dataset()
+    print(f"✅ Generated {len(df)} records")
+
+    # 5. Post-process and save each row
+    self.update_state(
+        state="STARTED",
+        meta={"stage": "saving", "progress": 0, "total": len(df)},
+    )
+
+    saved_ids = []
+    errors = []
+
+    for i, (_, row) in enumerate(df.iterrows()):
+        try:
+            # Parse hashtags — the expression column renders Python list
+            # repr with single quotes (e.g. "['ios', 'web']") which
+            # json.loads cannot handle, so we use ast.literal_eval.
+            hashtags = row.get("hashtags", [])
+            if isinstance(hashtags, str):
+                try:
+                    hashtags = ast.literal_eval(hashtags)
+                except (ValueError, SyntaxError):
+                    try:
+                        hashtags = json.loads(hashtags)
+                    except json.JSONDecodeError:
+                        hashtags = [hashtags]
+            if not isinstance(hashtags, list):
+                hashtags = []
+
+            # Parse scores
+            quality = row.get("idea_quality", {})
+            if isinstance(quality, str):
+                try:
+                    quality = json.loads(quality)
+                except json.JSONDecodeError:
+                    quality = {}
+
+            idea_score = _extract_judge_score(quality, "idea_score")
+            complexity_score = _extract_judge_score(quality, "complexity_score")
+
+            now = datetime.utcnow()
+            project = WaywoProject(
+                id=0,
+                source_comment_id=None,
+                source="nemo_data_designer",
+                is_valid_project=True,
+                title=str(row.get("title", "Untitled")),
+                short_description=str(row.get("short_description", "")),
+                description=str(row.get("description", "")),
+                hashtags=hashtags,
+                project_urls=[],
+                url_summaries={},
+                primary_url=None,
+                url_contents={},
+                idea_score=idea_score,
+                complexity_score=complexity_score,
+                workflow_logs=["Generated by NeMo DataDesigner"],
+                created_at=now,
+                processed_at=now,
+            )
+
+            # Generate embedding
+            embedding = None
+            try:
+                emb_text = create_embedding_text(
+                    title=project.title,
+                    description=project.description,
+                    hashtags=project.hashtags,
+                )
+                embedding = asyncio.run(
+                    get_single_embedding(emb_text, embedding_url=EMBEDDING_URL)
+                )
+            except Exception as e:
+                print(f"⚠️ Embedding failed for row {i} (non-fatal): {e}")
+
+            project_id = save_project(project, embedding=embedding)
+            saved_ids.append(project_id)
+            has_emb = "with embedding" if embedding else "without embedding"
+            print(f"💾 Saved project {project_id}: {project.title} ({has_emb})")
+
+            # Update progress
+            self.update_state(
+                state="STARTED",
+                meta={
+                    "stage": "saving",
+                    "progress": i + 1,
+                    "total": len(df),
+                },
+            )
+
+        except Exception as e:
+            print(f"❌ Failed to save row {i}: {e}")
+            errors.append({"row": i, "error": str(e)})
+
+    print(f"🎉 NDD generation complete: {len(saved_ids)} saved, {len(errors)} errors")
+
+    return {
+        "status": "success",
+        "num_requested": num_ideas,
+        "num_generated": len(df),
+        "num_saved": len(saved_ids),
+        "project_ids": saved_ids,
+        "errors": errors,
+        "seed_tags": seed_tags or [],
     }

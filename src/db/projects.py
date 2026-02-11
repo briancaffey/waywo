@@ -34,6 +34,7 @@ def save_project(project: WaywoProject, embedding: list[float] | None = None) ->
 
         db_project = WaywoProjectDB(
             source_comment_id=project.source_comment_id,
+            source=project.source,
             is_valid_project=project.is_valid_project,
             invalid_reason=project.invalid_reason,
             title=project.title,
@@ -88,6 +89,7 @@ def get_project(project_id: int) -> WaywoProject | None:
         return WaywoProject(
             id=db_project.id,
             source_comment_id=db_project.source_comment_id,
+            source=db_project.source,
             is_valid_project=db_project.is_valid_project,
             invalid_reason=db_project.invalid_reason,
             title=db_project.title,
@@ -136,6 +138,7 @@ def get_projects_for_comment(comment_id: int) -> list[WaywoProject]:
             WaywoProject(
                 id=p.id,
                 source_comment_id=p.source_comment_id,
+                source=p.source,
                 is_valid_project=p.is_valid_project,
                 invalid_reason=p.invalid_reason,
                 title=p.title,
@@ -247,6 +250,7 @@ def get_all_projects(
     is_valid: bool | None = None,
     is_bookmarked: bool | None = None,
     sort: str | None = None,
+    source: str | None = None,
 ) -> list[WaywoProject]:
     """Get all projects with optional filtering."""
     db = get_db_session()
@@ -284,6 +288,9 @@ def get_all_projects(
         if is_bookmarked is not None:
             query = query.filter(WaywoProjectDB.is_bookmarked == is_bookmarked)
 
+        if source is not None:
+            query = query.filter(WaywoProjectDB.source == source)
+
         # Tag filtering (search in JSON array)
         if tags:
             # SQLite JSON search - check if any tag is contained in hashtags
@@ -309,6 +316,7 @@ def get_all_projects(
             WaywoProject(
                 id=p.id,
                 source_comment_id=p.source_comment_id,
+                source=p.source,
                 is_valid_project=p.is_valid_project,
                 invalid_reason=p.invalid_reason,
                 title=p.title,

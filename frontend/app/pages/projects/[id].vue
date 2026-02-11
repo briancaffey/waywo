@@ -112,7 +112,13 @@
 
           <!-- Action Buttons -->
           <div class="flex items-center gap-1">
+            <!-- AI Generated badge -->
+            <Badge v-if="project.source === 'nemo_data_designer'" variant="secondary" class="mr-2 gap-1">
+              <Icon name="lucide:sparkles" class="h-3 w-3" />
+              AI Generated
+            </Badge>
             <a
+              v-if="project.source_comment_id"
               :href="`https://news.ycombinator.com/item?id=${project.source_comment_id}`"
               target="_blank"
               class="inline-flex items-center justify-center h-8 px-3 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors gap-1.5"
@@ -354,13 +360,17 @@
                   <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Project ID</span>
                   <span class="font-mono text-sm">{{ project.id }}</span>
                 </div>
-                <div class="flex flex-col gap-1">
+                <div v-if="project.source_comment_id" class="flex flex-col gap-1">
                   <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Source Comment</span>
                   <span class="font-mono text-sm">{{ project.source_comment_id }}</span>
                 </div>
                 <div class="flex flex-col gap-1">
+                  <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Source</span>
+                  <span class="text-sm">{{ project.source === 'nemo_data_designer' ? 'AI Generated' : project.source || 'Hacker News' }}</span>
+                </div>
+                <div v-if="project.comment_time" class="flex flex-col gap-1">
                   <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Comment Date</span>
-                  <span class="text-sm">{{ project.comment_time ? formatUnixTime(project.comment_time) : 'Unknown' }}</span>
+                  <span class="text-sm">{{ formatUnixTime(project.comment_time) }}</span>
                 </div>
                 <div class="flex flex-col gap-1">
                   <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Processed</span>

@@ -88,6 +88,85 @@ def run_migrations():
                 else:
                     logger.warning(f"Could not add {col_name} column: {e}")
 
+        # Add source column to waywo_projects if it doesn't exist
+        try:
+            conn.execute(
+                text("ALTER TABLE waywo_projects ADD COLUMN source VARCHAR(50)")
+            )
+            conn.commit()
+            logger.info("Added source column to waywo_projects")
+        except Exception as e:
+            if "duplicate column name" in str(e).lower():
+                logger.info("source column already exists")
+            else:
+                logger.warning(f"Could not add source column: {e}")
+
+        # Make source_comment_id nullable (SQLite requires table rebuild)
+        try:
+            # Check if source_comment_id is still NOT NULL
+            cols = conn.execute(
+                text("PRAGMA table_info(waywo_projects)")
+            ).fetchall()
+            src_col = [c for c in cols if c[1] == "source_comment_id"]
+            if src_col and src_col[0][3] == 1:  # notnull == 1
+                logger.info(
+                    "Rebuilding waywo_projects to make source_comment_id nullable..."
+                )
+                # Get all current column names/types from PRAGMA
+                col_names = [c[1] for c in cols]
+                col_list = ", ".join(col_names)
+
+                # Build CREATE TABLE with nullable source_comment_id
+                # We read the original DDL and modify it
+                original_ddl = conn.execute(
+                    text(
+                        "SELECT sql FROM sqlite_master WHERE type='table' AND name='waywo_projects'"
+                    )
+                ).scalar()
+
+                # Replace NOT NULL on source_comment_id with nullable
+                new_ddl = original_ddl.replace(
+                    "waywo_projects", "waywo_projects_tmp", 1
+                )
+                # Remove NOT NULL constraint from source_comment_id line
+                # The column def looks like: source_comment_id INTEGER NOT NULL
+                new_ddl = new_ddl.replace(
+                    "source_comment_id INTEGER NOT NULL",
+                    "source_comment_id INTEGER",
+                )
+
+                conn.execute(text(new_ddl))
+                conn.execute(
+                    text(
+                        f"INSERT INTO waywo_projects_tmp ({col_list}) SELECT {col_list} FROM waywo_projects"
+                    )
+                )
+                conn.execute(text("DROP TABLE waywo_projects"))
+                conn.execute(
+                    text(
+                        "ALTER TABLE waywo_projects_tmp RENAME TO waywo_projects"
+                    )
+                )
+                conn.commit()
+                logger.info("source_comment_id is now nullable")
+
+                # Recreate indexes that were dropped with the table
+                for idx_sql in [
+                    "CREATE INDEX IF NOT EXISTS ix_waywo_projects_source_comment_id ON waywo_projects (source_comment_id)",
+                    "CREATE INDEX IF NOT EXISTS ix_waywo_projects_idea_score ON waywo_projects (idea_score)",
+                    "CREATE INDEX IF NOT EXISTS ix_waywo_projects_complexity_score ON waywo_projects (complexity_score)",
+                    "CREATE INDEX IF NOT EXISTS ix_waywo_projects_is_valid ON waywo_projects (is_valid_project)",
+                    "CREATE INDEX IF NOT EXISTS ix_waywo_projects_created_at ON waywo_projects (created_at)",
+                    "CREATE INDEX IF NOT EXISTS ix_waywo_projects_source ON waywo_projects (source)",
+                ]:
+                    conn.execute(text(idx_sql))
+                conn.commit()
+                logger.info("Recreated indexes on waywo_projects")
+            else:
+                logger.info("source_comment_id is already nullable")
+        except Exception as e:
+            logger.warning(f"Could not make source_comment_id nullable: {e}")
+
     # Explicitly re-run vector search init to ensure it's set up
     # This is idempotent - safe to run multiple times
     logger.info("Initializing vector search indexes...")

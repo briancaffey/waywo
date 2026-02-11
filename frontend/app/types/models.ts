@@ -1,6 +1,7 @@
 export interface WaywoProject {
   id: number
-  source_comment_id: number
+  source_comment_id: number | null
+  source: string | null
   is_valid_project: boolean
   invalid_reason: string | null
   title: string
@@ -108,6 +109,36 @@ export interface ServicesHealth {
   invokeai: ServiceHealth
   tts: ServiceHealth
   stt: ServiceHealth
+}
+
+export interface GenerateIdeasRequest {
+  num_ideas: number
+  seed_tags?: string[]
+  creativity: number
+}
+
+export interface GenerateIdeasResponse {
+  task_id: string
+  num_requested: number
+  seed_tags: string[]
+}
+
+export interface GenerateIdeasStatus {
+  task_id: string
+  state: 'PENDING' | 'STARTED' | 'SUCCESS' | 'FAILURE'
+  stage?: string
+  progress?: number
+  total?: number
+  result?: {
+    status: string
+    num_requested: number
+    num_generated: number
+    num_saved: number
+    project_ids: number[]
+    errors: { row: number; error: string }[]
+    seed_tags: string[]
+  }
+  error?: string
 }
 
 export interface ResultMessage {

@@ -23,6 +23,7 @@ celery_app.conf.update(
         "process_waywo_posts": {"queue": "waywo"},
         "process_waywo_post": {"queue": "waywo"},
         "generate_video": {"queue": "waywo"},
+        "generate_ideas": {"queue": "waywo"},
     },
     # Store beat schedule file in celery-data directory with proper permissions
     beat_schedule_filename="/app/celery-data/celerybeat-schedule",

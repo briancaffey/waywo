@@ -44,6 +44,10 @@ async def list_waywo_projects(
         None,
         description="Sort order: 'random' for random order, default is newest first",
     ),
+    source: Optional[str] = Query(
+        None,
+        description="Filter by source: 'hn', 'nemo_data_designer'",
+    ),
 ):
     """
     List all WaywoProject entries with pagination and filtering.
@@ -80,6 +84,7 @@ async def list_waywo_projects(
             date_from=date_from,
             date_to=date_to,
             sort=sort,
+            source=source,
         )
         total = get_total_project_count(is_valid=is_valid)
 
@@ -101,6 +106,7 @@ async def list_waywo_projects(
             "max_complexity_score": max_complexity_score,
             "is_valid": is_valid,
             "bookmarked": bookmarked,
+            "source": source,
         },
     }
 
@@ -137,13 +143,13 @@ async def get_waywo_project(project_id: int):
     if project is None:
         raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
 
-    # Get the source comment
-    source_comment = get_comment(project.source_comment_id)
-
-    # Get the parent post if available
+    # Get the source comment (only for HN-sourced projects)
+    source_comment = None
     parent_post = None
-    if source_comment and source_comment.parent:
-        parent_post = get_post(source_comment.parent)
+    if project.source_comment_id is not None:
+        source_comment = get_comment(project.source_comment_id)
+        if source_comment and source_comment.parent:
+            parent_post = get_post(source_comment.parent)
 
     return {
         "project": project.model_dump(),

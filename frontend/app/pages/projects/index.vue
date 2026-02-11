@@ -191,17 +191,31 @@
         </CollapsibleContent>
       </Collapsible>
 
-      <!-- Filter Tabs (Bookmarked) -->
-      <div class="flex gap-2 mb-6">
+      <!-- Filter Tabs -->
+      <div class="flex flex-wrap gap-2 mb-6">
         <Button
-          :variant="!showBookmarkedOnly ? 'default' : 'outline'"
-          @click="showBookmarkedOnly && toggleBookmarkedFilter()"
+          :variant="!showBookmarkedOnly && !sourceFilter ? 'default' : 'outline'"
+          @click="setSourceFilter(null)"
         >
           All Projects
         </Button>
         <Button
+          :variant="sourceFilter === 'hn' ? 'default' : 'outline'"
+          @click="setSourceFilter('hn')"
+        >
+          <span class="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-orange-500 text-white text-[10px] font-bold leading-none mr-2">Y</span>
+          From HN
+        </Button>
+        <Button
+          :variant="sourceFilter === 'nemo_data_designer' ? 'default' : 'outline'"
+          @click="setSourceFilter('nemo_data_designer')"
+        >
+          <Icon name="lucide:sparkles" class="mr-2 h-4 w-4" />
+          AI Generated
+        </Button>
+        <Button
           :variant="showBookmarkedOnly ? 'default' : 'outline'"
-          @click="!showBookmarkedOnly && toggleBookmarkedFilter()"
+          @click="toggleBookmarkedFilter()"
         >
           <Icon name="lucide:star" class="mr-2 h-4 w-4" />
           Bookmarked
@@ -294,6 +308,10 @@
                 <Badge v-if="!project.is_valid_project" variant="destructive" class="text-xs">
                   Invalid
                 </Badge>
+                <Badge v-if="project.source === 'nemo_data_designer'" variant="outline" class="text-xs">
+                  <Icon name="lucide:sparkles" class="mr-1 h-3 w-3" />
+                  AI
+                </Badge>
               </div>
               <p class="text-muted-foreground">{{ project.short_description }}</p>
             </div>
@@ -325,6 +343,7 @@
           <div class="mt-4 pt-4 border-t flex items-center justify-between text-sm text-muted-foreground">
             <div class="flex items-center gap-2">
               <a
+                v-if="project.source_comment_id"
                 :href="`https://news.ycombinator.com/item?id=${project.source_comment_id}`"
                 target="_blank"
                 class="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-orange-500 text-white text-xs font-bold leading-none hover:bg-orange-600 transition-colors"
@@ -467,6 +486,7 @@ const offset = ref(0)
 // Filter state
 const isFilterOpen = ref(false)
 const showBookmarkedOnly = ref(false)
+const sourceFilter = ref<string | null>(null)
 const selectedTags = ref<string[]>([])
 const ideaScoreRange = ref<number[]>([1, 10])
 const complexityScoreRange = ref<number[]>([1, 10])
@@ -570,6 +590,9 @@ function buildUrlParams(): Record<string, string> {
   if (showBookmarkedOnly.value) {
     params.bookmarked = 'true'
   }
+  if (sourceFilter.value) {
+    params.source = sourceFilter.value
+  }
   if (commentId.value) {
     params.comment_id = String(commentId.value)
   }
@@ -615,6 +638,9 @@ function readFiltersFromUrl() {
   if (query.bookmarked === 'true') {
     showBookmarkedOnly.value = true
   }
+  if (query.source && typeof query.source === 'string') {
+    sourceFilter.value = query.source
+  }
 
   // Open filter panel if there are active filters
   if (activeFilterCount.value > 0) {
@@ -646,6 +672,11 @@ async function fetchProjects() {
     // Add bookmarked filter
     if (showBookmarkedOnly.value) {
       params.bookmarked = true
+    }
+
+    // Add source filter
+    if (sourceFilter.value) {
+      params.source = sourceFilter.value
     }
 
     // Add tag filter
@@ -708,6 +739,7 @@ function clearAllFilters() {
   dateFrom.value = ''
   dateTo.value = ''
   showBookmarkedOnly.value = false
+  sourceFilter.value = null
   offset.value = 0
   updateUrl()
   fetchProjects()
@@ -827,9 +859,21 @@ async function toggleBookmark(projectId: number) {
   }
 }
 
+// Set source filter
+function setSourceFilter(source: string | null) {
+  sourceFilter.value = source
+  showBookmarkedOnly.value = false
+  offset.value = 0
+  updateUrl()
+  fetchProjects()
+}
+
 // Toggle bookmarked filter
 function toggleBookmarkedFilter() {
   showBookmarkedOnly.value = !showBookmarkedOnly.value
+  if (showBookmarkedOnly.value) {
+    sourceFilter.value = null
+  }
   offset.value = 0
   updateUrl()
   fetchProjects()
