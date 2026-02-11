@@ -55,6 +55,7 @@ dependencies = [
     "playwright>=1.40.0",
     "Pillow>=10.0.0",
     "moviepy>=2.2.1",
+    "pycaps @ git+https://github.com/francozanardi/pycaps.git",
     # NeMo DataDesigner for synthetic project generation
     "data-designer>=0.4.0",
 ]

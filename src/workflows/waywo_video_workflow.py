@@ -23,6 +23,7 @@ from llama_index.core.workflow import (
 
 from src.clients.invokeai import generate_image
 from src.clients.stt import transcribe_audio
+from src.clients.subtitles import add_subtitles
 from src.clients.tts import generate_speech, list_voices
 from src.clients.video import assemble_video
 from src.db.projects import get_project
@@ -380,6 +381,7 @@ class WaywoVideoWorkflow(Workflow):
         video_dir = self._video_dir(ev.video_id)
         os.makedirs(video_dir, exist_ok=True)
         output_path = os.path.join(video_dir, "output.mp4")
+        raw_path = os.path.join(video_dir, "output_raw.mp4")
 
         segments_for_assembly = []
         for i, seg in enumerate(ev.script["segments"]):
@@ -392,15 +394,36 @@ class WaywoVideoWorkflow(Workflow):
                 }
             )
 
-        from src.settings import VIDEO_FPS, VIDEO_HEIGHT, VIDEO_WIDTH
+        from src.settings import USE_KEN_BURNS, VIDEO_FPS, VIDEO_HEIGHT, VIDEO_WIDTH
 
         duration_seconds = assemble_video(
             segments=segments_for_assembly,
-            output_path=output_path,
+            output_path=raw_path,
             width=VIDEO_WIDTH,
             height=VIDEO_HEIGHT,
             fps=VIDEO_FPS,
+            use_ken_burns=USE_KEN_BURNS,
         )
+
+        # Add subtitles: extract audio from assembled video, transcribe in
+        # one pass, then burn word-level animated subtitles via pycaps.
+        try:
+            self._log(ev.video_id, "Adding subtitles to video")
+            await add_subtitles(
+                video_path=raw_path,
+                output_path=output_path,
+                stt_url=self.stt_url,
+            )
+            # Clean up the intermediate file
+            try:
+                os.unlink(raw_path)
+            except OSError:
+                pass
+            self._log(ev.video_id, "Subtitles added successfully")
+        except Exception as e:
+            self._log(ev.video_id, f"Subtitle generation failed (non-fatal): {e}")
+            # Fall back to the video without subtitles
+            os.rename(raw_path, output_path)
 
         # Use first segment image as thumbnail
         thumbnail_rel = None

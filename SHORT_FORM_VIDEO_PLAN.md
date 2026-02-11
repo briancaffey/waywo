@@ -256,17 +256,39 @@ Full frontend for triggering video generation, monitoring progress, and browsing
 
 ---
 
-### Milestone 9: Subtitle Overlay (pycaps)
+### Milestone 9: Subtitle Overlay (pycaps) ✅
 
-Add word-level subtitle captions to the assembled video using pycaps. Deferred to polish phase — the core pipeline works without subtitles.
+Added word-level animated subtitle captions to assembled videos using pycaps.
 
-**Approach:** pycaps library (`pip install "pycaps[all] @ git+https://github.com/francozanardi/pycaps.git"`)
+**What was built:**
 
-**Key details:**
-- Convert STT `WordTimestamp` data to whisper_json format (offset-adjusted per segment)
-- Style: large readable text, high contrast, bottom-center positioning
-- Word highlight animation as narration progresses
-- Integrate as optional step in the workflow (after video assembly, before final save)
+`src/clients/subtitles.py` — subtitle overlay pipeline:
+- `add_subtitles(video_path, output_path, stt_url)` — async entry point
+- One-pass approach: extracts audio from the assembled video via ffmpeg, transcribes the
+  full audio in a single STT call, then burns subtitles via pycaps — no per-segment offset
+  calculations needed
+- `transcription_to_whisper_json(result, pause_threshold)` — converts `TranscriptionResult`
+  to pycaps whisper_json format, splitting on speech pauses (aligns naturally with the 0.3s
+  silence gaps between narration segments)
+- `extract_audio_to_wav()` — ffmpeg audio extraction (16-kHz mono PCM for STT)
+- `_run_pycaps_pipeline()` — loads the `minimalist` template (bottom-center, 2-line max,
+  char-limit splitter, fade animations) with custom CSS overlay (white text, gold highlight
+  for current word, bold sans-serif with drop shadow)
+- Synchronous pycaps render offloaded to thread pool via `run_in_executor`
+- `SubtitleError` exception class
+
+Workflow integration (`src/workflows/waywo_video_workflow.py`):
+- Assembly step writes to `output_raw.mp4`, then `add_subtitles` renders to `output.mp4`
+- Graceful fallback: if subtitles fail, the raw video is renamed to `output.mp4` and the
+  pipeline continues — subtitle failure is non-fatal
+
+Dependencies:
+- `pycaps` added to `pyproject.toml` (git install from `francozanardi/pycaps`)
+- `git` added to Dockerfile apt-get (required for git-based pip install)
+- Chromium already installed via `playwright install --with-deps chromium`
+
+14 new tests (8 whisper_json conversion, 4 add_subtitles, 2 workflow integration).
+35 total video tests passing.
 
 ---
 

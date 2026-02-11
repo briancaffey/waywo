@@ -411,11 +411,13 @@ async def test_workflow_assemble_video_step(tmp_path):
     from llama_index.core.workflow import StopEvent
 
     mock_assemble = MagicMock(return_value=30.5)
+    mock_add_subs = AsyncMock()
     mock_update_output = MagicMock()
     mock_update_status = MagicMock()
 
     with (
         patch.object(_wf_mod, "assemble_video", mock_assemble),
+        patch.object(_wf_mod, "add_subtitles", mock_add_subs),
         patch.object(_wf_mod, "update_video_output", mock_update_output),
         patch.object(_wf_mod, "update_video_status", mock_update_status),
         patch.object(_wf_mod, "append_video_workflow_log"),
@@ -452,5 +454,6 @@ async def test_workflow_assemble_video_step(tmp_path):
     segments_arg = call_kwargs[1].get("segments") or call_kwargs[0][0]
     assert len(segments_arg) == 2
 
+    mock_add_subs.assert_called_once()
     mock_update_output.assert_called_once()
     mock_update_status.assert_called_once_with(10, "completed")

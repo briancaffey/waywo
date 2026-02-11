@@ -46,6 +46,7 @@ STT_WS_URL = os.getenv(
 VIDEO_WIDTH = int(os.getenv("VIDEO_WIDTH", "1080"))
 VIDEO_HEIGHT = int(os.getenv("VIDEO_HEIGHT", "1920"))
 VIDEO_FPS = int(os.getenv("VIDEO_FPS", "30"))
+USE_KEN_BURNS = os.getenv("USE_KEN_BURNS", "").lower() in ("1", "true", "yes")
 
 # Phoenix observability
 PHOENIX_HOST = os.getenv("PHOENIX_HOST", "localhost")

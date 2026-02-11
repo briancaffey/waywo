@@ -160,6 +160,7 @@ def assemble_video(
     height: int = 1920,
     fps: int = 30,
     transition_duration: float = 0.5,
+    use_ken_burns: bool = False,
 ) -> float:
     """Assemble segment images and audio into an MP4 video.
 
@@ -193,18 +194,26 @@ def assemble_video(
 
     for i, seg in enumerate(segments):
         seg_duration = seg["audio_duration_seconds"]
-        motion = _pick_motion(i)
 
-        # Load and prepare image with Ken Burns
-        image = _load_and_scale_image(seg["image_path"], width, height)
-        frame_func = _make_ken_burns_frame_func(
-            image, width, height, seg_duration, motion
-        )
-
-        video_clip = VideoClip(
-            frame_function=frame_func,
-            duration=seg_duration,
-        ).with_fps(fps)
+        if use_ken_burns:
+            image = _load_and_scale_image(seg["image_path"], width, height)
+            motion = _pick_motion(i)
+            frame_func = _make_ken_burns_frame_func(
+                image, width, height, seg_duration, motion
+            )
+            video_clip = VideoClip(
+                frame_function=frame_func,
+                duration=seg_duration,
+            ).with_fps(fps)
+        else:
+            # Static center-crop — much faster to encode
+            img = Image.open(seg["image_path"]).convert("RGB")
+            img = img.resize((width, height), Image.LANCZOS)
+            static_frame = np.array(img)
+            video_clip = VideoClip(
+                frame_function=lambda t, f=static_frame: f,
+                duration=seg_duration,
+            ).with_fps(fps)
 
         # Attach audio
         audio_clip = AudioFileClip(seg["audio_path"])

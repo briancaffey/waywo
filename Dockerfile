@@ -15,10 +15,12 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get clean && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
+    git \
     libffi-dev \
     libssl-dev \
     graphviz \
     ffmpeg \
+    libegl1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
