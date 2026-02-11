@@ -66,6 +66,13 @@
               Chat
             </a>
             <a
+              href="/voice"
+              class="text-sm font-medium transition-colors hover:text-primary"
+              :class="isActive('/voice') ? 'text-primary' : 'text-muted-foreground'"
+            >
+              Voice
+            </a>
+            <a
               href="/designer"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/designer') ? 'text-primary' : 'text-muted-foreground'"
@@ -155,6 +162,13 @@
               :class="isActive('/chat') ? 'text-primary bg-accent' : 'text-muted-foreground'"
             >
               Chat
+            </a>
+            <a
+              href="/voice"
+              class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
+              :class="isActive('/voice') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+            >
+              Voice
             </a>
             <a
               href="/designer"

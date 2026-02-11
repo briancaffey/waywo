@@ -97,7 +97,7 @@
               <div
                 v-for="(msg, i) in messages"
                 :key="i"
-                :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'"
+                :class="msg.role === 'user' ? 'flex flex-col items-end' : 'flex flex-col items-start'"
               >
                 <div
                   :class="[
@@ -108,6 +108,21 @@
                   ]"
                 >
                   <p class="text-sm">{{ msg.text }}</p>
+                </div>
+                <div class="flex items-center gap-1.5 mt-0.5 px-1">
+                  <button
+                    v-if="msg.audioUrl"
+                    @click="togglePlayback(i)"
+                    class="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                  >
+                    <Icon
+                      :name="playingIndex === i ? 'lucide:pause' : 'lucide:play'"
+                      class="h-3 w-3"
+                    />
+                  </button>
+                  <span class="text-[10px] text-muted-foreground">
+                    {{ formatTime(msg.ts) }}
+                  </span>
                 </div>
               </div>
             </template>
@@ -222,6 +237,38 @@ const debugPanel = useDebugPanel()
 const threadManager = useVoiceThreads()
 const messagesContainer = ref<HTMLElement | null>(null)
 
+// ── Audio playback per message ──
+const playingIndex = ref<number | null>(null)
+let currentAudio: HTMLAudioElement | null = null
+
+function formatTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function togglePlayback(index: number) {
+  const msg = messages.value[index]
+  if (!msg?.audioUrl) return
+
+  if (playingIndex.value === index) {
+    currentAudio?.pause()
+    playingIndex.value = null
+    return
+  }
+
+  if (currentAudio) {
+    currentAudio.pause()
+    currentAudio = null
+  }
+
+  currentAudio = new Audio(msg.audioUrl)
+  currentAudio.onended = () => {
+    playingIndex.value = null
+    currentAudio = null
+  }
+  currentAudio.play()
+  playingIndex.value = index
+}
+
 const {
   voiceState,
   connectionState,
@@ -330,5 +377,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (titleRefreshTimer) clearInterval(titleRefreshTimer)
+  if (currentAudio) {
+    currentAudio.pause()
+    currentAudio = null
+  }
 })
 </script>

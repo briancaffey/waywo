@@ -9,6 +9,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   text: string
   ts: number // Date.now()
+  audioUrl?: string // Object URL for playback
 }
 
 export interface VoiceChatOptions {
@@ -44,6 +45,7 @@ export function useVoiceChat(options: VoiceChatOptions = {}) {
   let mediaStream: MediaStream | null = null
   let workletNode: AudioWorkletNode | null = null
   let sourceNode: MediaStreamAudioSourceNode | null = null
+  let _userPcmChunks: Int16Array[] = []
 
   // ── WebSocket connection ────────────────────────────────────────
   function connect(existingThreadId?: string | null) {
@@ -77,6 +79,13 @@ export function useVoiceChat(options: VoiceChatOptions = {}) {
 
     ws.onmessage = (event: MessageEvent) => {
       if (event.data instanceof ArrayBuffer) {
+        // Store audio blob URL on the most recent assistant message
+        const blob = new Blob([event.data.slice(0)], { type: 'audio/wav' })
+        const url = URL.createObjectURL(blob)
+        const lastAssistant = [...messages.value].reverse().find(m => m.role === 'assistant')
+        if (lastAssistant) {
+          lastAssistant.audioUrl = url
+        }
         _playAudio(event.data)
         return
       }
@@ -93,6 +102,10 @@ export function useVoiceChat(options: VoiceChatOptions = {}) {
 
   function disconnect() {
     _stopMic()
+    // Revoke all audio object URLs
+    for (const msg of messages.value) {
+      if (msg.audioUrl) URL.revokeObjectURL(msg.audioUrl)
+    }
     if (ws) {
       ws.close()
       ws = null
@@ -101,6 +114,7 @@ export function useVoiceChat(options: VoiceChatOptions = {}) {
     voiceState.value = 'idle'
     threadId.value = null
     messages.value = []
+    _userPcmChunks = []
   }
 
   // ── Message handling ────────────────────────────────────────────
@@ -118,16 +132,31 @@ export function useVoiceChat(options: VoiceChatOptions = {}) {
         partialTranscription.value = msg.text
         break
 
-      case 'stt_final':
+      case 'stt_final': {
         finalTranscription.value = msg.text
         partialTranscription.value = ''
+        // Create audio blob from accumulated user PCM chunks
+        let audioUrl: string | undefined
+        if (_userPcmChunks.length > 0) {
+          const totalLength = _userPcmChunks.reduce((sum, c) => sum + c.length, 0)
+          const merged = new Int16Array(totalLength)
+          let offset = 0
+          for (const chunk of _userPcmChunks) {
+            merged.set(chunk, offset)
+            offset += chunk.length
+          }
+          audioUrl = URL.createObjectURL(_createWavBlob(merged, 16000))
+          _userPcmChunks = []
+        }
         // Add user message to history
         messages.value.push({
           role: 'user',
           text: msg.text,
           ts: Date.now(),
+          audioUrl,
         })
         break
+      }
 
       case 'llm_complete':
         llmResponse.value = msg.text
@@ -151,6 +180,27 @@ export function useVoiceChat(options: VoiceChatOptions = {}) {
         options.onDebugEvent?.(msg)
         break
     }
+  }
+
+  // ── WAV encoding helper ────────────────────────────────────────
+  function _createWavBlob(pcmData: Int16Array, sampleRate: number): Blob {
+    const header = new ArrayBuffer(44)
+    const v = new DataView(header)
+    const dataSize = pcmData.byteLength
+    v.setUint32(0, 0x52494646, false)  // RIFF
+    v.setUint32(4, 36 + dataSize, true)
+    v.setUint32(8, 0x57415645, false)  // WAVE
+    v.setUint32(12, 0x666d7420, false) // fmt
+    v.setUint32(16, 16, true)
+    v.setUint16(20, 1, true)           // PCM
+    v.setUint16(22, 1, true)           // mono
+    v.setUint32(24, sampleRate, true)
+    v.setUint32(28, sampleRate * 2, true) // byteRate
+    v.setUint16(32, 2, true)           // blockAlign
+    v.setUint16(34, 16, true)          // bitsPerSample
+    v.setUint32(36, 0x64617461, false) // data
+    v.setUint32(40, dataSize, true)
+    return new Blob([header, pcmData.buffer], { type: 'audio/wav' })
   }
 
   // ── Mic capture ─────────────────────────────────────────────────
@@ -228,8 +278,11 @@ registerProcessor('pcm-capture-processor', PcmCaptureProcessor)
       workletNode = new AudioWorkletNode(audioContext, 'pcm-capture-processor')
 
       workletNode.port.onmessage = (e: MessageEvent) => {
+        const pcmBuffer = e.data as ArrayBuffer
+        // Accumulate a copy for user audio playback
+        _userPcmChunks.push(new Int16Array(pcmBuffer.slice(0)))
         if (ws && ws.readyState === WebSocket.OPEN && voiceState.value === 'listening') {
-          ws.send(e.data as ArrayBuffer)
+          ws.send(pcmBuffer)
         }
       }
 
@@ -293,6 +346,7 @@ registerProcessor('pcm-capture-processor', PcmCaptureProcessor)
     partialTranscription.value = ''
     finalTranscription.value = ''
     llmResponse.value = ''
+    _userPcmChunks = []
 
     try {
       await _startMic()
