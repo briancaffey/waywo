@@ -37,6 +37,7 @@ from src.db.projects import (  # noqa: F401
     get_all_projects,
     get_bookmarked_count,
     get_cluster_map_data,
+    get_hashtag_counts,
     get_project,
     get_projects_for_comment,
     get_total_project_count,

@@ -45,6 +45,13 @@
               Explore
             </a>
             <a
+              href="/word-cloud"
+              class="text-sm font-medium transition-colors hover:text-primary"
+              :class="isActive('/word-cloud') ? 'text-primary' : 'text-muted-foreground'"
+            >
+              Word Cloud
+            </a>
+            <a
               href="/videos"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/videos') ? 'text-primary' : 'text-muted-foreground'"
@@ -141,6 +148,13 @@
               :class="isActive('/explore') ? 'text-primary bg-accent' : 'text-muted-foreground'"
             >
               Explore
+            </a>
+            <a
+              href="/word-cloud"
+              class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
+              :class="isActive('/word-cloud') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+            >
+              Word Cloud
             </a>
             <a
               href="/videos"

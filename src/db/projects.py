@@ -369,6 +369,52 @@ def get_all_hashtags() -> list[str]:
         db.close()
 
 
+def get_hashtag_counts(
+    source: str | None = None,
+    min_count: int = 1,
+    limit: int = 200,
+) -> dict:
+    """Get hashtag frequency counts across all valid projects.
+
+    Returns dict with 'tags' list (sorted by count desc), 'total_unique', and 'total_usage'.
+    """
+    db = get_db_session()
+    try:
+        query = db.query(WaywoProjectDB.hashtags).filter(
+            WaywoProjectDB.is_valid_project == True,
+        )
+        if source is not None:
+            query = query.filter(WaywoProjectDB.source == source)
+
+        rows = query.all()
+
+        counts: dict[str, int] = {}
+        for (hashtags_json,) in rows:
+            if hashtags_json:
+                for tag in json.loads(hashtags_json):
+                    counts[tag] = counts.get(tag, 0) + 1
+
+        total_unique = len(counts)
+        total_usage = sum(counts.values())
+
+        # Filter by min_count, sort by count desc, apply limit
+        tags = [
+            {"tag": tag, "count": count}
+            for tag, count in sorted(counts.items(), key=lambda x: x[1], reverse=True)
+            if count >= min_count
+        ]
+        if limit:
+            tags = tags[:limit]
+
+        return {
+            "tags": tags,
+            "total_unique": total_unique,
+            "total_usage": total_usage,
+        }
+    finally:
+        db.close()
+
+
 def get_cluster_map_data() -> list[dict]:
     """Get lightweight project data for the cluster map visualization."""
     db = get_db_session()

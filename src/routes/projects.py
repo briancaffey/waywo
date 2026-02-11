@@ -11,6 +11,7 @@ from src.db.client import (
     get_bookmarked_count,
     get_cluster_map_data,
     get_comment,
+    get_hashtag_counts,
     get_post,
     get_project,
     get_projects_for_comment,
@@ -119,6 +120,23 @@ async def get_cluster_map():
     """
     data = get_cluster_map_data()
     return {"projects": data, "total": len(data)}
+
+
+@router.get("/api/waywo-projects/hashtag-counts", tags=["projects"])
+async def list_project_hashtag_counts(
+    source: Optional[str] = Query(
+        None, description="Filter by source: 'hn', 'nemo_data_designer'"
+    ),
+    min_count: int = Query(1, ge=1, description="Minimum tag count to include"),
+    limit: int = Query(200, ge=1, le=1000, description="Max number of tags to return"),
+):
+    """
+    Get hashtag frequency counts across all valid projects.
+
+    Returns tags sorted by count descending, with total stats.
+    Useful for word cloud visualizations.
+    """
+    return get_hashtag_counts(source=source, min_count=min_count, limit=limit)
 
 
 @router.get("/api/waywo-projects/hashtags", tags=["projects"])
