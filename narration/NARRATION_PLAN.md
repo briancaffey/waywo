@@ -186,15 +186,15 @@ Applied automatically before sending to any TTS service:
 - [x] Sample rate conversion so Dia (44.1kHz) and Magpie (22.05kHz) segments can be mixed in one export
 - [x] Export as MP3 in addition to WAV (add `pydub` or `ffmpeg` dependency)
 
-### Milestone 10: Generation Queue + Progress
+### Milestone 10: Generation Queue + Progress [DONE]
 **Goal**: Better async generation with real-time progress updates.
 
-- [ ] WebSocket endpoint for real-time generation progress
-- [ ] UI updates live as each segment completes (no manual refresh)
-- [ ] Cancel in-progress generation
-- [ ] Retry failed segments with one click
-- [ ] Generation time estimates based on historical durations
-- [ ] Queue multiple generation requests instead of rejecting with 409
+- [x] WebSocket endpoint for real-time generation progress
+- [x] UI updates live as each segment completes (no manual refresh)
+- [x] Cancel in-progress generation
+- [x] Retry failed segments with one click
+- [x] Generation time estimates based on historical durations
+- [x] Queue multiple generation requests instead of rejecting with 409
 
 ### Milestone 11: Article-to-Narration
 **Goal**: Paste a full article and have it automatically split into TTS-friendly segments with LLM cleanup.

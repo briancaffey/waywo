@@ -1,12 +1,16 @@
 import asyncio
+import json
 import logging
 import os
 import re
 import shutil
+import time
+import uuid
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -43,9 +47,57 @@ logger = logging.getLogger(__name__)
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "output")
 VOICE_SAMPLES_DIR = os.path.join(OUTPUT_DIR, "voice_samples")
 
-# Only one generation at a time
-generation_lock = asyncio.Lock()
-generation_status: dict = {"active": False, "segment_id": None, "message": ""}
+
+# --- Generation queue infrastructure ---
+
+@dataclass
+class GenerationJob:
+    id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
+    segment_ids: list[int] = field(default_factory=list)
+    text_overrides: dict[int, str] = field(default_factory=dict)
+    project_id: int | None = None
+
+generation_queue: asyncio.Queue[GenerationJob] = asyncio.Queue()
+cancel_event: asyncio.Event = asyncio.Event()
+active_job: dict = {"job": None}  # mutable container for current job
+ws_clients: set[WebSocket] = set()
+gen_times: dict[str, list[float]] = {"dia": [], "magpie": []}
+
+
+async def _broadcast(message: dict):
+    """Send JSON to all connected WS clients, discard dead connections."""
+    dead = set()
+    data = json.dumps(message)
+    for ws in ws_clients:
+        try:
+            await ws.send_text(data)
+        except Exception:
+            dead.add(ws)
+    ws_clients.difference_update(dead)
+
+
+def _record_time(service: str, elapsed: float):
+    """Append to rolling window (last 20 per service)."""
+    times = gen_times.setdefault(service, [])
+    times.append(elapsed)
+    if len(times) > 20:
+        gen_times[service] = times[-20:]
+
+
+def _estimate_time(service: str) -> float:
+    """Return moving average for service, defaults 45s dia / 3s magpie."""
+    times = gen_times.get(service, [])
+    if times:
+        return round(sum(times) / len(times), 1)
+    return 45.0 if service == "dia" else 3.0
+
+
+def _queue_status() -> dict:
+    return {
+        "type": "queue_status",
+        "queue_length": generation_queue.qsize(),
+        "active_job_id": active_job["job"].id if active_job["job"] else None,
+    }
 
 
 async def _seed_default_voice_sample():
@@ -76,7 +128,13 @@ async def lifespan(app: FastAPI):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     os.makedirs(VOICE_SAMPLES_DIR, exist_ok=True)
     await _seed_default_voice_sample()
+    worker_task = asyncio.create_task(_generation_worker())
     yield
+    worker_task.cancel()
+    try:
+        await worker_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title="Narration", lifespan=lifespan)
@@ -346,18 +404,96 @@ def _make_output_filename(position: int, text: str, variant_num: int = 0) -> str
     return f"{position:03d}_{name}{suffix}.wav"
 
 
+async def _generation_worker():
+    """Background worker that pulls jobs from the queue and processes them."""
+    while True:
+        job = await generation_queue.get()
+        active_job["job"] = job
+        cancel_event.clear()
+        generated = 0
+        failed = 0
+        errors = []
+        total = len(job.segment_ids)
+
+        await _broadcast({"type": "queued", "job_id": job.id, "segment_ids": job.segment_ids, "position": 0})
+        await _broadcast(_queue_status())
+
+        for i, seg_id in enumerate(job.segment_ids):
+            if cancel_event.is_set():
+                await _broadcast({
+                    "type": "job_cancelled",
+                    "job_id": job.id,
+                    "completed": i,
+                    "remaining": total - i,
+                })
+                break
+
+            seg = await get_segment(seg_id)
+            service = seg["service"] if seg else "dia"
+            estimate = _estimate_time(service)
+
+            await _broadcast({
+                "type": "segment_start",
+                "job_id": job.id,
+                "segment_id": seg_id,
+                "index": i,
+                "total": total,
+                "estimate_seconds": estimate,
+            })
+
+            t0 = time.monotonic()
+            try:
+                text_override = job.text_overrides.get(seg_id)
+                await _generate_segment(seg_id, text_override=text_override)
+                elapsed = round(time.monotonic() - t0, 1)
+                _record_time(service, elapsed)
+                generated += 1
+
+                seg = await get_segment(seg_id)
+                await _broadcast({
+                    "type": "segment_done",
+                    "job_id": job.id,
+                    "segment_id": seg_id,
+                    "segment": seg,
+                    "index": i,
+                    "total": total,
+                    "generation_seconds": elapsed,
+                })
+            except Exception as e:
+                elapsed = round(time.monotonic() - t0, 1)
+                failed += 1
+                errors.append({"id": seg_id, "error": str(e)})
+                await _broadcast({
+                    "type": "segment_error",
+                    "job_id": job.id,
+                    "segment_id": seg_id,
+                    "error": str(e),
+                    "index": i,
+                    "total": total,
+                })
+
+        if not cancel_event.is_set():
+            await _broadcast({
+                "type": "job_done",
+                "job_id": job.id,
+                "generated": generated,
+                "failed": failed,
+                "errors": errors,
+            })
+
+        active_job["job"] = None
+        generation_queue.task_done()
+        await _broadcast(_queue_status())
+
+
 async def _generate_segment(segment_id: int, text_override: str | None = None):
-    """Generate audio for a single segment. Caller must hold generation_lock."""
+    """Generate audio for a single segment."""
     from app.services.dia import generate as dia_generate
     from app.services.dia import get_wav_duration
 
     seg = await get_segment(segment_id)
     if not seg:
-        raise HTTPException(404, "Segment not found")
-
-    generation_status["active"] = True
-    generation_status["segment_id"] = segment_id
-    generation_status["message"] = f"Generating segment {seg['position']}..."
+        raise RuntimeError(f"Segment {segment_id} not found")
 
     await update_segment(segment_id, status="generating")
 
@@ -419,53 +555,53 @@ async def _generate_segment(segment_id: int, text_override: str | None = None):
         logger.error(f"Segment {segment_id} failed: {e}")
         await update_segment(segment_id, status="error", error_message=str(e))
         raise
-    finally:
-        generation_status["active"] = False
-        generation_status["segment_id"] = None
-        generation_status["message"] = ""
 
 
-@app.post("/api/segments/{segment_id}/generate")
+@app.post("/api/segments/{segment_id}/generate", status_code=202)
 async def api_generate_segment(segment_id: int):
     seg = await get_segment(segment_id)
     if not seg:
         raise HTTPException(404, "Segment not found")
-    if generation_lock.locked():
-        raise HTTPException(409, "A generation is already in progress")
-    async with generation_lock:
-        try:
-            await _generate_segment(segment_id)
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(500, f"Generation failed: {e}")
-    return await get_segment(segment_id)
+    job = GenerationJob(segment_ids=[segment_id], project_id=seg["project_id"])
+    await generation_queue.put(job)
+    return {"job_id": job.id, "queued": 1}
 
 
-@app.post("/api/projects/{project_id}/generate/all")
+@app.post("/api/projects/{project_id}/generate/all", status_code=202)
 async def api_generate_all(project_id: int):
-    if generation_lock.locked():
-        raise HTTPException(409, "A generation is already in progress")
-    segments = await list_segments(project_id)
-    pending = [s for s in segments if s["status"] != "done"]
+    segs = await list_segments(project_id)
+    pending = [s for s in segs if s["status"] != "done"]
     if not pending:
-        return {"message": "All segments already generated", "generated": 0}
-    results = {"generated": 0, "failed": 0, "errors": []}
-    async with generation_lock:
-        for i, seg in enumerate(pending):
-            generation_status["message"] = f"Generating segment {i + 1} of {len(pending)}..."
-            try:
-                await _generate_segment(seg["id"])
-                results["generated"] += 1
-            except Exception as e:
-                results["failed"] += 1
-                results["errors"].append({"id": seg["id"], "error": str(e)})
-    return results
+        return {"message": "All segments already generated", "queued": 0}
+    job = GenerationJob(segment_ids=[s["id"] for s in pending], project_id=project_id)
+    await generation_queue.put(job)
+    return {"job_id": job.id, "queued": len(pending)}
+
+
+@app.post("/api/projects/{project_id}/generate/failed", status_code=202)
+async def api_generate_failed(project_id: int):
+    segs = await list_segments(project_id)
+    error_segs = [s for s in segs if s["status"] == "error"]
+    if not error_segs:
+        return {"message": "No failed segments", "queued": 0}
+    job = GenerationJob(segment_ids=[s["id"] for s in error_segs], project_id=project_id)
+    await generation_queue.put(job)
+    return {"job_id": job.id, "queued": len(error_segs)}
+
+
+@app.post("/api/generation/cancel")
+async def api_cancel_generation():
+    cancel_event.set()
+    return {"ok": True}
 
 
 @app.get("/api/status")
 async def api_status():
-    return generation_status
+    return {
+        "active": active_job["job"] is not None,
+        "active_job_id": active_job["job"].id if active_job["job"] else None,
+        "queue_length": generation_queue.qsize(),
+    }
 
 
 @app.get("/api/projects/{project_id}/export")
@@ -501,24 +637,16 @@ async def api_export(
 
 # --- Variants ---
 
-@app.post("/api/segments/{segment_id}/regenerate")
+@app.post("/api/segments/{segment_id}/regenerate", status_code=202)
 async def api_regenerate_segment(segment_id: int, body: RegenerateRequest | None = None):
     seg = await get_segment(segment_id)
     if not seg:
         raise HTTPException(404, "Segment not found")
-    if generation_lock.locked():
-        raise HTTPException(409, "A generation is already in progress")
     text_override = body.text if body else None
-    async with generation_lock:
-        try:
-            await _generate_segment(segment_id, text_override=text_override)
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(500, f"Generation failed: {e}")
-    seg = await get_segment(segment_id)
-    seg["variants"] = await list_variants(segment_id)
-    return seg
+    overrides = {segment_id: text_override} if text_override else {}
+    job = GenerationJob(segment_ids=[segment_id], text_overrides=overrides, project_id=seg["project_id"])
+    await generation_queue.put(job)
+    return {"job_id": job.id, "queued": 1}
 
 @app.get("/api/segments/{segment_id}/variants")
 async def api_list_variants(segment_id: int):
@@ -581,3 +709,25 @@ async def api_delete_variant(variant_id: int):
         os.remove(variant["audio_path"])
     await delete_variant(variant_id)
     return {"ok": True}
+
+
+# --- WebSocket ---
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    ws_clients.add(ws)
+    try:
+        await ws.send_text(json.dumps(_queue_status()))
+        while True:
+            data = await ws.receive_text()
+            try:
+                msg = json.loads(data)
+                if msg.get("type") == "cancel":
+                    cancel_event.set()
+            except json.JSONDecodeError:
+                pass
+    except WebSocketDisconnect:
+        pass
+    finally:
+        ws_clients.discard(ws)

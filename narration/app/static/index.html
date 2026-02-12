@@ -83,13 +83,19 @@
     <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
 
       <!-- Status bar -->
-      <div v-if="status" class="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium"
-        :class="status.includes('failed') || status.includes('Failed') ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800' : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'">
-        <svg v-if="generating" class="w-4 h-4 spinner text-indigo-500" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" class="opacity-25"/>
-          <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-        </svg>
-        {{ status }}
+      <div v-if="status" class="mb-4 rounded-lg text-sm font-medium overflow-hidden"
+        :class="status.includes('failed') || status.includes('Failed') || status.includes('error') ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800' : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'">
+        <div class="flex items-center gap-2 px-4 py-2.5">
+          <svg v-if="generating" class="w-4 h-4 spinner text-indigo-500 shrink-0" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" class="opacity-25"/>
+            <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+          <span class="flex-1">{{ status }}</span>
+          <span v-if="genEstimate" class="text-xs opacity-70">~{{ genEstimate }}s</span>
+        </div>
+        <div v-if="generating && genTotal > 0" class="h-1 bg-indigo-100 dark:bg-indigo-900/50">
+          <div class="h-full bg-indigo-500 transition-all duration-300" :style="{ width: genProgress + '%' }"></div>
+        </div>
       </div>
 
       <!-- New project form -->
@@ -119,6 +125,10 @@
             <span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
             {{ pendingCount }} pending
           </span>
+          <span v-if="errorCount" class="flex items-center gap-1">
+            <span class="inline-block w-2 h-2 rounded-full bg-red-400"></span>
+            {{ errorCount }} failed
+          </span>
           <span class="font-medium text-gray-700 dark:text-gray-300">{{ totalDuration }}</span>
         </div>
 
@@ -133,9 +143,18 @@
             class="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-40">
             {{ showAddSegment ? 'Cancel' : '+ Add Segment' }}
           </button>
-          <button @click="generateAll" :disabled="generating || segments.length === 0"
+          <button v-if="!generating" @click="generateAll" :disabled="segments.length === 0"
             class="text-sm px-4 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium">
-            {{ generating ? 'Generating...' : 'Generate All' }}
+            Generate All
+          </button>
+          <button v-else @click="cancelGeneration"
+            class="text-sm px-4 py-1.5 rounded-lg font-medium transition-colors"
+            :class="cancelling ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-red-500 text-white hover:bg-red-600'">
+            {{ cancelling ? 'Cancelling...' : 'Cancel' }}
+          </button>
+          <button v-if="errorCount > 0 && !generating" @click="retryFailed"
+            class="text-sm px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors font-medium">
+            Retry {{ errorCount }} Failed
           </button>
           <button @click="showExport = !showExport" :disabled="!hasAudio"
             class="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
@@ -356,9 +375,11 @@
 
                 <span class="text-xs text-gray-400 dark:text-gray-500 w-8 text-right tabular-nums">{{ seg.duration_seconds ? fmtDuration(seg.duration_seconds) : '\u2014' }}</span>
 
-                <audio v-if="seg.status === 'done'" :src="'/api/segments/' + seg.id + '/audio'" controls preload="none" class="max-w-[180px]"></audio>
+                <audio v-if="seg.status === 'done'" :src="'/api/segments/' + seg.id + '/audio?v=' + (audioVersion[seg.id] || 0)" controls preload="none" class="max-w-[180px]"></audio>
 
-                <button v-if="!generating" @click="generateOne(seg.id)" title="Generate"
+                <button v-if="seg.status === 'error'" @click="generateOne(seg.id)" title="Retry"
+                  class="text-xs px-2 py-1 rounded-md border border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors">Retry</button>
+                <button v-else @click="generateOne(seg.id)" title="Generate"
                   class="text-xs px-2 py-1 rounded-md border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">Gen</button>
 
                 <button v-if="seg.status === 'done' && !generating" @click="toggleVariants(seg.id)"
@@ -443,7 +464,7 @@
   </div>
 
   <script>
-    const { createApp, ref, reactive, computed, onMounted } = Vue;
+    const { createApp, ref, reactive, computed, onMounted, onUnmounted } = Vue;
 
     createApp({
       setup() {
@@ -496,9 +517,20 @@
         const vsFileInput = ref(null);
         const confirmDeleteVs = ref(null);
 
+        // Generation queue state
+        const cancelling = ref(false);
+        const genIndex = ref(0);
+        const genTotal = ref(0);
+        const genEstimate = ref(null);
+        const audioVersion = reactive({});
+        let ws = null;
+        let wsReconnectTimer = null;
+
         const hasAudio = computed(() => segments.value.some(s => s.status === 'done'));
         const doneCount = computed(() => segments.value.filter(s => s.status === 'done').length);
+        const errorCount = computed(() => segments.value.filter(s => s.status === 'error').length);
         const pendingCount = computed(() => segments.value.filter(s => s.status !== 'done').length);
+        const genProgress = computed(() => genTotal.value > 0 ? Math.round((genIndex.value / genTotal.value) * 100) : 0);
         const totalDuration = computed(() => {
           const total = segments.value.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
           return fmtDuration(total);
@@ -637,54 +669,140 @@
         }
 
         async function generateOne(id) {
-          generating.value = true;
-          const seg = segments.value.find(s => s.id === id);
-          status.value = `Generating segment ${seg ? seg.position : id}...`;
           try {
             const res = await fetch(`/api/segments/${id}/generate`, { method: 'POST' });
             if (!res.ok) { const err = await res.json(); status.value = err.detail || 'Generation failed'; }
-            else { status.value = ''; }
-          } finally {
-            generating.value = false;
-            await fetchSegments();
-            if (expandedVariants.value === id) await fetchVariants(id);
-          }
+          } catch (e) { status.value = 'Request failed'; }
         }
 
         async function generateAll() {
-          generating.value = true;
-          const pending = segments.value.filter(s => s.status !== 'done');
-          for (let i = 0; i < pending.length; i++) {
-            status.value = `Generating segment ${pending[i].position} (${i + 1}/${pending.length})...`;
-            try {
-              const res = await fetch(`/api/segments/${pending[i].id}/generate`, { method: 'POST' });
-              if (!res.ok) { const err = await res.json(); console.error(`Segment ${pending[i].id} failed:`, err); }
-            } catch (e) { console.error(`Segment ${pending[i].id} error:`, e); }
-            await fetchSegments();
-          }
-          generating.value = false;
-          status.value = '';
+          try {
+            const res = await fetch(`/api/projects/${currentProjectId.value}/generate/all`, { method: 'POST' });
+            if (!res.ok) { const err = await res.json(); status.value = err.detail || 'Generation failed'; }
+          } catch (e) { status.value = 'Request failed'; }
         }
 
         async function regenerate(segId) {
-          generating.value = true;
-          const seg = segments.value.find(s => s.id === segId);
-          status.value = `Regenerating segment ${seg ? seg.position : segId}...`;
           const textOverride = regenText[segId]?.trim() || null;
+          const body = textOverride ? { text: textOverride } : {};
+          regenText[segId] = '';
           try {
-            const body = textOverride ? { text: textOverride } : {};
             const res = await fetch(`/api/segments/${segId}/regenerate`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(body),
             });
             if (!res.ok) { const err = await res.json(); status.value = err.detail || 'Regeneration failed'; }
-            else { status.value = ''; }
-          } finally {
-            generating.value = false;
-            regenText[segId] = '';
-            await fetchSegments();
-            await fetchVariants(segId);
+          } catch (e) { status.value = 'Request failed'; }
+        }
+
+        async function cancelGeneration() {
+          cancelling.value = true;
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'cancel' }));
+          }
+        }
+
+        async function retryFailed() {
+          try {
+            const res = await fetch(`/api/projects/${currentProjectId.value}/generate/failed`, { method: 'POST' });
+            if (!res.ok) { const err = await res.json(); status.value = err.detail || 'Retry failed'; }
+          } catch (e) { status.value = 'Request failed'; }
+        }
+
+        function updateSegmentInPlace(segId, data) {
+          const idx = segments.value.findIndex(s => s.id === segId);
+          if (idx !== -1) {
+            segments.value[idx] = { ...segments.value[idx], ...data };
+          }
+        }
+
+        function connectWs() {
+          const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+          ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+          ws.onmessage = (event) => {
+            let msg;
+            try { msg = JSON.parse(event.data); } catch { return; }
+            handleWsMessage(msg);
+          };
+
+          ws.onclose = () => {
+            ws = null;
+            wsReconnectTimer = setTimeout(connectWs, 2000);
+          };
+
+          ws.onerror = () => { ws?.close(); };
+        }
+
+        function handleWsMessage(msg) {
+          switch (msg.type) {
+            case 'queued':
+              generating.value = true;
+              genTotal.value = msg.segment_ids.length;
+              genIndex.value = 0;
+              status.value = `Queued ${msg.segment_ids.length} segment${msg.segment_ids.length > 1 ? 's' : ''}...`;
+              break;
+
+            case 'segment_start': {
+              genIndex.value = msg.index;
+              genTotal.value = msg.total;
+              genEstimate.value = msg.estimate_seconds;
+              const seg = segments.value.find(s => s.id === msg.segment_id);
+              const pos = seg ? seg.position : msg.segment_id;
+              status.value = `Generating segment ${pos} (${msg.index + 1}/${msg.total})...`;
+              updateSegmentInPlace(msg.segment_id, { status: 'generating' });
+              break;
+            }
+
+            case 'segment_done':
+              genIndex.value = msg.index + 1;
+              genEstimate.value = null;
+              updateSegmentInPlace(msg.segment_id, msg.segment);
+              audioVersion[msg.segment_id] = (audioVersion[msg.segment_id] || 0) + 1;
+              if (expandedVariants.value === msg.segment_id) fetchVariants(msg.segment_id);
+              break;
+
+            case 'segment_error':
+              genIndex.value = msg.index + 1;
+              genEstimate.value = null;
+              updateSegmentInPlace(msg.segment_id, { status: 'error', error_message: msg.error });
+              break;
+
+            case 'job_done':
+              generating.value = false;
+              cancelling.value = false;
+              genTotal.value = 0;
+              genIndex.value = 0;
+              genEstimate.value = null;
+              if (msg.failed > 0) {
+                status.value = `Done: ${msg.generated} generated, ${msg.failed} failed`;
+              } else if (msg.generated > 0) {
+                status.value = `Generated ${msg.generated} segment${msg.generated > 1 ? 's' : ''}`;
+                setTimeout(() => { if (!generating.value) status.value = ''; }, 3000);
+              } else {
+                status.value = '';
+              }
+              break;
+
+            case 'job_cancelled':
+              generating.value = false;
+              cancelling.value = false;
+              genTotal.value = 0;
+              genIndex.value = 0;
+              genEstimate.value = null;
+              status.value = `Cancelled (${msg.completed} completed, ${msg.remaining} skipped)`;
+              fetchSegments();
+              break;
+
+            case 'queue_status':
+              if (!msg.active_job_id) {
+                generating.value = false;
+                cancelling.value = false;
+              } else {
+                generating.value = true;
+              }
+              break;
           }
         }
 
@@ -796,6 +914,12 @@
             currentProjectId.value = projects.value[0].id;
             await fetchSegments();
           }
+          connectWs();
+        });
+
+        onUnmounted(() => {
+          if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+          if (ws) ws.close();
         });
 
         return {
@@ -808,11 +932,12 @@
           dragId, dragOverId,
           showExport, exportFormat, exportGapMs, exportFadeMs, exportNormalize,
           showVoices, voiceSamples, magpieVoices, vsName, vsTranscript, vsFileInput, confirmDeleteVs,
-          hasAudio, doneCount, pendingCount, totalDuration,
+          hasAudio, doneCount, errorCount, pendingCount, totalDuration,
+          cancelling, genIndex, genTotal, genEstimate, genProgress, audioVersion,
           fmtDuration, fetchProjects, createProject: createProjectFn, switchProject, deleteProject,
           fetchSegments, doImport, addSegment,
           startEdit, saveEdit, updateService, updateVoice, deleteSegment, clearAllSegments,
-          generateOne, generateAll, regenerate,
+          generateOne, generateAll, regenerate, cancelGeneration, retryFailed,
           selectVariant, deleteVariantBtn, toggleVariants,
           exportAudio,
           fetchVoiceSamples, fetchMagpieVoices, uploadVoiceSample, deleteVoiceSample,
