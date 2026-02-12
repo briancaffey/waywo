@@ -137,9 +137,10 @@
             class="text-sm px-4 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium">
             {{ generating ? 'Generating...' : 'Generate All' }}
           </button>
-          <button @click="exportAudio" :disabled="!hasAudio"
-            class="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-40">
-            Export WAV
+          <button @click="showExport = !showExport" :disabled="!hasAudio"
+            class="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
+            :class="showExport ? 'bg-gray-100 dark:bg-gray-700 border-gray-400 dark:border-gray-500' : ''">
+            {{ showExport ? 'Hide Export' : 'Export' }}
           </button>
           <button v-if="segments.length" @click="clearAllSegments" :disabled="generating"
             class="text-sm px-3 py-1.5 rounded-lg transition-colors"
@@ -222,6 +223,53 @@
             <button @click="doImport" :disabled="!importText.trim()"
               class="text-sm px-4 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors font-medium">
               Import
+            </button>
+          </div>
+        </div>
+
+        <!-- Export options panel -->
+        <div v-if="showExport" class="mb-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+          <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Export Options</h3>
+          <div class="flex flex-wrap items-end gap-4">
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-500 dark:text-gray-400">Format</label>
+              <select v-model="exportFormat"
+                class="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-700 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 outline-none">
+                <option value="wav">WAV</option>
+                <option value="mp3">MP3</option>
+              </select>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-500 dark:text-gray-400">Gap between segments</label>
+              <select v-model="exportGapMs"
+                class="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-700 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 outline-none">
+                <option value="0">None</option>
+                <option value="250">0.25s</option>
+                <option value="500">0.5s</option>
+                <option value="750">0.75s</option>
+                <option value="1000">1.0s</option>
+                <option value="1500">1.5s</option>
+                <option value="2000">2.0s</option>
+              </select>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-500 dark:text-gray-400">Fade in/out</label>
+              <select v-model="exportFadeMs"
+                class="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-700 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 outline-none">
+                <option value="0">None</option>
+                <option value="25">25ms</option>
+                <option value="50">50ms</option>
+                <option value="100">100ms</option>
+                <option value="200">200ms</option>
+              </select>
+            </div>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" v-model="exportNormalize" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500">
+              <span class="text-sm text-gray-700 dark:text-gray-300">Normalize</span>
+            </label>
+            <button @click="exportAudio"
+              class="text-sm px-4 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">
+              Download {{ exportFormat.toUpperCase() }}
             </button>
           </div>
         </div>
@@ -431,6 +479,13 @@
         const confirmClear = ref(false);
         const dragId = ref(null);
         const dragOverId = ref(null);
+
+        // Export options
+        const showExport = ref(false);
+        const exportFormat = ref('wav');
+        const exportGapMs = ref('750');
+        const exportFadeMs = ref('50');
+        const exportNormalize = ref(true);
 
         // Voice samples
         const showVoices = ref(false);
@@ -652,7 +707,13 @@
         }
 
         async function exportAudio() {
-          window.location.href = `/api/projects/${currentProjectId.value}/export`;
+          const params = new URLSearchParams({
+            format: exportFormat.value,
+            gap_ms: exportGapMs.value,
+            fade_ms: exportFadeMs.value,
+            normalize: exportNormalize.value,
+          });
+          window.location.href = `/api/projects/${currentProjectId.value}/export?${params}`;
         }
 
         // Voice samples
@@ -745,6 +806,7 @@
           expandedVariants, variantsMap, regenText,
           showAddSegment, addText, confirmDeleteSeg, confirmDeleteVar, confirmClear,
           dragId, dragOverId,
+          showExport, exportFormat, exportGapMs, exportFadeMs, exportNormalize,
           showVoices, voiceSamples, magpieVoices, vsName, vsTranscript, vsFileInput, confirmDeleteVs,
           hasAudio, doneCount, pendingCount, totalDuration,
           fmtDuration, fetchProjects, createProject: createProjectFn, switchProject, deleteProject,

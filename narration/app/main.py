@@ -1,14 +1,12 @@
 import asyncio
-import io
 import logging
 import os
 import re
 import shutil
-import wave
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -471,26 +469,32 @@ async def api_status():
 
 
 @app.get("/api/projects/{project_id}/export")
-async def api_export(project_id: int):
+async def api_export(
+    project_id: int,
+    format: str = Query("wav", pattern="^(wav|mp3)$"),
+    gap_ms: int = Query(750, ge=0, le=5000),
+    fade_ms: int = Query(50, ge=0, le=500),
+    normalize: bool = Query(True),
+):
+    from app.services.audio import concatenate_segments, export_audio
+
     segments = await list_segments(project_id)
     done = [s for s in segments if s["status"] == "done" and s["audio_path"] and os.path.exists(s["audio_path"])]
     if not done:
         raise HTTPException(400, "No audio segments to export")
-    buf = io.BytesIO()
-    params_set = False
-    with wave.open(buf, "wb") as out_wav:
-        for seg in done:
-            with wave.open(seg["audio_path"], "rb") as in_wav:
-                if not params_set:
-                    out_wav.setparams(in_wav.getparams())
-                    params_set = True
-                out_wav.writeframes(in_wav.readframes(in_wav.getnframes()))
-    buf.seek(0)
+
+    paths = [s["audio_path"] for s in done]
+    combined = concatenate_segments(paths, gap_ms=gap_ms, fade_ms=fade_ms, normalize=normalize)
+    buf, media_type = export_audio(combined, fmt=format)
+
     proj = await get_project(project_id)
-    filename = f"narration_{proj['name'].replace(' ', '_').lower()}.wav" if proj else "narration_export.wav"
+    name_slug = proj["name"].replace(" ", "_").lower() if proj else "export"
+    ext = "mp3" if format == "mp3" else "wav"
+    filename = f"narration_{name_slug}.{ext}"
+
     return StreamingResponse(
         buf,
-        media_type="audio/wav",
+        media_type=media_type,
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 

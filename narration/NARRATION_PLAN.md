@@ -177,14 +177,14 @@ Applied automatically before sending to any TTS service:
 - [x] Voice samples panel with upload, list, preview, delete
 - [x] Segments store `voice_sample_id` (Dia) and `magpie_voice` (Magpie)
 
-### Milestone 9: Audio Post-Processing
+### Milestone 9: Audio Post-Processing [DONE]
 **Goal**: Improve exported audio quality with basic post-processing.
 
-- [ ] Configurable silence gap between segments (e.g. 0.5s, 1s, 1.5s)
-- [ ] Fade-in/fade-out per segment to avoid clicks at boundaries
-- [ ] Normalize audio levels across segments (peak or LUFS normalization)
-- [ ] Sample rate conversion so Dia (44.1kHz) and Magpie (22.05kHz) segments can be mixed in one export
-- [ ] Export as MP3 in addition to WAV (add `pydub` or `ffmpeg` dependency)
+- [x] Configurable silence gap between segments (e.g. 0.5s, 1s, 1.5s)
+- [x] Fade-in/fade-out per segment to avoid clicks at boundaries
+- [x] Normalize audio levels across segments (peak or LUFS normalization)
+- [x] Sample rate conversion so Dia (44.1kHz) and Magpie (22.05kHz) segments can be mixed in one export
+- [x] Export as MP3 in addition to WAV (add `pydub` or `ffmpeg` dependency)
 
 ### Milestone 10: Generation Queue + Progress
 **Goal**: Better async generation with real-time progress updates.
