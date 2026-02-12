@@ -125,14 +125,15 @@ def _run_pycaps_pipeline(
 ) -> None:
     """Run the pycaps pipeline to burn subtitles onto a video.
 
-    Uses the minimalist template with only a CSS font-size override.
+    Uses a local template (copy of minimalist with animations removed)
+    and layers custom CSS on top.
 
     This function is **synchronous** — call it via ``run_in_executor``
     from async code.
     """
     from pycaps import TemplateLoader, TranscriptFormat
 
-    builder = TemplateLoader("minimalist").with_input_video(video_path).load(False)
+    builder = TemplateLoader("src/clients/subtitle-template").with_input_video(video_path).load(False)
     builder.with_output_video(output_path)
     builder.with_transcription(whisper_json, TranscriptFormat.WHISPER_JSON)
     builder.add_css_content(SUBTITLE_CSS)
