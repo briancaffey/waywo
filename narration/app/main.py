@@ -30,7 +30,9 @@ from app.db import (
     delete_segment,
     delete_all_segments,
     reorder_segments,
+    shift_segment_positions,
     import_script,
+    sync_segments,
     create_variant,
     get_variant,
     list_variants,
@@ -39,6 +41,10 @@ from app.db import (
     get_voice_sample,
     create_voice_sample,
     delete_voice_sample,
+    get_transcription,
+    create_transcription,
+    delete_transcription,
+    get_transcriptions_for_project,
 )
 from app.services.sanitize import sanitize_text
 
@@ -46,6 +52,7 @@ logger = logging.getLogger(__name__)
 
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "output")
 VOICE_SAMPLES_DIR = os.path.join(OUTPUT_DIR, "voice_samples")
+STT_URL = os.environ.get("STT_URL", "http://192.168.5.96:8001")
 
 
 # --- Generation queue infrastructure ---
@@ -177,9 +184,27 @@ class ReorderRequest(BaseModel):
 class ImportRequest(BaseModel):
     text: str
     service: str = "dia"
+    magpie_voice: str | None = None
+    original_texts: list[str] | None = None
+
+class ImportArticleRequest(BaseModel):
+    text: str
+    service: str = "dia"
+    magpie_voice: str | None = None
+
+class SyncRequest(BaseModel):
+    lines: list[str]
+    service: str = "dia"
 
 class RegenerateRequest(BaseModel):
     text: str | None = None
+
+class TrimRequest(BaseModel):
+    start_ms: int
+    end_ms: int
+
+class ProcessChunkRequest(BaseModel):
+    text: str
 
 
 # --- Routes ---
@@ -254,6 +279,9 @@ async def api_create_segment(project_id: int, body: SegmentCreate):
     if position is None:
         segments = await list_segments(project_id)
         position = len(segments) + 1
+    else:
+        # Shift existing segments at this position and after to make room
+        await shift_segment_positions(project_id, position)
     return await create_segment(project_id, body.text, sanitized, position, body.service, body.voice_sample_id, body.magpie_voice)
 
 @app.put("/api/segments/{segment_id}")
@@ -306,7 +334,52 @@ async def api_import_segments(project_id: int, body: ImportRequest):
     lines = [line.strip() for line in body.text.splitlines() if line.strip()]
     if not lines:
         raise HTTPException(400, "No lines to import")
-    return await import_script(project_id, lines, body.service)
+    return await import_script(project_id, lines, body.service, body.magpie_voice, body.original_texts)
+
+@app.post("/api/projects/{project_id}/import-article")
+async def api_import_article(project_id: int, body: ImportArticleRequest):
+    proj = await get_project(project_id)
+    if not proj:
+        raise HTTPException(404, "Project not found")
+    if not body.text.strip():
+        raise HTTPException(400, "Article text is empty")
+    from app.services.llm import split_article_for_tts_streaming
+
+    async def event_stream():
+        async for event in split_article_for_tts_streaming(body.text):
+            if event["phase"] == "done":
+                event["service"] = body.service
+                event["magpie_voice"] = body.magpie_voice
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+@app.post("/api/process-chunk")
+async def api_process_chunk(body: ProcessChunkRequest):
+    """Process a single text chunk through the LLM for TTS cleanup."""
+    if not body.text.strip():
+        raise HTTPException(400, "Chunk text is empty")
+    from app.services.llm import process_single_chunk
+    try:
+        segments = await process_single_chunk(body.text)
+        return {"segments": segments}
+    except Exception as e:
+        raise HTTPException(502, f"LLM processing failed: {e}")
+
+@app.post("/api/projects/{project_id}/segments/sync")
+async def api_sync_segments(project_id: int, body: SyncRequest):
+    proj = await get_project(project_id)
+    if not proj:
+        raise HTTPException(404, "Project not found")
+    lines = [line for line in body.lines if line.strip()]
+    if not lines:
+        raise HTTPException(400, "No lines to sync")
+    result = await sync_segments(project_id, lines, body.service)
+    # Clean up audio files for deleted/changed segments
+    for p in result.pop("audio_paths_to_delete", []):
+        if p and os.path.exists(p):
+            os.remove(p)
+    return result
 
 @app.delete("/api/projects/{project_id}/segments")
 async def api_delete_all_segments(project_id: int):
@@ -390,6 +463,139 @@ async def api_delete_voice_sample(sample_id: int):
     if not ok:
         raise HTTPException(404, "Voice sample not found")
     return {"ok": True}
+
+
+# --- Transcriptions ---
+
+@app.post("/api/segments/{segment_id}/transcribe")
+async def api_transcribe_segment(segment_id: int):
+    import httpx
+    seg = await get_segment(segment_id)
+    if not seg:
+        raise HTTPException(404, "Segment not found")
+    if not seg["audio_path"] or not os.path.exists(seg["audio_path"]):
+        raise HTTPException(400, "Segment has no audio to transcribe")
+    try:
+        with open(seg["audio_path"], "rb") as f:
+            audio_bytes = f.read()
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=10)) as client:
+            resp = await client.post(
+                f"{STT_URL}/transcribe",
+                params={"timestamps": "true"},
+                files={"file": ("audio.wav", audio_bytes, "audio/wav")},
+            )
+        if resp.status_code != 200:
+            raise RuntimeError(f"STT service returned {resp.status_code}: {resp.text[:300]}")
+        data = resp.json()
+        text = data.get("text", "")
+        words = data.get("words", [])
+        result = await create_transcription(segment_id, text, words)
+        return result
+    except httpx.ConnectError:
+        raise HTTPException(502, f"Could not connect to speech-to-text service at {STT_URL}")
+    except Exception as e:
+        raise HTTPException(502, f"Transcription failed: {e}")
+
+
+@app.get("/api/segments/{segment_id}/transcription")
+async def api_get_transcription(segment_id: int):
+    seg = await get_segment(segment_id)
+    if not seg:
+        raise HTTPException(404, "Segment not found")
+    t = await get_transcription(segment_id)
+    if not t:
+        raise HTTPException(404, "No transcription for this segment")
+    return t
+
+
+@app.delete("/api/segments/{segment_id}/transcription")
+async def api_delete_transcription(segment_id: int):
+    ok = await delete_transcription(segment_id)
+    if not ok:
+        raise HTTPException(404, "No transcription to delete")
+    return {"ok": True}
+
+
+@app.post("/api/segments/{segment_id}/trim")
+async def api_trim_segment(segment_id: int, body: TrimRequest):
+    import httpx
+    from app.services.audio import trim_audio
+
+    seg = await get_segment(segment_id)
+    if not seg:
+        raise HTTPException(404, "Segment not found")
+    if not seg["audio_path"] or not os.path.exists(seg["audio_path"]):
+        raise HTTPException(400, "Segment has no audio to trim")
+
+    new_duration = trim_audio(seg["audio_path"], body.start_ms, body.end_ms)
+    await update_segment(segment_id, duration_seconds=round(new_duration, 2))
+
+    # Delete old transcription and re-run STT
+    await delete_transcription(segment_id)
+
+    transcription = None
+    try:
+        with open(seg["audio_path"], "rb") as f:
+            audio_bytes = f.read()
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=10)) as client:
+            resp = await client.post(
+                f"{STT_URL}/transcribe",
+                params={"timestamps": "true"},
+                files={"file": ("audio.wav", audio_bytes, "audio/wav")},
+            )
+        if resp.status_code == 200:
+            data = resp.json()
+            transcription = await create_transcription(segment_id, data.get("text", ""), data.get("words", []))
+    except Exception as e:
+        logger.warning(f"Re-transcription after trim failed for segment {segment_id}: {e}")
+
+    updated_seg = await get_segment(segment_id)
+    return {"segment": updated_seg, "transcription": transcription}
+
+
+@app.get("/api/projects/{project_id}/transcriptions")
+async def api_get_project_transcriptions(project_id: int):
+    proj = await get_project(project_id)
+    if not proj:
+        raise HTTPException(404, "Project not found")
+    return await get_transcriptions_for_project(project_id)
+
+
+@app.post("/api/projects/{project_id}/transcribe-all", status_code=202)
+async def api_transcribe_all(project_id: int):
+    """Transcribe all segments with audio that don't have transcriptions yet."""
+    import httpx
+    proj = await get_project(project_id)
+    if not proj:
+        raise HTTPException(404, "Project not found")
+    segs = await list_segments(project_id)
+    existing = await get_transcriptions_for_project(project_id)
+    to_transcribe = [s for s in segs if s["status"] == "done" and s["audio_path"] and s["id"] not in existing]
+    if not to_transcribe:
+        return {"message": "All segments already transcribed", "transcribed": 0}
+
+    transcribed = 0
+    errors = []
+    for seg in to_transcribe:
+        try:
+            with open(seg["audio_path"], "rb") as f:
+                audio_bytes = f.read()
+            async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=10)) as client:
+                resp = await client.post(
+                    f"{STT_URL}/transcribe",
+                    params={"timestamps": "true"},
+                    files={"file": ("audio.wav", audio_bytes, "audio/wav")},
+                )
+            if resp.status_code != 200:
+                errors.append({"id": seg["id"], "error": f"HTTP {resp.status_code}"})
+                continue
+            data = resp.json()
+            await create_transcription(seg["id"], data.get("text", ""), data.get("words", []))
+            transcribed += 1
+        except Exception as e:
+            errors.append({"id": seg["id"], "error": str(e)})
+
+    return {"transcribed": transcribed, "errors": errors, "total": len(to_transcribe)}
 
 
 # --- Generation ---

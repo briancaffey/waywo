@@ -62,6 +62,14 @@ def concatenate_segments(
     return combined
 
 
+def trim_audio(path: str, start_ms: int, end_ms: int) -> float:
+    """Trim audio file in place. Returns new duration in seconds."""
+    seg = AudioSegment.from_file(path)
+    trimmed = seg[start_ms:end_ms]
+    trimmed.export(path, format="wav")
+    return len(trimmed) / 1000.0
+
+
 def export_audio(
     combined: AudioSegment,
     fmt: str = "wav",

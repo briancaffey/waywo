@@ -196,38 +196,94 @@ Applied automatically before sending to any TTS service:
 - [x] Generation time estimates based on historical durations
 - [x] Queue multiple generation requests instead of rejecting with 409
 
-### Milestone 11: Article-to-Narration
+### Milestone 11: Article-to-Narration [DONE]
 **Goal**: Paste a full article and have it automatically split into TTS-friendly segments with LLM cleanup.
 
-- [ ] `POST /api/projects/{id}/import-article` — accepts raw article text
-- [ ] LLM-powered text processing (via Nemotron or configurable endpoint):
+- [x] `POST /api/projects/{id}/import-article` — accepts raw article text
+- [x] LLM-powered text processing (via Nemotron or configurable endpoint):
   - Split article into sentence-level segments appropriate for TTS
   - Sanitize special characters, abbreviations, numbers (e.g. "42%" -> "forty-two percent")
   - Expand acronyms where helpful for spoken clarity
   - Remove or rewrite content that does not work well spoken (URLs, markdown, code blocks)
-- [ ] UI: "Import Article" option alongside "Import Script"
-- [ ] Preview the split/cleaned segments before committing
-- [ ] Configurable LLM endpoint via env var
+- [x] UI: "Import Article" option alongside "Import Script"
+- [x] Preview the split/cleaned segments before committing
+- [x] Configurable LLM endpoint via env var
 
-### Milestone 12: Script Editor
+### Milestone 12: Script Editor [DONE]
 **Goal**: A proper inline script editor that makes it easy to iterate on narration text.
 
-- [ ] Multi-line script editing view (full script as editable text)
-- [ ] Sync edits back to segments (diff-aware: only reset segments whose text changed)
-- [ ] Line-by-line preview: click a line to hear existing audio or generate
-- [ ] Sentence splitting helper: auto-split long lines into TTS-friendly chunks
-- [ ] Character count / estimated duration per line
-- [ ] Highlight lines that have issues (too long, unsupported characters)
+- [x] Multi-line script editing view (full script as editable rows)
+- [x] Sync edits back to segments (diff-aware: only reset segments whose text changed)
+- [x] Line-by-line preview: click play to hear existing audio
+- [x] Sentence splitting helper: auto-split long lines at sentence boundaries
+- [x] Character count, word count, estimated duration per line
+- [x] Highlight lines that are too long (amber >200, red >300 chars)
 
-### Milestone 12: Timeline Visualization
+### Milestone 13: Timeline Visualization [DONE]
 **Goal**: A visual timeline showing the full narration with waveforms and timing.
 
-- [ ] Horizontal timeline bar showing all segments proportional to duration
-- [ ] Color-coded by status (pending/done/error)
-- [ ] Click a segment in the timeline to jump to it and play
-- [ ] Continuous playback: play all segments in order without gaps
-- [ ] Waveform display per segment (using Web Audio API)
-- [ ] Total duration marker and current playback position
+- [x] Horizontal timeline bar showing all segments proportional to duration
+- [x] Color-coded by status (pending/done/error)
+- [x] Click a segment in the timeline to jump to it and play
+- [x] Continuous playback: play all segments in order without gaps
+- [x] Waveform display per segment (using Web Audio API)
+- [x] Total duration marker and current playback position
+
+### Milestone 14: Speech-to-Text Transcription + Word-Level Timeline
+**Goal**: Transcribe generated audio segments using the speech-to-text service, store word-level timestamps, and visualize them in both the segment view and the timeline.
+
+**Speech-to-Text Service**:
+- Existing service at `services/speech-to-text/` running on port 8001
+- `POST /transcribe?timestamps=true` with multipart WAV file upload
+- Returns `{text: str, words: [{word: str, start: float, end: float}]}`
+- Configurable via `STT_URL` env var (default `http://localhost:8001`)
+
+**Database Changes**:
+- [ ] Add `transcriptions` table:
+  - `id` INTEGER PK
+  - `segment_id` INTEGER FK → segments.id (unique, one transcription per segment)
+  - `text` TEXT — full transcribed text
+  - `words_json` TEXT — JSON array of `{word, start, end}` objects
+  - `created_at` DATETIME
+- [ ] Migration: create table if not exists on init_db
+
+**Backend Endpoints**:
+- [ ] `POST /api/segments/{id}/transcribe` — Send segment audio to STT service, store result
+  - Reads the segment's active audio (selected variant or primary audio_path)
+  - POSTs the WAV file to STT service with `timestamps=true`
+  - Stores `{text, words_json}` in transcriptions table
+  - Returns the transcription with parsed words array
+- [ ] `GET /api/segments/{id}/transcription` — Get stored transcription for a segment
+  - Returns `{text, words: [{word, start, end}]}` or 404
+- [ ] `DELETE /api/segments/{id}/transcription` — Remove transcription (e.g. after re-generation)
+- [ ] `POST /api/projects/{id}/transcribe-all` — Transcribe all segments with audio that don't have transcriptions yet
+  - Sequential processing with progress tracking (reuse generation status pattern)
+- [ ] Auto-delete transcription when a segment is regenerated or its selected variant changes (stale audio)
+
+**Segment View — Collapsible Transcription Panel**:
+- [ ] "Transcribe" button on each segment with audio (next to play/regenerate controls)
+- [ ] Collapsible panel below segment showing:
+  - Full transcribed text
+  - Word-level breakdown: each word with start/end timestamps displayed as pills/chips
+  - Click a word to seek audio to that timestamp and play
+  - Words highlighted in sequence during audio playback (karaoke-style)
+- [ ] Visual indicator on segment card when transcription exists (small icon/badge)
+- [ ] "Re-transcribe" option if audio has changed since last transcription
+- [ ] Loading state while transcription is in progress
+
+**Timeline View — Word Overlay**:
+- [ ] Word track above the waveform timeline showing transcribed words positioned by timestamp
+  - Each word placed at its `start` offset relative to the segment's position in the overall timeline
+  - Words sized proportionally to their duration (`end - start`)
+  - Overflow handling for segments with many words (truncate or smaller font)
+- [ ] During playback: current word highlighted (bold/colored) as the playback cursor passes through it
+  - Uses `timeupdate` events and binary search on word timestamps for efficiency
+- [ ] Words only shown for segments that have been transcribed (others show empty track)
+- [ ] "Transcribe All" button in timeline toolbar to batch-transcribe all segments with audio
+- [ ] Minimap also reflects transcribed vs. non-transcribed segments (subtle indicator)
+
+**Configuration**:
+- `STT_URL` env var for speech-to-text service URL (default: `http://localhost:8001`)
 
 ---
 
