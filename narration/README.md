@@ -28,7 +28,7 @@ uv run python generate.py script.txt
 Specify a different host or port:
 
 ```bash
-uv run python generate.py script.txt --host 192.168.1.100 --port 7860
+uv run python generate.py script.txt --host 192.168.5.253 --port 7860
 ```
 
 ## Output

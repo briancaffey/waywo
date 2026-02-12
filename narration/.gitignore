@@ -1,6 +1,9 @@
 # Output files
 output/
 
+# Database
+narration.db
+
 # Python
 __pycache__/
 *.py[cod]

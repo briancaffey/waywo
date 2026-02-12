@@ -1,0 +1,265 @@
+# Narration App Plan
+
+A mini app for generating voice narration from text using Dia (voice cloning) and Magpie (fast TTS). The goal is to produce ~3:30 of narrated audio composed of many individually generated segments, managed through a simple timeline UI.
+
+## Architecture
+
+```
+narration/
+├── app/
+│   ├── main.py          # FastAPI server
+│   ├── db.py            # SQLite setup + models
+│   ├── services/
+│   │   ├── dia.py       # Dia Gradio client (voice cloning)
+│   │   ├── magpie.py    # Magpie NIM client (fast TTS)
+│   │   └── sanitize.py  # Text sanitization
+│   └── static/
+│       └── index.html   # Vue 3 SPA via CDN
+├── batch.py             # CLI batch generation script
+├── script.txt           # Narration script (committed to git)
+├── sample/              # Reference voice files
+│   ├── Alice.wav
+│   └── text.txt
+├── output/              # Generated audio files (gitignored)
+├── narration.db         # SQLite database (gitignored)
+├── pyproject.toml
+└── NARRATION_PLAN.md
+```
+
+## Services
+
+| Service | Host | Use Case | Voice Cloning | Speed |
+|---------|------|----------|---------------|-------|
+| Dia | `192.168.5.253:7860` (configurable via `DIA_URL`) | Primary narration | Yes (from sample/Alice.wav) | Slow (~30-60s per segment) |
+| Magpie | `192.168.6.3:9000` (configurable via `MAGPIE_URL`) | Quick drafts / previews | No (preset voices) | Fast (~2-5s per segment) |
+
+## Data Model
+
+### Segment (SQLite table: `segments`)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER PK | Auto-increment |
+| position | INTEGER | Order in timeline (1-based) |
+| text | TEXT | The narration text |
+| sanitized_text | TEXT | Cleaned text sent to TTS |
+| service | TEXT | "dia" or "magpie" |
+| status | TEXT | "pending", "generating", "done", "error" |
+| audio_path | TEXT | Relative path to WAV file in output/ |
+| duration_seconds | REAL | Duration of generated audio |
+| error_message | TEXT | Error details if failed |
+| selected_variant_id | INTEGER | FK to active variant |
+| created_at | DATETIME | |
+| updated_at | DATETIME | |
+
+### Variant (SQLite table: `variants`)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER PK | Auto-increment |
+| segment_id | INTEGER FK | References segments.id |
+| text | TEXT | Text used for this generation |
+| sanitized_text | TEXT | Sanitized text sent to TTS |
+| service | TEXT | Service used for generation |
+| audio_path | TEXT | Path to WAV file |
+| duration_seconds | REAL | Duration |
+| created_at | DATETIME | |
+
+## Text Sanitization (`sanitize.py`)
+
+Applied automatically before sending to any TTS service:
+
+- Curly single quotes → straight `'`
+- Curly double quotes → straight `"`
+- Remove parentheses and their contents
+- En/em dashes → hyphen or comma
+- Ellipsis character → `...`
+- Strip `[S1]` / `[S2]` speaker tags (added back programmatically by Dia client)
+- Collapse multiple spaces
+- Strip leading/trailing whitespace
+
+## API Endpoints
+
+### Segments
+- `GET /api/segments` — List all segments ordered by position
+- `POST /api/segments` — Create segment
+- `PUT /api/segments/{id}` — Update segment text/position/service
+- `DELETE /api/segments/{id}` — Delete segment
+- `POST /api/segments/reorder` — Bulk reorder
+- `POST /api/segments/import` — Import from text (one line per segment)
+
+### Generation
+- `POST /api/segments/{id}/generate` — Generate audio for one segment
+- `POST /api/segments/{id}/regenerate` — Regenerate (creates new variant)
+- `POST /api/generate/all` — Generate all pending segments sequentially
+- `GET /api/segments/{id}/audio` — Stream the WAV file
+- `GET /api/status` — Current generation status
+
+### Variants
+- `GET /api/segments/{id}/variants` — List variants for a segment
+- `POST /api/segments/{id}/variants/{vid}/select` — Select active variant
+- `GET /api/variants/{vid}/audio` — Stream variant audio
+- `DELETE /api/variants/{vid}` — Delete a variant
+
+### Other
+- `GET /api/export` — Concatenate all segments into one WAV and download
+- `GET /api/voices` — List available Magpie voices
+- `GET /` — Serve frontend
+
+---
+
+## Completed Milestones
+
+### Milestone 1: Project Setup + Database [DONE]
+- [x] FastAPI app with SQLite, segment CRUD, text sanitization
+- [x] Vue 3 SPA via CDN with Pico CSS
+- [x] Script import (one line per segment)
+- [x] `.gitignore` for `narration.db`, `output/`
+
+### Milestone 2: Dia Voice Generation [DONE]
+- [x] Async Dia client via httpx (upload reference audio, SSE polling)
+- [x] Voice cloning from `sample/Alice.wav` + `sample/text.txt`
+- [x] Generation lock (one at a time via asyncio.Lock)
+- [x] Audio playback per segment, duration extraction
+
+### Milestone 3: Batch Generation + Status [DONE]
+- [x] Generate All endpoint with sequential processing
+- [x] Status endpoint and UI status bar with spinner
+- [x] `batch.py` CLI script for headless generation
+
+### Milestone 4: Magpie Integration [DONE]
+- [x] Magpie NIM client (form-data POST to `/v1/audio/synthesize`)
+- [x] Per-segment service selector (dia/magpie)
+- [x] Voices endpoint listing available Magpie voices
+
+### Milestone 5: Export + Polish [DONE]
+- [x] WAV concatenation export
+- [x] Drag-to-reorder segments
+- [x] Summary bar (segment count, done/total, duration)
+- [x] Inline UI for add/delete (no browser popups)
+
+### Milestone 6: Variants + Regeneration [DONE]
+- [x] Variants table with full generation history
+- [x] Regenerate with same or tweaked text
+- [x] A/B comparison with per-variant audio players
+- [x] Select active variant per segment
+- [x] Auto-select new variant on generation
+
+---
+
+## Next Milestones
+
+### Milestone 7: Projects
+**Goal**: Introduce a project abstraction so each script import lives in its own workspace.
+
+- [ ] Add `projects` table (id, name, description, created_at, updated_at)
+- [ ] Add `project_id` FK to `segments` and `variants` tables
+- [ ] `GET/POST /api/projects` — list and create projects
+- [ ] `DELETE /api/projects/{id}` — delete project and all its segments/variants/audio files
+- [ ] `POST /api/projects/{id}/import` — import script into a specific project
+- [ ] UI: project switcher in the toolbar (dropdown or sidebar)
+- [ ] UI: "New Project" creates a clean workspace
+- [ ] UI: "Delete Project" removes everything (segments, variants, audio files)
+- [ ] Importing a script into a new project does not affect other projects
+- [ ] Output files organized by project: `output/{project_id}/`
+- [ ] Migrate existing segments into a default project on first run
+
+### Milestone 8: Voice Sample Management [DONE]
+**Goal**: Support multiple voice samples and make it easy to experiment with different voices.
+
+- [x] Add `voice_samples` table (id, name, audio_path, transcript, created_at)
+- [x] Upload voice samples through the UI (WAV + transcript text)
+- [x] Per-segment voice sample selection for Dia (dropdown in segment controls)
+- [x] Per-segment Magpie voice selection (dropdown populated from `/api/voices`)
+- [x] Preview a voice sample before using it (audio player in voice panel)
+- [x] Ship with Alice as the default sample, allow adding more
+- [x] Dia client accepts custom reference audio/text per segment
+- [x] Voice samples panel with upload, list, preview, delete
+- [x] Segments store `voice_sample_id` (Dia) and `magpie_voice` (Magpie)
+
+### Milestone 9: Audio Post-Processing
+**Goal**: Improve exported audio quality with basic post-processing.
+
+- [ ] Configurable silence gap between segments (e.g. 0.5s, 1s, 1.5s)
+- [ ] Fade-in/fade-out per segment to avoid clicks at boundaries
+- [ ] Normalize audio levels across segments (peak or LUFS normalization)
+- [ ] Sample rate conversion so Dia (44.1kHz) and Magpie (22.05kHz) segments can be mixed in one export
+- [ ] Export as MP3 in addition to WAV (add `pydub` or `ffmpeg` dependency)
+
+### Milestone 10: Generation Queue + Progress
+**Goal**: Better async generation with real-time progress updates.
+
+- [ ] WebSocket endpoint for real-time generation progress
+- [ ] UI updates live as each segment completes (no manual refresh)
+- [ ] Cancel in-progress generation
+- [ ] Retry failed segments with one click
+- [ ] Generation time estimates based on historical durations
+- [ ] Queue multiple generation requests instead of rejecting with 409
+
+### Milestone 11: Article-to-Narration
+**Goal**: Paste a full article and have it automatically split into TTS-friendly segments with LLM cleanup.
+
+- [ ] `POST /api/projects/{id}/import-article` — accepts raw article text
+- [ ] LLM-powered text processing (via Nemotron or configurable endpoint):
+  - Split article into sentence-level segments appropriate for TTS
+  - Sanitize special characters, abbreviations, numbers (e.g. "42%" -> "forty-two percent")
+  - Expand acronyms where helpful for spoken clarity
+  - Remove or rewrite content that does not work well spoken (URLs, markdown, code blocks)
+- [ ] UI: "Import Article" option alongside "Import Script"
+- [ ] Preview the split/cleaned segments before committing
+- [ ] Configurable LLM endpoint via env var
+
+### Milestone 12: Script Editor
+**Goal**: A proper inline script editor that makes it easy to iterate on narration text.
+
+- [ ] Multi-line script editing view (full script as editable text)
+- [ ] Sync edits back to segments (diff-aware: only reset segments whose text changed)
+- [ ] Line-by-line preview: click a line to hear existing audio or generate
+- [ ] Sentence splitting helper: auto-split long lines into TTS-friendly chunks
+- [ ] Character count / estimated duration per line
+- [ ] Highlight lines that have issues (too long, unsupported characters)
+
+### Milestone 12: Timeline Visualization
+**Goal**: A visual timeline showing the full narration with waveforms and timing.
+
+- [ ] Horizontal timeline bar showing all segments proportional to duration
+- [ ] Color-coded by status (pending/done/error)
+- [ ] Click a segment in the timeline to jump to it and play
+- [ ] Continuous playback: play all segments in order without gaps
+- [ ] Waveform display per segment (using Web Audio API)
+- [ ] Total duration marker and current playback position
+
+---
+
+## Configuration
+
+All via environment variables with sensible defaults:
+
+```
+DIA_URL=http://192.168.5.253:7860
+MAGPIE_URL=http://192.168.6.3:9000
+REFERENCE_AUDIO=sample/Alice.wav
+REFERENCE_TEXT=sample/text.txt
+OUTPUT_DIR=output
+DATABASE_URL=narration.db
+```
+
+## Running
+
+```bash
+# Install dependencies
+uv sync
+
+# Start the server
+uv run uvicorn app.main:app --reload --port 8877
+
+# Or batch generate from CLI
+uv run python batch.py script.txt --service dia
+```
+
+## Notes
+
+- Dia requires the `[S1]` tag in the reference text and generates with the segment text + `[S2]` suffix (prevents audio cutoff)
+- Each segment should be roughly 1-2 sentences — the TTS services struggle with longer text
+- The existing `script.txt` has 27 non-empty lines, which at ~7-8 seconds each gives roughly 3:30 of audio
+- The original `generate.py` and `sample.py` are preserved as reference but won't be used by the app
