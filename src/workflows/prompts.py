@@ -187,6 +187,38 @@ def chatbot_response_prompt(query: str, context: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 7. Chat System Prompt (multi-turn aware)
+# ---------------------------------------------------------------------------
+CHAT_SYSTEM_PROMPT = """You are an AI assistant that helps users explore projects from Hacker News "What are you working on?" threads.
+
+You have access to a database of projects that people have shared. When answering questions:
+
+1. Base your answers on the provided project context when available
+2. If relevant projects are found, mention specific projects by name
+3. Include relevant details like descriptions, tags, and scores when helpful
+4. If no relevant projects are found, say so honestly
+5. Be helpful and conversational
+6. Remember previous messages in this conversation for follow-up questions
+
+The projects come from monthly "What are you working on?" threads on Hacker News where developers share what they're building."""
+
+
+# ---------------------------------------------------------------------------
+# 8. RAG Context Injection Templates
+# ---------------------------------------------------------------------------
+CHAT_RAG_CONTEXT_TEMPLATE = """Context from project database:
+{context}
+
+Use this context to answer the user's question. Reference specific projects by name when relevant."""
+
+
+VOICE_RAG_CONTEXT_PREFIX = """I found some relevant projects in the database:
+{context}
+
+Use this context to answer naturally in a conversational tone. Mention specific project names when relevant, but keep responses concise for spoken delivery."""
+
+
+# ---------------------------------------------------------------------------
 # Workflow Steps Registry
 # ---------------------------------------------------------------------------
 WORKFLOW_STEPS = [

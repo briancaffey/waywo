@@ -248,6 +248,30 @@ class GenerateIdeasResponse(BaseModel):
     seed_tags: list[str]
 
 
+class ChatTurn(BaseModel):
+    """A single turn in a text chat conversation."""
+
+    id: int
+    thread_id: str
+    role: str  # user | assistant
+    text: str
+    source_projects: list[dict] = Field(default_factory=list)
+    llm_duration_ms: Optional[int] = None
+    rag_triggered: Optional[bool] = None
+    created_at: datetime
+
+
+class ChatThread(BaseModel):
+    """A text chat conversation thread."""
+
+    id: str
+    title: str
+    system_prompt: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    turns: list[ChatTurn] = Field(default_factory=list)
+
+
 class VoiceTurn(BaseModel):
     """A single turn in a voice chat conversation."""
 

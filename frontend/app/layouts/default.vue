@@ -45,13 +45,6 @@
               Explore
             </a>
             <a
-              href="/word-cloud"
-              class="text-sm font-medium transition-colors hover:text-primary"
-              :class="isActive('/word-cloud') ? 'text-primary' : 'text-muted-foreground'"
-            >
-              Word Cloud
-            </a>
-            <a
               href="/videos"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/videos') ? 'text-primary' : 'text-muted-foreground'"
@@ -85,13 +78,6 @@
               :class="isActive('/designer') ? 'text-primary' : 'text-muted-foreground'"
             >
               Designer
-            </a>
-            <a
-              href="/admin"
-              class="text-sm font-medium transition-colors hover:text-primary"
-              :class="isActive('/admin') ? 'text-primary' : 'text-muted-foreground'"
-            >
-              Admin
             </a>
             <button
               @click="toggleTheme"
@@ -150,13 +136,6 @@
               Explore
             </a>
             <a
-              href="/word-cloud"
-              class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
-              :class="isActive('/word-cloud') ? 'text-primary bg-accent' : 'text-muted-foreground'"
-            >
-              Word Cloud
-            </a>
-            <a
               href="/videos"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/videos') ? 'text-primary bg-accent' : 'text-muted-foreground'"
@@ -191,13 +170,6 @@
             >
               Designer
             </a>
-            <a
-              href="/admin"
-              class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
-              :class="isActive('/admin') ? 'text-primary bg-accent' : 'text-muted-foreground'"
-            >
-              Admin
-            </a>
             <button
               @click="toggleTheme"
               class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -218,12 +190,150 @@
     </main>
 
     <!-- Footer -->
-    <footer class="border-t bg-background">
-      <div class="container mx-auto px-4 py-8">
-        <div class="flex flex-col items-center justify-between gap-4 md:h-24 md:flex-row">
-          <div class="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
-            <p class="text-center text-sm leading-loose text-muted-foreground md:text-left">
-              waywo
+    <footer class="border-t bg-muted/40">
+      <div class="container mx-auto px-4 py-12">
+        <!-- Main Footer Grid -->
+        <div class="grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-5">
+          <!-- Brand Column -->
+          <div class="col-span-2 md:col-span-1 lg:col-span-2">
+            <div class="flex items-center space-x-2 mb-4">
+              <div class="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+                <span class="text-primary-foreground font-bold text-sm">w</span>
+              </div>
+              <span class="text-lg font-bold">waywo</span>
+            </div>
+            <p class="text-sm text-muted-foreground leading-relaxed max-w-xs mb-4">
+              Discover what people are building. AI-powered exploration of Hacker News "What are you working on?" threads.
+            </p>
+            <div class="flex items-center gap-3">
+              <a
+                href="https://news.ycombinator.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-muted-foreground hover:text-primary transition-colors"
+                title="Hacker News"
+              >
+                <Icon name="lucide:newspaper" class="h-5 w-5" />
+              </a>
+              <a
+                href="https://github.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-muted-foreground hover:text-primary transition-colors"
+                title="GitHub"
+              >
+                <Icon name="lucide:github" class="h-5 w-5" />
+              </a>
+            </div>
+          </div>
+
+          <!-- Browse Column -->
+          <div>
+            <h3 class="text-sm font-semibold mb-3">Browse</h3>
+            <ul class="space-y-2">
+              <li>
+                <NuxtLink to="/posts" class="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Monthly Threads
+                </NuxtLink>
+              </li>
+              <li>
+                <NuxtLink to="/comments" class="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Comments
+                </NuxtLink>
+              </li>
+              <li>
+                <NuxtLink to="/projects" class="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Projects
+                </NuxtLink>
+              </li>
+              <li>
+                <NuxtLink to="/explore" class="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Explore
+                </NuxtLink>
+              </li>
+              <li>
+                <NuxtLink to="/videos" class="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Videos
+                </NuxtLink>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Tools Column -->
+          <div>
+            <h3 class="text-sm font-semibold mb-3">Tools</h3>
+            <ul class="space-y-2">
+              <li>
+                <NuxtLink to="/search" class="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Semantic Search
+                </NuxtLink>
+              </li>
+              <li>
+                <NuxtLink to="/chat" class="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  AI Chat
+                </NuxtLink>
+              </li>
+              <li>
+                <NuxtLink to="/voice" class="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Voice Assistant
+                </NuxtLink>
+              </li>
+              <li>
+                <NuxtLink to="/word-cloud" class="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Word Cloud
+                </NuxtLink>
+              </li>
+              <li>
+                <NuxtLink to="/designer" class="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Designer
+                </NuxtLink>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Resources Column -->
+          <div>
+            <h3 class="text-sm font-semibold mb-3">Resources</h3>
+            <ul class="space-y-2">
+              <li>
+                <a
+                  href="https://news.ycombinator.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-sm text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
+                >
+                  Hacker News
+                  <Icon name="lucide:external-link" class="h-3 w-3" />
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://news.ycombinator.com/item?id=42575537"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-sm text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
+                >
+                  Latest WAYWO
+                  <Icon name="lucide:external-link" class="h-3 w-3" />
+                </a>
+              </li>
+              <li>
+                <NuxtLink to="/admin" class="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Admin
+                </NuxtLink>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Separator -->
+        <div class="border-t mt-10 pt-6">
+          <div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
+            <p class="text-xs text-muted-foreground">
+              Built with Nuxt, FastAPI & LlamaIndex. Data sourced from the Hacker News API.
+            </p>
+            <p class="text-xs text-muted-foreground">
+              &copy; {{ new Date().getFullYear() }} waywo
             </p>
           </div>
         </div>

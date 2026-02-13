@@ -1,16 +1,11 @@
 <template>
   <div class="container mx-auto px-4 py-12">
     <div class="max-w-5xl mx-auto">
-      <!-- Header -->
-      <div class="text-center mb-12">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6">
-          <Icon name="lucide:file-text" class="h-8 w-8 text-primary" />
-        </div>
-        <h1 class="text-4xl font-bold tracking-tight mb-4">Waywo Posts</h1>
-        <p class="text-xl text-muted-foreground">
-          Monthly "What are you working on?" posts from Hacker News
-        </p>
-      </div>
+      <WaywoPageHeader
+        icon="lucide:file-text"
+        title="Waywo Posts"
+        description='Monthly "What are you working on?" posts from Hacker News'
+      />
 
       <!-- Controls -->
       <Card class="p-6 mb-8">

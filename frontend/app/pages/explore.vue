@@ -1,16 +1,11 @@
 <template>
   <div class="container mx-auto px-4 py-12">
     <div class="max-w-6xl mx-auto">
-      <!-- Header -->
-      <div class="text-center mb-12">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6">
-          <Icon name="lucide:scatter-chart" class="h-8 w-8 text-primary" />
-        </div>
-        <h1 class="text-4xl font-bold tracking-tight mb-4">Explore</h1>
-        <p class="text-xl text-muted-foreground">
-          Explore project clusters visualized with UMAP dimensionality reduction
-        </p>
-      </div>
+      <WaywoPageHeader
+        icon="lucide:scatter-chart"
+        title="Explore"
+        description="Explore project clusters visualized with UMAP dimensionality reduction"
+      />
 
       <!-- Stats Summary -->
       <div v-if="clusterMap" class="grid grid-cols-2 gap-4 max-w-sm mx-auto mb-8">

@@ -4,7 +4,7 @@ export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking'
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
-export type DebugCategory = 'stt' | 'llm' | 'tts' | 'audio' | 'ws' | 'state'
+export type DebugCategory = 'stt' | 'llm' | 'tts' | 'audio' | 'ws' | 'state' | 'rag'
 
 /** Messages sent from client to server */
 export interface ClientMessage {

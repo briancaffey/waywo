@@ -1,17 +1,12 @@
 <template>
   <div class="container mx-auto px-4 py-12">
     <div class="max-w-5xl mx-auto">
-      <!-- Header -->
-      <div class="text-center mb-12">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6">
-          <Icon name="lucide:message-square" class="h-8 w-8 text-primary" />
-        </div>
-        <h1 class="text-4xl font-bold tracking-tight mb-4">Comments</h1>
-        <p class="text-xl text-muted-foreground">
-          Browse project submissions from "What are you working on?" posts
-        </p>
-        <!-- Filter indicator -->
-        <div v-if="postId" class="mt-4">
+      <WaywoPageHeader
+        icon="lucide:message-square"
+        title="Comments"
+        description='Browse project submissions from "What are you working on?" posts'
+      >
+        <div v-if="postId">
           <Badge variant="outline" class="text-sm">
             Filtered by Post ID: {{ postId }}
             <button @click="clearFilter" class="ml-2 hover:text-destructive">
@@ -19,7 +14,7 @@
             </button>
           </Badge>
         </div>
-      </div>
+      </WaywoPageHeader>
 
       <!-- Stats & Processing Card -->
       <Card class="p-6 mb-8">

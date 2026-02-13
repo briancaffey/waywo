@@ -14,6 +14,11 @@ export default defineNuxtConfig({
       prefix: 'Voice',
       extensions: ['.vue'],
     },
+    {
+      path: '~/components/chat',
+      prefix: 'Chat',
+      extensions: ['.vue'],
+    },
   ],
   css: ['~/assets/css/tailwind.css'],
   vite: {

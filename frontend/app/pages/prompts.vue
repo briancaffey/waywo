@@ -1,20 +1,16 @@
 <template>
   <div class="container mx-auto px-4 py-12">
     <div class="max-w-4xl mx-auto">
-      <!-- Header -->
-      <div class="text-center mb-12">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6">
-          <Icon name="lucide:file-text" class="h-8 w-8 text-primary" />
-        </div>
-        <h1 class="text-4xl font-bold tracking-tight mb-4">Workflow Prompts</h1>
-        <p class="text-xl text-muted-foreground">
-          All prompt templates used in the processing pipeline
-        </p>
-        <a href="/admin" class="inline-flex items-center gap-1 mt-4 text-sm text-muted-foreground hover:text-primary transition-colors">
+      <WaywoPageHeader
+        icon="lucide:file-text"
+        title="Workflow Prompts"
+        description="All prompt templates used in the processing pipeline"
+      >
+        <a href="/admin" class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors">
           <Icon name="lucide:arrow-left" class="h-4 w-4" />
           Back to Admin
         </a>
-      </div>
+      </WaywoPageHeader>
 
       <!-- Loading -->
       <div v-if="isLoading" class="flex justify-center py-16">

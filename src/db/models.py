@@ -442,6 +442,62 @@ class WaywoVideoSegmentDB(Base):
         self.transcription_json = json.dumps(data) if data else None
 
 
+class ChatThreadDB(Base):
+    """SQLAlchemy model for text chat threads."""
+
+    __tablename__ = "chat_threads"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    title: Mapped[str] = mapped_column(Text, default="New conversation", nullable=False)
+    system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    turns: Mapped[list["ChatTurnDB"]] = relationship(
+        "ChatTurnDB",
+        back_populates="thread",
+        order_by="ChatTurnDB.created_at",
+        cascade="all, delete-orphan",
+    )
+
+
+class ChatTurnDB(Base):
+    """SQLAlchemy model for individual turns within a text chat thread."""
+
+    __tablename__ = "chat_turns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    thread_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("chat_threads.id", ondelete="CASCADE"), nullable=False
+    )
+
+    role: Mapped[str] = mapped_column(String(20), nullable=False)  # user | assistant
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    source_projects_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    llm_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rag_triggered: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+    thread: Mapped["ChatThreadDB"] = relationship(
+        "ChatThreadDB", back_populates="turns"
+    )
+
+    __table_args__ = (
+        Index("ix_chat_turns_thread_id", "thread_id"),
+        Index("ix_chat_turns_thread_created", "thread_id", "created_at"),
+    )
+
+
 class VoiceThreadDB(Base):
     """SQLAlchemy model for voice chat threads."""
 

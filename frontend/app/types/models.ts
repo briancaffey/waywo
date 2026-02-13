@@ -77,6 +77,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   sourceProjects?: SourceProject[]
+  ragTriggered?: boolean
 }
 
 export interface DatabaseStats {

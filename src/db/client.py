@@ -57,6 +57,18 @@ from src.db.stats import (  # noqa: F401
     reset_all_data,
 )
 
+from src.db.chat import (  # noqa: F401
+    create_thread as create_chat_thread,
+    create_turn as create_chat_turn,
+    delete_thread as delete_chat_thread,
+    get_thread as get_chat_thread,
+    get_thread_count as get_chat_thread_count,
+    get_turns as get_chat_turns,
+    list_threads as list_chat_threads,
+    search_threads as search_chat_threads,
+    update_thread as update_chat_thread,
+)
+
 from src.db.voice import (  # noqa: F401
     create_thread,
     create_turn,

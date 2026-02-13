@@ -1,16 +1,11 @@
 <template>
   <div class="container mx-auto px-4 py-12">
     <div class="max-w-6xl mx-auto">
-      <!-- Header -->
-      <div class="text-center mb-12">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6">
-          <Icon name="lucide:search" class="h-8 w-8 text-primary" />
-        </div>
-        <h1 class="text-4xl font-bold tracking-tight mb-4">Semantic Search</h1>
-        <p class="text-xl text-muted-foreground">
-          Find projects by meaning, not just keywords
-        </p>
-      </div>
+      <WaywoPageHeader
+        icon="lucide:search"
+        title="Semantic Search"
+        description="Find projects by meaning, not just keywords"
+      />
 
       <!-- Search Box -->
       <Card class="p-6 mb-8">

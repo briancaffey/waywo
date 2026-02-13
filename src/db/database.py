@@ -84,6 +84,8 @@ def init_db():
     Call this on application startup.
     """
     from src.db.models import (  # noqa: F401
+        ChatThreadDB,
+        ChatTurnDB,
         VoiceThreadDB,
         VoiceTurnDB,
         WaywoCommentDB,

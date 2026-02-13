@@ -1,16 +1,11 @@
 <template>
   <div class="container mx-auto px-4 py-12">
     <div class="max-w-4xl mx-auto">
-      <!-- Header (matches other pages) -->
-      <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6">
-          <Icon name="lucide:audio-waveform" class="h-8 w-8 text-primary" />
-        </div>
-        <h1 class="text-4xl font-bold tracking-tight mb-4">Voice Mode</h1>
-        <p class="text-xl text-muted-foreground">
-          Talk to the AI assistant using your voice
-        </p>
-      </div>
+      <WaywoPageHeader
+        icon="lucide:audio-waveform"
+        title="Voice Mode"
+        description="Talk to the AI assistant using your voice"
+      />
 
       <!-- Controls bar -->
       <div class="flex items-center justify-center gap-4 mb-8">

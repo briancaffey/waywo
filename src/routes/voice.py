@@ -36,7 +36,9 @@ from src.db.voice import (
     update_thread,
 )
 from src.llm_config import get_llm
+from src.rag.retrieve import smart_retrieve
 from src.settings import STT_WS_URL
+from src.workflows.prompts import VOICE_RAG_CONTEXT_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -448,6 +450,27 @@ async def voice_chat(
 
                 logger.info(f"Voice chat: transcription = {transcription!r}")
 
+                # ── RAG retrieval ─────────────────────────────────────
+                rag = await smart_retrieve(transcription)
+                await _send_debug(
+                    ws_client,
+                    "rag",
+                    "result",
+                    triggered=rag.was_triggered,
+                    top_similarity=round(rag.top_similarity, 4),
+                    projects_found=rag.projects_found,
+                )
+
+                # Build system prompt, optionally with RAG context
+                effective_system_prompt = VOICE_SYSTEM_PROMPT
+                if rag.was_triggered:
+                    rag_section = VOICE_RAG_CONTEXT_PREFIX.format(
+                        context=rag.context_text
+                    )
+                    effective_system_prompt = (
+                        VOICE_SYSTEM_PROMPT + "\n\n" + rag_section
+                    )
+
                 # ── LLM generation ────────────────────────────────────
                 llm_start = time.monotonic()
 
@@ -460,11 +483,12 @@ async def voice_chat(
                     input_text=transcription,
                     input_chars=len(transcription),
                     history_turns=len(history),
+                    rag_triggered=rag.was_triggered,
                 )
 
                 llm = get_llm()
                 messages = _build_llm_messages(
-                    VOICE_SYSTEM_PROMPT, history, transcription
+                    effective_system_prompt, history, transcription
                 )
 
                 response = await llm.achat(messages)

@@ -1,16 +1,11 @@
 <template>
   <div class="container mx-auto px-4 py-12">
     <div class="max-w-2xl mx-auto">
-      <!-- Header -->
-      <div class="text-center mb-12">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6">
-          <Icon name="lucide:bug" class="h-8 w-8 text-primary" />
-        </div>
-        <h1 class="text-4xl font-bold tracking-tight mb-4">Debug</h1>
-        <p class="text-xl text-muted-foreground">
-          Test backend API integration
-        </p>
-      </div>
+      <WaywoPageHeader
+        icon="lucide:bug"
+        title="Debug"
+        description="Test backend API integration"
+      />
 
       <!-- Main Card -->
       <Card class="p-8">
