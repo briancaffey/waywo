@@ -105,6 +105,7 @@ const config = useRuntimeConfig()
 const router = useRouter()
 
 const rawProjects = ref<ClusterMapProject[]>([])
+const clusterNames = ref<Record<string, string>>({})
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const chartContainer = ref<HTMLElement | null>(null)
@@ -276,11 +277,12 @@ const clusterLegend = computed(() => {
     counts.set(label, (counts.get(label) || 0) + 1)
   }
 
+  const names = clusterNames.value
   const entries: { label: number; name: string; color: string; count: number }[] = []
   for (const [label, count] of Array.from(counts.entries()).sort((a, b) => a[0] - b[0])) {
     entries.push({
       label,
-      name: label === -1 ? 'Noise' : `Cluster ${label}`,
+      name: label === -1 ? 'Noise' : (names[String(label)] || `Cluster ${label}`),
       color: clusterColor(label),
       count,
     })
@@ -290,11 +292,16 @@ const clusterLegend = computed(() => {
 
 function tooltipContent(d: NormalizedProject): string {
   const tags = d.hashtags.slice(0, 4).map(t => `#${t}`).join(' ')
+  const names = clusterNames.value
+  const clusterName = d.cluster_label != null && d.cluster_label !== -1
+    ? names[String(d.cluster_label)] || `Cluster ${d.cluster_label}`
+    : 'Noise'
   return `
     <div style="max-width: 280px; padding: 4px 0;">
       <div style="font-weight: 600; margin-bottom: 4px;">${escapeHtml(d.title)}</div>
       <div style="font-size: 12px; color: #888; margin-bottom: 4px;">${escapeHtml(d.short_description)}</div>
-      <div style="font-size: 11px; color: #aaa;">${escapeHtml(tags)}</div>
+      <div style="font-size: 11px; color: #aaa; margin-bottom: 2px;">${escapeHtml(tags)}</div>
+      <div style="font-size: 11px; color: #666;">${escapeHtml(clusterName)}</div>
     </div>
   `
 }
@@ -322,10 +329,15 @@ async function fetchClusterData() {
   error.value = null
 
   try {
-    const response = await $fetch<{ projects: ClusterMapProject[]; total: number }>(
+    const response = await $fetch<{
+      projects: ClusterMapProject[]
+      total: number
+      cluster_names: Record<string, string>
+    }>(
       `${config.public.apiBase}/api/waywo-projects/cluster-map`
     )
     rawProjects.value = response.projects
+    clusterNames.value = response.cluster_names || {}
   } catch (err) {
     console.error('Failed to fetch cluster map data:', err)
     error.value = 'Failed to load cluster map data'

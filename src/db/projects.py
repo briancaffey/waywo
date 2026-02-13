@@ -10,7 +10,7 @@ from sqlalchemy import func, or_
 
 from src.db.database import SessionLocal
 from src.clients.embedding import embedding_to_blob
-from src.db.models import WaywoCommentDB, WaywoProjectDB
+from src.db.models import ClusterNameDB, WaywoCommentDB, WaywoProjectDB
 from src.models import WaywoProject
 
 logger = logging.getLogger(__name__)
@@ -415,8 +415,11 @@ def get_hashtag_counts(
         db.close()
 
 
-def get_cluster_map_data() -> list[dict]:
-    """Get lightweight project data for the cluster map visualization."""
+def get_cluster_map_data() -> dict:
+    """Get lightweight project data for the cluster map visualization.
+
+    Returns a dict with 'projects' list and 'cluster_names' mapping.
+    """
     db = get_db_session()
     try:
         results = (
@@ -439,7 +442,7 @@ def get_cluster_map_data() -> list[dict]:
             .all()
         )
 
-        return [
+        projects = [
             {
                 "id": r.id,
                 "title": r.title,
@@ -453,6 +456,116 @@ def get_cluster_map_data() -> list[dict]:
             }
             for r in results
         ]
+
+        # Fetch cluster names
+        name_rows = db.query(ClusterNameDB).all()
+        cluster_names = {str(row.cluster_id): row.name for row in name_rows}
+
+        return {"projects": projects, "cluster_names": cluster_names}
+    finally:
+        db.close()
+
+
+def generate_cluster_names() -> dict[int, str]:
+    """Use the LLM to generate descriptive names for each cluster.
+
+    Samples up to 5 projects per cluster, sends one batched prompt,
+    and stores results in the cluster_names table.
+    Returns a dict mapping cluster_id to name.
+    """
+    from src.llm_config import get_llm_for_structured_output
+
+    db = get_db_session()
+    try:
+        # Get distinct cluster labels (excluding noise = -1)
+        labels = (
+            db.query(WaywoProjectDB.cluster_label)
+            .filter(
+                WaywoProjectDB.is_valid_project == True,
+                WaywoProjectDB.cluster_label.isnot(None),
+                WaywoProjectDB.cluster_label != -1,
+            )
+            .distinct()
+            .all()
+        )
+        cluster_ids = sorted([row[0] for row in labels])
+
+        if not cluster_ids:
+            logger.warning("No clusters found to name")
+            return {}
+
+        # Sample up to 5 projects per cluster
+        prompt_parts = [
+            "You are categorizing clusters of software projects from Hacker News "
+            '"What are you working on?" threads.\n\n'
+            "Below are clusters of projects. For each cluster, I've listed sample "
+            "project titles and descriptions.\n\n"
+            "Give each cluster a short, descriptive name (2-5 words) that captures "
+            "the common theme.\n"
+        ]
+
+        for cid in cluster_ids:
+            samples = (
+                db.query(WaywoProjectDB.title, WaywoProjectDB.short_description)
+                .filter(
+                    WaywoProjectDB.cluster_label == cid,
+                    WaywoProjectDB.is_valid_project == True,
+                )
+                .order_by(func.random())
+                .limit(5)
+                .all()
+            )
+            prompt_parts.append(f"\n## Cluster {cid}")
+            for title, desc in samples:
+                prompt_parts.append(f"- {title}: {desc}")
+
+        prompt_parts.append(
+            "\nReturn a JSON object mapping cluster ID (as string) to name. "
+            "Example: "
+            '{"0": "Developer Tools", "1": "AI/ML Projects"}\n'
+            "Return ONLY the JSON object, no other text."
+        )
+
+        prompt_text = "\n".join(prompt_parts)
+        logger.info(f"Generating names for {len(cluster_ids)} clusters via LLM")
+
+        llm = get_llm_for_structured_output()
+        response = llm.complete(prompt_text)
+        raw = response.text.strip()
+
+        # Strip markdown fences if present
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+            if raw.endswith("```"):
+                raw = raw[:-3].strip()
+
+        names: dict[int, str] = {}
+        try:
+            parsed = json.loads(raw)
+            for k, v in parsed.items():
+                names[int(k)] = str(v)
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Failed to parse LLM cluster names response: {e}\nRaw: {raw}")
+            return {}
+
+        # Clear old names and insert new ones
+        db.query(ClusterNameDB).delete()
+        for cid, name in names.items():
+            db.add(ClusterNameDB(cluster_id=cid, name=name))
+        db.commit()
+
+        logger.info(f"Stored {len(names)} cluster names: {names}")
+        return names
+    finally:
+        db.close()
+
+
+def get_cluster_names() -> dict[int, str]:
+    """Return {cluster_id: name} dict from the cluster_names table."""
+    db = get_db_session()
+    try:
+        rows = db.query(ClusterNameDB).all()
+        return {row.cluster_id: row.name for row in rows}
     finally:
         db.close()
 
@@ -533,6 +646,13 @@ def compute_umap_clusters() -> int:
 
         db.commit()
         logger.info(f"Updated {len(ids)} projects with UMAP coordinates and cluster labels")
-        return len(ids)
     finally:
         db.close()
+
+    # Generate LLM-based cluster names after UMAP/HDBSCAN completes
+    try:
+        generate_cluster_names()
+    except Exception as e:
+        logger.error(f"Failed to generate cluster names: {e}")
+
+    return len(ids)

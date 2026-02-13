@@ -125,10 +125,15 @@ async def list_waywo_projects(
 async def get_cluster_map():
     """
     Get lightweight project data for the cluster map visualization.
-    Returns projects that have UMAP coordinates computed.
+    Returns projects that have UMAP coordinates computed, plus cluster names.
     """
     data = get_cluster_map_data()
-    return {"projects": data, "total": len(data)}
+    projects = data["projects"]
+    return {
+        "projects": projects,
+        "total": len(projects),
+        "cluster_names": data["cluster_names"],
+    }
 
 
 @router.get("/api/waywo-projects/hashtag-counts", tags=["projects"])

@@ -481,6 +481,15 @@ class WaywoVideoSegmentDB(Base):
         self.transcription_json = json.dumps(data) if data else None
 
 
+class ClusterNameDB(Base):
+    """Stores LLM-generated names for HDBSCAN clusters."""
+
+    __tablename__ = "cluster_names"
+
+    cluster_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class ChatThreadDB(Base):
     """SQLAlchemy model for text chat threads."""
 

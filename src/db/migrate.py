@@ -101,6 +101,21 @@ def run_migrations():
             else:
                 logger.warning(f"Could not add source column: {e}")
 
+        # Create cluster_names table if it doesn't exist
+        try:
+            conn.execute(
+                text(
+                    """CREATE TABLE IF NOT EXISTS cluster_names (
+                        cluster_id INTEGER PRIMARY KEY,
+                        name TEXT NOT NULL
+                    )"""
+                )
+            )
+            conn.commit()
+            logger.info("Ensured cluster_names table exists")
+        except Exception as e:
+            logger.warning(f"Could not create cluster_names table: {e}")
+
         # Make source_comment_id nullable (SQLite requires table rebuild)
         try:
             # Check if source_comment_id is still NOT NULL
