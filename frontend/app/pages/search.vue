@@ -28,59 +28,47 @@
             </Button>
           </div>
 
-          <!-- Search Options -->
-          <div class="flex items-center gap-6 mt-4 pt-4 border-t">
-            <div class="flex items-center gap-2">
-              <Switch id="use-rerank" v-model="useRerank" />
-              <label for="use-rerank" class="text-sm cursor-pointer">
-                Use Rerank
-              </label>
-              <span class="text-xs text-muted-foreground">(improves relevance)</span>
+          <!-- Search Options + Stats -->
+          <div class="flex items-center mt-4 pt-4 border-t">
+            <div class="flex items-center gap-6">
+              <div class="flex items-center gap-2">
+                <Switch id="use-rerank" v-model="useRerank" />
+                <label for="use-rerank" class="text-sm cursor-pointer">
+                  Use Rerank
+                </label>
+                <span class="text-xs text-muted-foreground">(improves relevance)</span>
+              </div>
+
+              <div v-if="useRerank" class="flex items-center gap-2">
+                <Switch id="compare-mode" v-model="compareMode" />
+                <label for="compare-mode" class="text-sm cursor-pointer">
+                  Compare Mode
+                </label>
+                <span class="text-xs text-muted-foreground">(show side-by-side)</span>
+              </div>
             </div>
 
-            <div v-if="useRerank" class="flex items-center gap-2">
-              <Switch id="compare-mode" v-model="compareMode" />
-              <label for="compare-mode" class="text-sm cursor-pointer">
-                Compare Mode
-              </label>
-              <span class="text-xs text-muted-foreground">(show side-by-side)</span>
+            <div v-if="stats" class="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+              <span><span class="font-medium text-foreground">{{ stats.projects_with_embeddings }}</span> projects · <span class="font-medium text-foreground">{{ stats.embedding_coverage }}%</span> coverage</span>
+              <Badge v-if="embeddingHealthy" variant="outline" class="text-green-600 text-[10px] px-1.5 py-0">
+                <Icon name="lucide:check-circle" class="h-3 w-3 mr-1" />
+                Embed
+              </Badge>
+              <Badge v-else variant="destructive" class="text-[10px] px-1.5 py-0">
+                <Icon name="lucide:alert-circle" class="h-3 w-3 mr-1" />
+                Embed
+              </Badge>
+              <Badge v-if="rerankHealthy" variant="outline" class="text-green-600 text-[10px] px-1.5 py-0">
+                <Icon name="lucide:check-circle" class="h-3 w-3 mr-1" />
+                Rerank
+              </Badge>
+              <Badge v-else variant="outline" class="text-yellow-600 text-[10px] px-1.5 py-0">
+                <Icon name="lucide:alert-circle" class="h-3 w-3 mr-1" />
+                Rerank
+              </Badge>
             </div>
           </div>
         </form>
-      </Card>
-
-      <!-- Stats Card -->
-      <Card v-if="stats" class="p-4 mb-8">
-        <div class="flex items-center justify-between text-sm">
-          <div class="flex items-center gap-4">
-            <div>
-              <span class="text-muted-foreground">Searchable Projects:</span>
-              <span class="font-semibold ml-1">{{ stats.projects_with_embeddings }}</span>
-            </div>
-            <div>
-              <span class="text-muted-foreground">Coverage:</span>
-              <span class="font-semibold ml-1">{{ stats.embedding_coverage }}%</span>
-            </div>
-          </div>
-          <div class="flex items-center gap-2">
-            <Badge v-if="embeddingHealthy" variant="outline" class="text-green-600">
-              <Icon name="lucide:check-circle" class="h-3 w-3 mr-1" />
-              Embedding
-            </Badge>
-            <Badge v-else variant="destructive">
-              <Icon name="lucide:alert-circle" class="h-3 w-3 mr-1" />
-              Embedding Offline
-            </Badge>
-            <Badge v-if="rerankHealthy" variant="outline" class="text-green-600">
-              <Icon name="lucide:check-circle" class="h-3 w-3 mr-1" />
-              Rerank
-            </Badge>
-            <Badge v-else variant="outline" class="text-yellow-600">
-              <Icon name="lucide:alert-circle" class="h-3 w-3 mr-1" />
-              Rerank Offline
-            </Badge>
-          </div>
-        </div>
       </Card>
 
       <!-- Search Error -->

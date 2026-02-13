@@ -1,6 +1,6 @@
 <template>
   <div class="container mx-auto px-4 py-8 md:py-12">
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-5xl mx-auto">
       <!-- Loading State -->
       <div v-if="isLoading" class="flex justify-center py-20">
         <Icon name="lucide:loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
@@ -35,151 +35,167 @@
             <AlertDescription>{{ project.invalid_reason }}</AlertDescription>
           </Alert>
 
-          <!-- Title Row -->
-          <div class="flex items-start gap-4 mb-3">
-            <button
-              @click="toggleBookmark"
-              :disabled="isTogglingBookmark"
-              class="mt-1 hover:scale-110 transition-transform flex-shrink-0"
-              :title="project.is_bookmarked ? 'Remove bookmark' : 'Add bookmark'"
-            >
-              <Icon
-                name="lucide:star"
-                :class="[
-                  'h-8 w-8 transition-colors',
-                  project.is_bookmarked ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/40 hover:text-yellow-500',
-                  isTogglingBookmark ? 'animate-pulse' : ''
-                ]"
-              />
-            </button>
-            <div class="min-w-0">
-              <div class="flex items-center gap-3 flex-wrap">
-                <h1 class="text-5xl md:text-6xl font-bold tracking-tight">{{ project.title }}</h1>
-                <Badge v-if="!project.is_valid_project" variant="destructive" class="text-xs">
-                  Invalid
+          <div class="flex flex-col lg:flex-row lg:gap-8">
+            <!-- Left: Text Content -->
+            <div class="flex-1 min-w-0">
+              <!-- Title -->
+              <div class="mb-4">
+                <div class="flex items-center gap-3 flex-wrap">
+                  <h1 class="project-title">{{ project.title }}</h1>
+                  <Badge v-if="!project.is_valid_project" variant="destructive" class="text-xs">
+                    Invalid
+                  </Badge>
+                </div>
+                <p class="project-subtitle">{{ project.short_description }}</p>
+                <a
+                  v-if="project.primary_url"
+                  :href="project.primary_url"
+                  target="_blank"
+                  class="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-2"
+                >
+                  <Icon name="lucide:external-link" class="h-3.5 w-3.5" />
+                  {{ project.primary_url }}
+                </a>
+              </div>
+
+              <!-- Scores (compact inline) -->
+              <div class="flex items-center gap-3 mb-5">
+                <div class="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5">
+                  <Icon name="lucide:lightbulb" class="h-4 w-4 text-amber-500" />
+                  <span class="text-sm text-muted-foreground">Idea</span>
+                  <span class="score-value">{{ project.idea_score }}</span>
+                  <span class="text-xs text-muted-foreground">/10</span>
+                </div>
+                <div class="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5">
+                  <Icon name="lucide:gauge" class="h-4 w-4 text-blue-500" />
+                  <span class="text-sm text-muted-foreground">Complexity</span>
+                  <span class="score-value">{{ project.complexity_score }}</span>
+                  <span class="text-xs text-muted-foreground">/10</span>
+                </div>
+              </div>
+
+              <!-- Tags -->
+              <div v-if="project.hashtags?.length" class="flex flex-wrap gap-2 mb-6">
+                <Badge
+                  v-for="tag in project.hashtags"
+                  :key="tag"
+                  variant="secondary"
+                  class="project-tag"
+                >
+                  #{{ tag }}
                 </Badge>
               </div>
-              <p class="text-lg md:text-xl text-muted-foreground mt-2 leading-relaxed">{{ project.short_description }}</p>
-              <a
-                v-if="project.primary_url"
-                :href="project.primary_url"
-                target="_blank"
-                class="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-2"
-              >
-                <Icon name="lucide:external-link" class="h-3.5 w-3.5" />
-                {{ project.primary_url }}
-              </a>
-            </div>
-          </div>
 
-          <!-- Score Cards -->
-          <div class="grid grid-cols-2 gap-4 mt-8 mb-6">
-            <div class="relative overflow-hidden rounded-xl border bg-gradient-to-br from-amber-500/5 to-orange-500/10 dark:from-amber-500/10 dark:to-orange-500/5 p-5">
-              <div class="flex items-center gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-amber-500/10 dark:bg-amber-500/20">
-                  <Icon name="lucide:lightbulb" class="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <div class="text-sm font-medium text-muted-foreground">Idea Score</div>
-                  <div class="text-3xl font-bold tracking-tight">{{ project.idea_score }}<span class="text-base font-normal text-muted-foreground">/10</span></div>
-                </div>
+              <!-- Action Buttons -->
+              <div class="flex flex-wrap items-center gap-1">
+                <button
+                  @click="toggleBookmark"
+                  :disabled="isTogglingBookmark"
+                  :title="project.is_bookmarked ? 'Remove bookmark' : 'Add bookmark'"
+                  class="inline-flex items-center justify-center h-8 px-3 rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors gap-1.5"
+                  :class="project.is_bookmarked ? 'text-yellow-600' : 'text-muted-foreground'"
+                >
+                  <Icon
+                    name="lucide:star"
+                    :class="[
+                      'h-4 w-4 transition-colors',
+                      project.is_bookmarked ? 'text-yellow-500 fill-yellow-500' : '',
+                      isTogglingBookmark ? 'animate-pulse' : ''
+                    ]"
+                  />
+                  {{ project.is_bookmarked ? 'Saved' : 'Save' }}
+                </button>
+                <Badge v-if="project.source === 'nemo_data_designer'" variant="secondary" class="gap-1">
+                  <Icon name="lucide:sparkles" class="h-3 w-3" />
+                  AI
+                </Badge>
+                <a
+                  v-if="project.source_comment_id"
+                  :href="`https://news.ycombinator.com/item?id=${project.source_comment_id}`"
+                  target="_blank"
+                  class="inline-flex items-center justify-center h-8 px-3 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors gap-1.5"
+                >
+                  <span class="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-orange-500 text-white text-[10px] font-bold leading-none">Y</span>
+                  HN
+                </a>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  @click="reprocessProject"
+                  :disabled="isReprocessing"
+                  :class="{
+                    'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20': btnFeedback.getFeedback('reprocess') === 'confirming',
+                    'bg-green-500/10 text-green-600': btnFeedback.getFeedback('reprocess') === 'success',
+                    'bg-destructive/10 text-destructive': btnFeedback.getFeedback('reprocess') === 'error',
+                    'text-muted-foreground': !['confirming', 'success', 'error'].includes(btnFeedback.getFeedback('reprocess')),
+                  }"
+                >
+                  <Icon
+                    :name="isReprocessing ? 'lucide:loader-2' : btnFeedback.getFeedback('reprocess') === 'confirming' ? 'lucide:alert-triangle' : btnFeedback.getFeedback('reprocess') === 'success' ? 'lucide:check' : btnFeedback.getFeedback('reprocess') === 'error' ? 'lucide:x' : 'lucide:rotate-cw'"
+                    :class="['h-3.5 w-3.5 mr-1.5', isReprocessing ? 'animate-spin' : '']"
+                  />
+                  {{ isReprocessing ? 'Queuing...' : btnFeedback.getFeedback('reprocess') === 'confirming' ? 'Sure?' : btnFeedback.getFeedback('reprocess') === 'success' ? 'Queued' : btnFeedback.getFeedback('reprocess') === 'error' ? 'Failed' : 'Reprocess' }}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  @click="generateVideo"
+                  :disabled="isGeneratingVideo"
+                  :class="{
+                    'bg-green-500/10 text-green-600': btnFeedback.getFeedback('genvideo') === 'success',
+                    'bg-destructive/10 text-destructive': btnFeedback.getFeedback('genvideo') === 'error',
+                    'text-muted-foreground': !['success', 'error'].includes(btnFeedback.getFeedback('genvideo')),
+                  }"
+                >
+                  <Icon
+                    :name="isGeneratingVideo ? 'lucide:loader-2' : btnFeedback.getFeedback('genvideo') === 'success' ? 'lucide:check' : btnFeedback.getFeedback('genvideo') === 'error' ? 'lucide:x' : 'lucide:video'"
+                    :class="['h-3.5 w-3.5 mr-1.5', isGeneratingVideo ? 'animate-spin' : '']"
+                  />
+                  {{ isGeneratingVideo ? 'Starting...' : btnFeedback.getFeedback('genvideo') === 'success' ? 'Started' : btnFeedback.getFeedback('genvideo') === 'error' ? 'Failed' : 'Video' }}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  @click="deleteProject"
+                  :disabled="isDeleting"
+                  :class="[
+                    btnFeedback.getFeedback('delete') === 'confirming'
+                      ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                      : btnFeedback.getFeedback('delete') === 'error'
+                        ? 'bg-destructive/10 text-destructive'
+                        : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10'
+                  ]"
+                >
+                  <Icon
+                    :name="isDeleting ? 'lucide:loader-2' : btnFeedback.getFeedback('delete') === 'confirming' ? 'lucide:alert-triangle' : btnFeedback.getFeedback('delete') === 'error' ? 'lucide:x' : 'lucide:trash-2'"
+                    :class="['h-3.5 w-3.5 mr-1.5', isDeleting ? 'animate-spin' : '']"
+                  />
+                  {{ isDeleting ? 'Deleting...' : btnFeedback.getFeedback('delete') === 'confirming' ? 'Sure?' : btnFeedback.getFeedback('delete') === 'error' ? 'Failed' : 'Delete' }}
+                </Button>
               </div>
             </div>
-            <div class="relative overflow-hidden rounded-xl border bg-gradient-to-br from-blue-500/5 to-indigo-500/10 dark:from-blue-500/10 dark:to-indigo-500/5 p-5">
-              <div class="flex items-center gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-500/10 dark:bg-blue-500/20">
-                  <Icon name="lucide:gauge" class="h-5 w-5 text-blue-600 dark:text-blue-400" />
+
+            <!-- Right: Screenshot (large screens) -->
+            <div v-if="project.screenshot_path" class="mt-6 lg:mt-0 lg:w-[360px] flex-shrink-0">
+              <Card class="overflow-hidden">
+                <img
+                  :src="`${config.public.apiBase}/media/${project.screenshot_path}`"
+                  :alt="`Screenshot of ${project.title}`"
+                  class="w-full"
+                  loading="lazy"
+                />
+                <div v-if="project.project_urls?.length" class="px-4 py-2.5 border-t">
+                  <a
+                    :href="project.project_urls[0]"
+                    target="_blank"
+                    class="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5 truncate"
+                  >
+                    <Icon name="lucide:external-link" class="h-3.5 w-3.5 flex-shrink-0" />
+                    {{ project.project_urls[0] }}
+                  </a>
                 </div>
-                <div>
-                  <div class="text-sm font-medium text-muted-foreground">Complexity</div>
-                  <div class="text-3xl font-bold tracking-tight">{{ project.complexity_score }}<span class="text-base font-normal text-muted-foreground">/10</span></div>
-                </div>
-              </div>
+              </Card>
             </div>
-          </div>
-
-          <!-- Tags -->
-          <div v-if="project.hashtags?.length" class="flex flex-wrap gap-2 mb-6">
-            <Badge
-              v-for="tag in project.hashtags"
-              :key="tag"
-              variant="secondary"
-              class="px-3 py-1"
-            >
-              #{{ tag }}
-            </Badge>
-          </div>
-
-          <!-- Action Buttons -->
-          <div class="flex items-center gap-1">
-            <!-- AI Generated badge -->
-            <Badge v-if="project.source === 'nemo_data_designer'" variant="secondary" class="mr-2 gap-1">
-              <Icon name="lucide:sparkles" class="h-3 w-3" />
-              AI Generated
-            </Badge>
-            <a
-              v-if="project.source_comment_id"
-              :href="`https://news.ycombinator.com/item?id=${project.source_comment_id}`"
-              target="_blank"
-              class="inline-flex items-center justify-center h-8 px-3 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors gap-1.5"
-            >
-              <span class="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-orange-500 text-white text-[10px] font-bold leading-none">Y</span>
-              HN
-            </a>
-            <Button
-              variant="ghost"
-              size="sm"
-              @click="reprocessProject"
-              :disabled="isReprocessing"
-              :class="{
-                'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20': btnFeedback.getFeedback('reprocess') === 'confirming',
-                'bg-green-500/10 text-green-600': btnFeedback.getFeedback('reprocess') === 'success',
-                'bg-destructive/10 text-destructive': btnFeedback.getFeedback('reprocess') === 'error',
-                'text-muted-foreground': !['confirming', 'success', 'error'].includes(btnFeedback.getFeedback('reprocess')),
-              }"
-            >
-              <Icon
-                :name="isReprocessing ? 'lucide:loader-2' : btnFeedback.getFeedback('reprocess') === 'confirming' ? 'lucide:alert-triangle' : btnFeedback.getFeedback('reprocess') === 'success' ? 'lucide:check' : btnFeedback.getFeedback('reprocess') === 'error' ? 'lucide:x' : 'lucide:rotate-cw'"
-                :class="['h-3.5 w-3.5 mr-1.5', isReprocessing ? 'animate-spin' : '']"
-              />
-              {{ isReprocessing ? 'Queuing...' : btnFeedback.getFeedback('reprocess') === 'confirming' ? 'Sure?' : btnFeedback.getFeedback('reprocess') === 'success' ? 'Queued' : btnFeedback.getFeedback('reprocess') === 'error' ? 'Failed' : 'Reprocess' }}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              @click="generateVideo"
-              :disabled="isGeneratingVideo"
-              :class="{
-                'bg-green-500/10 text-green-600': btnFeedback.getFeedback('genvideo') === 'success',
-                'bg-destructive/10 text-destructive': btnFeedback.getFeedback('genvideo') === 'error',
-                'text-muted-foreground': !['success', 'error'].includes(btnFeedback.getFeedback('genvideo')),
-              }"
-            >
-              <Icon
-                :name="isGeneratingVideo ? 'lucide:loader-2' : btnFeedback.getFeedback('genvideo') === 'success' ? 'lucide:check' : btnFeedback.getFeedback('genvideo') === 'error' ? 'lucide:x' : 'lucide:video'"
-                :class="['h-3.5 w-3.5 mr-1.5', isGeneratingVideo ? 'animate-spin' : '']"
-              />
-              {{ isGeneratingVideo ? 'Starting...' : btnFeedback.getFeedback('genvideo') === 'success' ? 'Started' : btnFeedback.getFeedback('genvideo') === 'error' ? 'Failed' : 'Generate Video' }}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              @click="deleteProject"
-              :disabled="isDeleting"
-              :class="[
-                btnFeedback.getFeedback('delete') === 'confirming'
-                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
-                  : btnFeedback.getFeedback('delete') === 'error'
-                    ? 'bg-destructive/10 text-destructive'
-                    : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10'
-              ]"
-            >
-              <Icon
-                :name="isDeleting ? 'lucide:loader-2' : btnFeedback.getFeedback('delete') === 'confirming' ? 'lucide:alert-triangle' : btnFeedback.getFeedback('delete') === 'error' ? 'lucide:x' : 'lucide:trash-2'"
-                :class="['h-3.5 w-3.5 mr-1.5', isDeleting ? 'animate-spin' : '']"
-              />
-              {{ isDeleting ? 'Deleting...' : btnFeedback.getFeedback('delete') === 'confirming' ? 'Sure?' : btnFeedback.getFeedback('delete') === 'error' ? 'Failed' : 'Delete' }}
-            </Button>
           </div>
         </div>
 
@@ -194,34 +210,6 @@
             </div>
             <Card class="p-6">
               <p class="text-muted-foreground leading-relaxed">{{ project.description }}</p>
-            </Card>
-          </section>
-
-          <!-- Screenshot -->
-          <section v-if="project.screenshot_path">
-            <div class="flex items-center gap-2.5 mb-3">
-              <Icon name="lucide:image" class="h-5 w-5 text-muted-foreground" />
-              <h2 class="text-lg font-semibold">Screenshot</h2>
-            </div>
-            <Card class="overflow-hidden">
-              <div class="border-b">
-                <img
-                  :src="`${config.public.apiBase}/media/${project.screenshot_path}`"
-                  :alt="`Screenshot of ${project.title}`"
-                  class="w-full"
-                  loading="lazy"
-                />
-              </div>
-              <div v-if="project.project_urls?.length" class="px-5 py-3">
-                <a
-                  :href="project.project_urls[0]"
-                  target="_blank"
-                  class="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5"
-                >
-                  <Icon name="lucide:external-link" class="h-3.5 w-3.5" />
-                  {{ project.project_urls[0] }}
-                </a>
-              </div>
             </Card>
           </section>
 
@@ -716,6 +704,44 @@ onMounted(() => {
 </script>
 
 <style>
+/* Project detail hero typography - explicit styles to avoid Tailwind JIT issues */
+.project-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+@media (min-width: 640px) {
+  .project-title {
+    font-size: 3rem;
+  }
+}
+@media (min-width: 768px) {
+  .project-title {
+    font-size: 3.75rem;
+  }
+}
+.project-subtitle {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+  margin-top: 0.75rem;
+}
+@media (min-width: 768px) {
+  .project-subtitle {
+    font-size: 1.25rem;
+  }
+}
+.score-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.project-tag {
+  padding: 0.375rem 0.875rem;
+  font-size: 0.875rem;
+}
+
 /* Style for HTML content from HN */
 .prose a {
   color: hsl(var(--primary));
