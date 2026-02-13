@@ -7,6 +7,7 @@ Uses NVIDIA Nemotron model via OpenAI-compatible API.
 import logging
 
 from llama_index.llms.openai_like import OpenAILike
+from openai import AsyncOpenAI
 
 from src.settings import (
     LLM_API_KEY,
@@ -69,6 +70,14 @@ def get_llm_for_structured_output() -> OpenAILike:
     )
 
     return llm
+
+
+def get_openai_client() -> AsyncOpenAI:
+    """Get an AsyncOpenAI client pointing at the vLLM endpoint.
+
+    Used by the agentic tool-calling loop (not by LlamaIndex).
+    """
+    return AsyncOpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
 
 
 def get_llm_for_creative_output() -> OpenAILike:

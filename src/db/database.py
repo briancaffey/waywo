@@ -111,6 +111,8 @@ def _run_migrations():
     migrations = [
         "ALTER TABLE waywo_projects ADD COLUMN primary_url TEXT",
         "ALTER TABLE waywo_projects ADD COLUMN url_contents TEXT",
+        "ALTER TABLE chat_turns ADD COLUMN agent_steps_json TEXT",
+        "ALTER TABLE voice_turns ADD COLUMN agent_steps_json TEXT",
     ]
     with SessionLocal() as session:
         for sql in migrations:

@@ -19,6 +19,12 @@ def _turn_from_db(t: ChatTurnDB) -> ChatTurn:
             source_projects = json.loads(t.source_projects_json)
         except (json.JSONDecodeError, TypeError):
             pass
+    agent_steps = []
+    if t.agent_steps_json:
+        try:
+            agent_steps = json.loads(t.agent_steps_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
     return ChatTurn(
         id=t.id,
         thread_id=t.thread_id,
@@ -27,6 +33,7 @@ def _turn_from_db(t: ChatTurnDB) -> ChatTurn:
         source_projects=source_projects,
         llm_duration_ms=t.llm_duration_ms,
         rag_triggered=t.rag_triggered,
+        agent_steps=agent_steps,
         created_at=t.created_at,
     )
 
@@ -135,9 +142,11 @@ def create_turn(
     source_projects: list[dict] | None = None,
     llm_duration_ms: int | None = None,
     rag_triggered: bool | None = None,
+    agent_steps: list[dict] | None = None,
 ) -> ChatTurn:
     with SessionLocal() as session:
         source_json = json.dumps(source_projects) if source_projects else None
+        steps_json = json.dumps(agent_steps) if agent_steps else None
         turn = ChatTurnDB(
             thread_id=thread_id,
             role=role,
@@ -145,6 +154,7 @@ def create_turn(
             source_projects_json=source_json,
             llm_duration_ms=llm_duration_ms,
             rag_triggered=rag_triggered,
+            agent_steps_json=steps_json,
         )
         session.add(turn)
         # Bump thread's updated_at

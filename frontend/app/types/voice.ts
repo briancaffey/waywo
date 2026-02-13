@@ -4,7 +4,7 @@ export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking'
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
-export type DebugCategory = 'stt' | 'llm' | 'tts' | 'audio' | 'ws' | 'state' | 'rag'
+export type DebugCategory = 'stt' | 'llm' | 'tts' | 'audio' | 'ws' | 'state' | 'rag' | 'agent'
 
 /** Messages sent from client to server */
 export interface ClientMessage {
@@ -51,6 +51,23 @@ export interface ServerDebugMessage {
   ts: string
 }
 
+export interface ServerAgentThinkingMessage {
+  type: 'agent_thinking'
+  thought: string
+}
+
+export interface ServerAgentToolCallMessage {
+  type: 'agent_tool_call'
+  tool: string
+  input: string
+}
+
+export interface ServerAgentToolResultMessage {
+  type: 'agent_tool_result'
+  tool: string
+  projects_found: number
+}
+
 export type ServerMessage =
   | ServerStateMessage
   | ServerSttPartialMessage
@@ -59,6 +76,9 @@ export type ServerMessage =
   | ServerTurnCompleteMessage
   | ServerErrorMessage
   | ServerDebugMessage
+  | ServerAgentThinkingMessage
+  | ServerAgentToolCallMessage
+  | ServerAgentToolResultMessage
 
 /** Voice thread from the API */
 export interface VoiceThread {

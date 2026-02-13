@@ -6,79 +6,79 @@
         <div class="flex h-16 items-center justify-between">
           <!-- Logo/Brand -->
           <div class="flex items-center space-x-2">
-            <a href="/" class="flex items-center space-x-2">
+            <NuxtLink to="/" class="flex items-center space-x-2">
               <div class="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
                 <span class="text-primary-foreground font-bold text-sm">w</span>
               </div>
               <span class="text-xl font-bold">waywo</span>
-            </a>
+            </NuxtLink>
           </div>
 
           <!-- Navigation Links -->
           <div class="hidden md:flex items-center space-x-6">
-            <a
-              href="/posts"
+            <NuxtLink
+              to="/posts"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/posts') ? 'text-primary' : 'text-muted-foreground'"
             >
               Posts
-            </a>
-            <a
-              href="/comments"
+            </NuxtLink>
+            <NuxtLink
+              to="/comments"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/comments') ? 'text-primary' : 'text-muted-foreground'"
             >
               Comments
-            </a>
-            <a
-              href="/projects"
+            </NuxtLink>
+            <NuxtLink
+              to="/projects"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/projects') ? 'text-primary' : 'text-muted-foreground'"
             >
               Projects
-            </a>
-            <a
-              href="/explore"
+            </NuxtLink>
+            <NuxtLink
+              to="/explore"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/explore') ? 'text-primary' : 'text-muted-foreground'"
             >
               Explore
-            </a>
-            <a
-              href="/videos"
+            </NuxtLink>
+            <NuxtLink
+              to="/videos"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/videos') ? 'text-primary' : 'text-muted-foreground'"
             >
               Videos
-            </a>
-            <a
-              href="/search"
+            </NuxtLink>
+            <NuxtLink
+              to="/search"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/search') ? 'text-primary' : 'text-muted-foreground'"
             >
               Search
-            </a>
-            <a
-              href="/chat"
+            </NuxtLink>
+            <NuxtLink
+              to="/chat"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/chat') ? 'text-primary' : 'text-muted-foreground'"
             >
               Chat
-            </a>
-            <a
-              href="/voice"
+            </NuxtLink>
+            <NuxtLink
+              to="/voice"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/voice') ? 'text-primary' : 'text-muted-foreground'"
             >
               Voice
-            </a>
-            <a
-              href="/designer"
+            </NuxtLink>
+            <NuxtLink
+              to="/designer"
               class="text-sm font-medium transition-colors hover:text-primary"
               :class="isActive('/designer') ? 'text-primary' : 'text-muted-foreground'"
             >
               Designer
-            </a>
+            </NuxtLink>
             <button
               @click="toggleTheme"
               class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -107,69 +107,78 @@
         <!-- Mobile Menu -->
         <div v-if="mobileMenuOpen" class="md:hidden border-t py-4">
           <div class="flex flex-col space-y-2">
-            <a
-              href="/posts"
+            <NuxtLink
+              to="/posts"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/posts') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+              @click="mobileMenuOpen = false"
             >
               Posts
-            </a>
-            <a
-              href="/comments"
+            </NuxtLink>
+            <NuxtLink
+              to="/comments"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/comments') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+              @click="mobileMenuOpen = false"
             >
               Comments
-            </a>
-            <a
-              href="/projects"
+            </NuxtLink>
+            <NuxtLink
+              to="/projects"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/projects') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+              @click="mobileMenuOpen = false"
             >
               Projects
-            </a>
-            <a
-              href="/explore"
+            </NuxtLink>
+            <NuxtLink
+              to="/explore"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/explore') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+              @click="mobileMenuOpen = false"
             >
               Explore
-            </a>
-            <a
-              href="/videos"
+            </NuxtLink>
+            <NuxtLink
+              to="/videos"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/videos') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+              @click="mobileMenuOpen = false"
             >
               Videos
-            </a>
-            <a
-              href="/search"
+            </NuxtLink>
+            <NuxtLink
+              to="/search"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/search') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+              @click="mobileMenuOpen = false"
             >
               Search
-            </a>
-            <a
-              href="/chat"
+            </NuxtLink>
+            <NuxtLink
+              to="/chat"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/chat') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+              @click="mobileMenuOpen = false"
             >
               Chat
-            </a>
-            <a
-              href="/voice"
+            </NuxtLink>
+            <NuxtLink
+              to="/voice"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/voice') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+              @click="mobileMenuOpen = false"
             >
               Voice
-            </a>
-            <a
-              href="/designer"
+            </NuxtLink>
+            <NuxtLink
+              to="/designer"
               class="text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md"
               :class="isActive('/designer') ? 'text-primary bg-accent' : 'text-muted-foreground'"
+              @click="mobileMenuOpen = false"
             >
               Designer
-            </a>
+            </NuxtLink>
             <button
               @click="toggleTheme"
               class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"

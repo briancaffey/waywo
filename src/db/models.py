@@ -522,6 +522,7 @@ class ChatTurnDB(Base):
     source_projects_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     llm_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     rag_triggered: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    agent_steps_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
@@ -585,6 +586,7 @@ class VoiceTurnDB(Base):
     llm_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     tts_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     stt_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    agent_steps_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False

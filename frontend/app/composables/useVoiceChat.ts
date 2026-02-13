@@ -4,6 +4,7 @@ import type {
   ServerMessage,
   ServerDebugMessage,
 } from '~/types/voice'
+import type { AgentStep } from '~/types/models'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -38,6 +39,7 @@ export function useVoiceChat(options: VoiceChatOptions = {}) {
   const errorMessage = ref<string | null>(null)
   const threadId = ref<string | null>(null)
   const messages = ref<ChatMessage[]>([])
+  const agentSteps = ref<AgentStep[]>([])
 
   // ── Internals (not reactive) ────────────────────────────────────
   let ws: WebSocket | null = null
@@ -126,6 +128,22 @@ export function useVoiceChat(options: VoiceChatOptions = {}) {
         if (msg.thread_id) {
           threadId.value = msg.thread_id
         }
+        // Clear agent steps when returning to listening
+        if (msg.state === 'idle') {
+          agentSteps.value = []
+        }
+        break
+
+      case 'agent_thinking':
+        agentSteps.value.push({ type: 'thought', text: msg.thought })
+        break
+
+      case 'agent_tool_call':
+        agentSteps.value.push({ type: 'tool_call', tool: msg.tool, input: msg.input })
+        break
+
+      case 'agent_tool_result':
+        agentSteps.value.push({ type: 'tool_result', tool: msg.tool, projects_found: msg.projects_found })
         break
 
       case 'stt_partial':
@@ -346,6 +364,7 @@ registerProcessor('pcm-capture-processor', PcmCaptureProcessor)
     partialTranscription.value = ''
     finalTranscription.value = ''
     llmResponse.value = ''
+    agentSteps.value = []
     _userPcmChunks = []
 
     try {
@@ -412,6 +431,7 @@ registerProcessor('pcm-capture-processor', PcmCaptureProcessor)
     errorMessage: readonly(errorMessage),
     threadId: readonly(threadId),
     messages: readonly(messages),
+    agentSteps: readonly(agentSteps),
 
     // Actions
     connect,

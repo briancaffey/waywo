@@ -90,11 +90,22 @@ export interface SourceProject {
   complexity_score: number
 }
 
+export interface AgentStep {
+  type: 'thought' | 'tool_call' | 'tool_result'
+  text?: string
+  tool?: string
+  input?: string
+  summary?: string
+  projects_found?: number
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   sourceProjects?: SourceProject[]
   ragTriggered?: boolean
+  agentSteps?: AgentStep[]
+  isStreaming?: boolean
 }
 
 export interface DatabaseStats {

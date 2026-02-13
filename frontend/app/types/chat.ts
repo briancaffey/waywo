@@ -17,5 +17,6 @@ export interface ChatTurnRecord {
   source_projects: Record<string, unknown>[]
   llm_duration_ms: number | null
   rag_triggered: boolean | null
+  agent_steps: Record<string, unknown>[] | null
   created_at: string
 }

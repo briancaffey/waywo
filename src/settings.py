@@ -54,6 +54,10 @@ DEDUP_SIMILARITY_THRESHOLD = float(os.getenv("DEDUP_SIMILARITY_THRESHOLD", "0.85
 # RAG retrieval
 RAG_SIMILARITY_THRESHOLD = float(os.getenv("RAG_SIMILARITY_THRESHOLD", "0.65"))
 
+# Agent
+AGENT_MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", "5"))
+AGENT_TOOL_CALLING = os.getenv("AGENT_TOOL_CALLING", "true").lower() in ("1", "true", "yes")
+
 # Phoenix observability
 PHOENIX_HOST = os.getenv("PHOENIX_HOST", "localhost")
 PHOENIX_PORT = os.getenv("PHOENIX_PORT", "6006")

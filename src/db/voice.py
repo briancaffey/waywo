@@ -1,5 +1,6 @@
 """Voice thread and turn CRUD operations."""
 
+import json
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -12,6 +13,12 @@ from src.models import VoiceThread, VoiceTurn
 
 
 def _turn_from_db(t: VoiceTurnDB) -> VoiceTurn:
+    agent_steps = []
+    if t.agent_steps_json:
+        try:
+            agent_steps = json.loads(t.agent_steps_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
     return VoiceTurn(
         id=t.id,
         thread_id=t.thread_id,
@@ -23,6 +30,7 @@ def _turn_from_db(t: VoiceTurnDB) -> VoiceTurn:
         llm_duration_ms=t.llm_duration_ms,
         tts_duration_ms=t.tts_duration_ms,
         stt_duration_ms=t.stt_duration_ms,
+        agent_steps=agent_steps,
         created_at=t.created_at,
     )
 
@@ -135,8 +143,10 @@ def create_turn(
     llm_duration_ms: Optional[int] = None,
     tts_duration_ms: Optional[int] = None,
     stt_duration_ms: Optional[int] = None,
+    agent_steps: list[dict] | None = None,
 ) -> VoiceTurn:
     with SessionLocal() as session:
+        steps_json = json.dumps(agent_steps) if agent_steps else None
         turn = VoiceTurnDB(
             thread_id=thread_id,
             role=role,
@@ -148,6 +158,7 @@ def create_turn(
             llm_duration_ms=llm_duration_ms,
             tts_duration_ms=tts_duration_ms,
             stt_duration_ms=stt_duration_ms,
+            agent_steps_json=steps_json,
         )
         session.add(turn)
         # Also bump the thread's updated_at

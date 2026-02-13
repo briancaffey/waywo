@@ -283,6 +283,7 @@ class ChatTurn(BaseModel):
     source_projects: list[dict] = Field(default_factory=list)
     llm_duration_ms: Optional[int] = None
     rag_triggered: Optional[bool] = None
+    agent_steps: list[dict] = Field(default_factory=list)
     created_at: datetime
 
 
@@ -310,6 +311,7 @@ class VoiceTurn(BaseModel):
     llm_duration_ms: Optional[int] = None
     tts_duration_ms: Optional[int] = None
     stt_duration_ms: Optional[int] = None
+    agent_steps: list[dict] = Field(default_factory=list)
     created_at: datetime
 
 

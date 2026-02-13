@@ -16,62 +16,85 @@
         </div>
       </WaywoPageHeader>
 
-      <!-- Stats Card -->
-      <Card class="p-6 mb-8">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-muted-foreground">Total Projects</p>
-            <p class="text-3xl font-bold">{{ total }}</p>
+      <!-- Toolbar -->
+      <Collapsible v-model:open="isFilterOpen" class="mb-6">
+        <div class="flex items-center gap-3 flex-wrap">
+          <!-- Project count -->
+          <div class="inline-flex items-center gap-1.5 rounded-lg border bg-muted/50 px-3 py-1.5 text-sm font-medium tabular-nums">
+            <span class="text-foreground font-semibold">{{ total }}</span>
+            <span class="text-muted-foreground">projects</span>
           </div>
-          <div class="flex gap-2">
-            <Button :variant="sortOrder === 'random' ? 'default' : 'outline'" @click="shuffleProjects" :disabled="isLoading">
-              <Icon
-                name="lucide:shuffle"
-                class="mr-2 h-4 w-4"
-              />
+
+          <!-- Source tabs -->
+          <div class="flex items-center gap-1.5 flex-1 min-w-0">
+            <Button
+              size="sm"
+              :variant="!showBookmarkedOnly && !sourceFilter ? 'default' : 'outline'"
+              @click="setSourceFilter(null)"
+            >
+              All
+            </Button>
+            <Button
+              size="sm"
+              :variant="sourceFilter === 'hn' ? 'default' : 'outline'"
+              @click="setSourceFilter('hn')"
+            >
+              <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm bg-orange-500 text-white text-[9px] font-bold leading-none mr-1.5">Y</span>
+              HN
+            </Button>
+            <Button
+              size="sm"
+              :variant="sourceFilter === 'nemo_data_designer' ? 'default' : 'outline'"
+              @click="setSourceFilter('nemo_data_designer')"
+            >
+              <Icon name="lucide:sparkles" class="mr-1.5 h-3.5 w-3.5" />
+              AI
+            </Button>
+            <Button
+              size="sm"
+              :variant="showBookmarkedOnly ? 'default' : 'outline'"
+              @click="toggleBookmarkedFilter()"
+            >
+              <Icon name="lucide:star" class="mr-1.5 h-3.5 w-3.5" />
+              Saved
+              <Badge v-if="bookmarkedCount > 0" variant="secondary" class="ml-1.5 text-[10px] px-1.5 py-0">
+                {{ bookmarkedCount }}
+              </Badge>
+            </Button>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex items-center gap-1.5">
+            <CollapsibleTrigger as-child>
+              <Button variant="outline" size="sm" class="gap-1.5">
+                <Icon name="lucide:filter" class="h-3.5 w-3.5" />
+                Filters
+                <Badge v-if="activeFilterCount > 0" variant="secondary" class="text-[10px] px-1.5 py-0">
+                  {{ activeFilterCount }}
+                </Badge>
+                <Icon
+                  :name="isFilterOpen ? 'lucide:chevron-up' : 'lucide:chevron-down'"
+                  class="h-3.5 w-3.5"
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <Button size="sm" :variant="sortOrder === 'random' ? 'default' : 'outline'" @click="shuffleProjects" :disabled="isLoading">
+              <Icon name="lucide:shuffle" class="mr-1.5 h-3.5 w-3.5" />
               Shuffle
             </Button>
-            <Button variant="outline" @click="refreshProjects" :disabled="isLoading">
+            <Button variant="outline" size="sm" @click="refreshProjects" :disabled="isLoading">
               <Icon
                 :name="isLoading ? 'lucide:loader-2' : 'lucide:refresh-cw'"
                 :class="isLoading ? 'animate-spin' : ''"
-                class="mr-2 h-4 w-4"
+                class="mr-1.5 h-3.5 w-3.5"
               />
               Refresh
             </Button>
           </div>
         </div>
-      </Card>
-
-      <!-- Filter Section -->
-      <Collapsible v-model:open="isFilterOpen" class="mb-6">
-        <div class="flex items-center justify-between mb-4">
-          <CollapsibleTrigger as-child>
-            <Button variant="outline" class="gap-2">
-              <Icon name="lucide:filter" class="h-4 w-4" />
-              Filters
-              <Badge v-if="activeFilterCount > 0" variant="secondary" class="ml-1">
-                {{ activeFilterCount }}
-              </Badge>
-              <Icon
-                :name="isFilterOpen ? 'lucide:chevron-up' : 'lucide:chevron-down'"
-                class="h-4 w-4"
-              />
-            </Button>
-          </CollapsibleTrigger>
-          <Button
-            v-if="activeFilterCount > 0"
-            variant="ghost"
-            size="sm"
-            @click="clearAllFilters"
-          >
-            <Icon name="lucide:x" class="mr-1 h-3 w-3" />
-            Clear All Filters
-          </Button>
-        </div>
 
         <CollapsibleContent>
-          <Card class="p-6">
+          <Card class="p-6 mt-3">
             <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               <!-- Tags Filter -->
               <div class="space-y-2 lg:col-span-1">
@@ -174,51 +197,25 @@
                 />
               </div>
 
-              <!-- Apply Filters Button -->
-              <div class="flex items-end">
-                <Button @click="applyFilters" class="w-full">
+              <!-- Apply / Clear Buttons -->
+              <div class="flex items-end gap-2">
+                <Button @click="applyFilters" class="flex-1">
                   <Icon name="lucide:search" class="mr-2 h-4 w-4" />
-                  Apply Filters
+                  Apply
+                </Button>
+                <Button
+                  v-if="activeFilterCount > 0"
+                  variant="ghost"
+                  @click="clearAllFilters"
+                >
+                  <Icon name="lucide:x" class="mr-1 h-3 w-3" />
+                  Clear
                 </Button>
               </div>
             </div>
           </Card>
         </CollapsibleContent>
       </Collapsible>
-
-      <!-- Filter Tabs -->
-      <div class="flex flex-wrap gap-2 mb-6">
-        <Button
-          :variant="!showBookmarkedOnly && !sourceFilter ? 'default' : 'outline'"
-          @click="setSourceFilter(null)"
-        >
-          All Projects
-        </Button>
-        <Button
-          :variant="sourceFilter === 'hn' ? 'default' : 'outline'"
-          @click="setSourceFilter('hn')"
-        >
-          <span class="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-orange-500 text-white text-[10px] font-bold leading-none mr-2">Y</span>
-          From HN
-        </Button>
-        <Button
-          :variant="sourceFilter === 'nemo_data_designer' ? 'default' : 'outline'"
-          @click="setSourceFilter('nemo_data_designer')"
-        >
-          <Icon name="lucide:sparkles" class="mr-2 h-4 w-4" />
-          AI Generated
-        </Button>
-        <Button
-          :variant="showBookmarkedOnly ? 'default' : 'outline'"
-          @click="toggleBookmarkedFilter()"
-        >
-          <Icon name="lucide:star" class="mr-2 h-4 w-4" />
-          Bookmarked
-          <Badge v-if="bookmarkedCount > 0" variant="secondary" class="ml-2">
-            {{ bookmarkedCount }}
-          </Badge>
-        </Button>
-      </div>
 
       <!-- Projects List -->
       <div v-if="isLoading" class="flex justify-center py-12">

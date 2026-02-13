@@ -1,23 +1,29 @@
-"""Text chat REST API with threaded conversations and smart RAG.
+"""Text chat REST API with threaded conversations and agentic RAG.
 
 Endpoints:
-  GET    /api/chat/threads              - list threads
-  POST   /api/chat/threads              - create thread
-  GET    /api/chat/threads/{id}         - get thread with turns
-  PUT    /api/chat/threads/{id}         - update thread title
-  DELETE /api/chat/threads/{id}         - delete thread
-  POST   /api/chat/threads/{id}/message - send message (main chat endpoint)
+  GET    /api/chat/threads                     - list threads
+  POST   /api/chat/threads                     - create thread
+  GET    /api/chat/threads/{id}                - get thread with turns
+  PUT    /api/chat/threads/{id}                - update thread title
+  DELETE /api/chat/threads/{id}                - delete thread
+  POST   /api/chat/threads/{id}/message        - send message (legacy)
+  POST   /api/chat/threads/{id}/message/stream - send message (SSE streaming)
 """
 
 import asyncio
+import json
 import logging
 import time
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from llama_index.core.llms import ChatMessage
 from pydantic import BaseModel
 
+from src.agent.engine import run_agent
+from src.agent.events import AgentEventType
+from src.agent.prompts import TEXT_AGENT_SYSTEM_PROMPT
 from src.db.chat import (
     create_thread,
     create_turn,
@@ -177,6 +183,127 @@ async def api_send_message(thread_id: str, body: SendMessageRequest):
         "rag_triggered": rag.was_triggered,
         "llm_duration_ms": llm_ms,
     }
+
+
+# ---------------------------------------------------------------------------
+# SSE streaming chat endpoint (agentic)
+# ---------------------------------------------------------------------------
+
+
+def _sse_event(event: str, data: dict) -> str:
+    """Format a single SSE event."""
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+@router.post("/api/chat/threads/{thread_id}/message/stream")
+async def api_send_message_stream(thread_id: str, body: SendMessageRequest):
+    """Send a message and stream the agentic response as SSE events."""
+    thread = get_thread(thread_id, include_turns=False)
+    if thread is None:
+        raise HTTPException(status_code=404, detail="Thread not found")
+
+    user_text = body.message.strip()
+    if not user_text:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    async def event_generator():
+        llm_start = time.monotonic()
+
+        # Load recent history
+        history = get_turns(thread_id, limit=MAX_HISTORY_TURNS)
+
+        # Persist user turn immediately
+        create_turn(thread_id=thread_id, role="user", text=user_text)
+
+        # Run the agent
+        final_text = ""
+        source_projects: list[dict] = []
+        agent_steps: list[dict] = []
+
+        async for event in run_agent(
+            user_message=user_text,
+            history=history,
+            system_prompt_template=TEXT_AGENT_SYSTEM_PROMPT,
+            stream_final_answer=True,
+        ):
+            if event.type == AgentEventType.THINKING:
+                yield _sse_event("thinking", {
+                    "thought": event.data.get("thought", ""),
+                    "iteration": event.data.get("iteration", 0),
+                })
+
+            elif event.type == AgentEventType.TOOL_CALL:
+                yield _sse_event("tool_call", {
+                    "tool": event.data.get("tool", ""),
+                    "input": event.data.get("input", ""),
+                })
+
+            elif event.type == AgentEventType.TOOL_RESULT:
+                yield _sse_event("tool_result", {
+                    "tool": event.data.get("tool", ""),
+                    "projects_found": event.data.get("projects_found", 0),
+                    "result_summary": event.data.get("result_summary", ""),
+                })
+
+            elif event.type == AgentEventType.ANSWER_START:
+                yield _sse_event("answer_start", {})
+
+            elif event.type == AgentEventType.ANSWER_TOKEN:
+                yield _sse_event("answer_token", {
+                    "token": event.data.get("token", ""),
+                })
+
+            elif event.type == AgentEventType.ANSWER_DONE:
+                final_text = event.data.get("full_text", "")
+                source_projects = event.data.get("source_projects", [])
+                agent_steps = event.data.get("agent_steps", [])
+                yield _sse_event("answer_done", {
+                    "full_text": final_text,
+                    "source_projects": source_projects,
+                })
+
+            elif event.type == AgentEventType.ERROR:
+                yield _sse_event("error", {
+                    "error": event.data.get("error", "Unknown error"),
+                })
+
+            elif event.type == AgentEventType.MAX_ITERATIONS:
+                yield _sse_event("max_iterations", {
+                    "iterations": event.data.get("iterations", 0),
+                })
+
+        llm_ms = int((time.monotonic() - llm_start) * 1000)
+
+        # Persist assistant turn
+        if final_text:
+            create_turn(
+                thread_id=thread_id,
+                role="assistant",
+                text=final_text,
+                source_projects=source_projects if source_projects else None,
+                llm_duration_ms=llm_ms,
+                rag_triggered=bool(source_projects),
+                agent_steps=agent_steps if agent_steps else None,
+            )
+
+        # Auto-title on first message
+        if not history:
+            asyncio.create_task(_auto_title_thread(thread_id, user_text))
+
+        yield _sse_event("done", {
+            "llm_duration_ms": llm_ms,
+            "thread_id": thread_id,
+        })
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 async def _auto_title_thread(thread_id: str, user_text: str):

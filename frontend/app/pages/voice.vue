@@ -132,6 +132,17 @@
               </div>
             </div>
 
+            <!-- Agent steps during processing -->
+            <div v-if="voiceState === 'processing' && agentSteps.length > 0" class="flex flex-col items-start">
+              <div class="bg-muted/50 rounded-2xl rounded-bl-md px-4 py-3 max-w-[80%]">
+                <ChatAgentSteps :steps="agentSteps" />
+                <div class="flex items-center gap-2 mt-1">
+                  <Icon name="lucide:loader-2" class="h-3 w-3 animate-spin text-muted-foreground" />
+                  <span class="text-xs text-muted-foreground">Processing...</span>
+                </div>
+              </div>
+            </div>
+
             <!-- Empty state -->
             <div
               v-if="showText && voiceState === 'idle' && messages.length === 0"
@@ -271,6 +282,7 @@ const {
   errorMessage,
   messages,
   threadId,
+  agentSteps,
   connect,
   disconnect,
   startListening,

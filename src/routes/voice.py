@@ -23,6 +23,9 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from llama_index.core.llms import ChatMessage
 from pydantic import BaseModel
 
+from src.agent.engine import run_agent
+from src.agent.events import AgentEventType
+from src.agent.prompts import VOICE_AGENT_SYSTEM_PROMPT
 from src.clients.tts import generate_speech, list_voices
 from src.db.voice import (
     create_thread,
@@ -36,9 +39,7 @@ from src.db.voice import (
     update_thread,
 )
 from src.llm_config import get_llm
-from src.rag.retrieve import smart_retrieve
 from src.settings import STT_WS_URL
-from src.workflows.prompts import VOICE_RAG_CONTEXT_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -143,8 +144,6 @@ async def api_delete_thread(thread_id: str):
 # Constants & helpers
 # ---------------------------------------------------------------------------
 
-
-VOICE_SYSTEM_PROMPT = """You are a helpful voice assistant. Keep your responses concise and conversational since they will be spoken aloud. Avoid markdown formatting, code blocks, bullet points, or numbered lists. Speak naturally as if having a conversation. Aim for 2-3 sentences unless more detail is explicitly requested."""
 
 MAX_HISTORY_TURNS = 20  # Max recent turns to send as LLM context
 
@@ -276,17 +275,6 @@ async def _collect_stt_results(
         await _send_debug(ws_client, "stt", "error", error=str(e))
 
     return final_text
-
-
-def _build_llm_messages(
-    system_prompt: str, history: list, user_text: str
-) -> list:
-    """Build the LLM message list from system prompt + history + current user turn."""
-    messages = [ChatMessage(role="system", content=system_prompt)]
-    for turn in history:
-        messages.append(ChatMessage(role=turn.role, content=turn.text))
-    messages.append(ChatMessage(role="user", content=user_text))
-    return messages
 
 
 async def _auto_title_thread(thread_id: str, user_text: str):
@@ -450,61 +438,69 @@ async def voice_chat(
 
                 logger.info(f"Voice chat: transcription = {transcription!r}")
 
-                # ── RAG retrieval ─────────────────────────────────────
-                rag = await smart_retrieve(transcription)
-                await _send_debug(
-                    ws_client,
-                    "rag",
-                    "result",
-                    triggered=rag.was_triggered,
-                    top_similarity=round(rag.top_similarity, 4),
-                    projects_found=rag.projects_found,
-                )
-
-                # Build system prompt, optionally with RAG context
-                effective_system_prompt = VOICE_SYSTEM_PROMPT
-                if rag.was_triggered:
-                    rag_section = VOICE_RAG_CONTEXT_PREFIX.format(
-                        context=rag.context_text
-                    )
-                    effective_system_prompt = (
-                        VOICE_SYSTEM_PROMPT + "\n\n" + rag_section
-                    )
-
-                # ── LLM generation ────────────────────────────────────
+                # ── Agent-driven RAG + LLM ────────────────────────────
                 llm_start = time.monotonic()
 
                 # Load conversation history for context
                 history = get_turns(thread_id, limit=MAX_HISTORY_TURNS)
                 await _send_debug(
                     ws_client,
-                    "llm",
-                    "request_started",
+                    "agent",
+                    "started",
                     input_text=transcription,
                     input_chars=len(transcription),
                     history_turns=len(history),
-                    rag_triggered=rag.was_triggered,
                 )
 
-                llm = get_llm()
-                messages = _build_llm_messages(
-                    effective_system_prompt, history, transcription
-                )
+                llm_text = ""
+                source_projects: list[dict] = []
+                agent_steps: list[dict] = []
 
-                response = await llm.achat(messages)
-                llm_text = response.message.content.strip()
+                async for event in run_agent(
+                    user_message=transcription,
+                    history=history,
+                    system_prompt_template=VOICE_AGENT_SYSTEM_PROMPT,
+                    stream_final_answer=False,
+                ):
+                    if event.type == AgentEventType.THINKING:
+                        await ws_client.send_text(
+                            _make_event("agent_thinking", thought=event.data.get("thought", ""))
+                        )
+                        await _send_debug(ws_client, "agent", "thinking", thought=event.data.get("thought", ""))
+
+                    elif event.type == AgentEventType.TOOL_CALL:
+                        await ws_client.send_text(
+                            _make_event("agent_tool_call", tool=event.data.get("tool", ""), input=event.data.get("input", ""))
+                        )
+                        await _send_debug(ws_client, "agent", "tool_call", **event.data)
+
+                    elif event.type == AgentEventType.TOOL_RESULT:
+                        await ws_client.send_text(
+                            _make_event("agent_tool_result", tool=event.data.get("tool", ""), projects_found=event.data.get("projects_found", 0))
+                        )
+                        await _send_debug(ws_client, "agent", "tool_result", **event.data)
+
+                    elif event.type == AgentEventType.ANSWER_DONE:
+                        llm_text = event.data.get("full_text", "")
+                        source_projects = event.data.get("source_projects", [])
+                        agent_steps = event.data.get("agent_steps", [])
+
+                    elif event.type == AgentEventType.ERROR:
+                        await _send_debug(ws_client, "agent", "error", error=event.data.get("error", ""))
+
                 llm_ms = int((time.monotonic() - llm_start) * 1000)
 
                 logger.info(
-                    f"Voice chat: LLM response ({llm_ms}ms) = {llm_text[:120]}..."
+                    f"Voice chat: Agent response ({llm_ms}ms) = {llm_text[:120]}..."
                 )
                 await _send_debug(
                     ws_client,
-                    "llm",
-                    "response_complete",
+                    "agent",
+                    "complete",
                     duration_ms=llm_ms,
                     output_chars=len(llm_text),
                     output_preview=llm_text[:200],
+                    projects_found=len(source_projects),
                 )
                 await ws_client.send_text(
                     _make_event("llm_complete", text=llm_text)
@@ -574,6 +570,7 @@ async def voice_chat(
                     tts_voice=selected_voice,
                     llm_duration_ms=llm_ms,
                     tts_duration_ms=tts_ms,
+                    agent_steps=agent_steps if agent_steps else None,
                 )
                 await _send_debug(ws_client, "ws", "turns_saved", thread_id=thread_id)
 
