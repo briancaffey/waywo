@@ -34,6 +34,9 @@ from src.clients.firecrawl import extract_urls_from_text, scrape_urls
 from src.llm_config import get_llm, get_llm_for_structured_output
 from src.workflows.events import (
     CommentInputEvent,
+    DeduplicationCheckEvent,
+    DeduplicationPassedEvent,
+    DuplicateFoundEvent,
     EmbeddingGeneratedEvent,
     ExtractedProjectEvent,
     MetadataGeneratedEvent,
@@ -70,11 +73,13 @@ class WaywoProjectWorkflow(Workflow):
         *args,
         firecrawl_url: str = "http://localhost:3002",
         embedding_url: str = "http://192.168.5.96:8000",
+        dedup_similarity_threshold: float = 0.85,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.firecrawl_url = firecrawl_url
         self.embedding_url = embedding_url
+        self.dedup_similarity_threshold = dedup_similarity_threshold
         self.llm = get_llm()
         self.llm_structured = get_llm_for_structured_output()
 
@@ -96,6 +101,7 @@ class WaywoProjectWorkflow(Workflow):
         await ctx.store.set("projects", [])
         await ctx.store.set("total_projects", 1)
         await ctx.store.set("comment_id", ev.comment_id)
+        await ctx.store.set("comment_author", ev.get("comment_author"))
 
         await self._log(ctx, "🚀", f"Starting workflow for comment {ev.comment_id}")
 
@@ -183,7 +189,7 @@ class WaywoProjectWorkflow(Workflow):
     @step
     async def validate_project(
         self, ctx: Context, ev: ExtractedProjectEvent
-    ) -> ValidatedProjectEvent:
+    ) -> DeduplicationCheckEvent:
         """
         Validate whether the extracted text represents a valid project/product.
 
@@ -198,20 +204,23 @@ class WaywoProjectWorkflow(Workflow):
         )
 
         raw_text = ev.raw_text.strip()
+        comment_author = await ctx.store.get("comment_author")
 
         # Quick checks for obvious non-projects
         if raw_text in ["[deleted]", "[removed]", ""]:
-            return ValidatedProjectEvent(
+            return DeduplicationCheckEvent(
                 **ev.model_dump(),
                 is_valid=False,
                 invalid_reason="deleted_or_removed",
+                comment_author=comment_author,
             )
 
         if len(raw_text) < 20:
-            return ValidatedProjectEvent(
+            return DeduplicationCheckEvent(
                 **ev.model_dump(),
                 is_valid=False,
                 invalid_reason="text_too_short",
+                comment_author=comment_author,
             )
 
         # Use LLM to validate
@@ -235,23 +244,99 @@ class WaywoProjectWorkflow(Workflow):
             else:
                 await self._log(ctx, "❌", f"Project invalid: {reason}")
 
-            return ValidatedProjectEvent(
+            return DeduplicationCheckEvent(
                 **ev.model_dump(),
                 is_valid=is_valid,
                 invalid_reason=None if is_valid else reason,
+                comment_author=comment_author,
             )
 
         except Exception as e:
             await self._log(ctx, "⚠️", f"Validation error, assuming valid: {e}")
-            return ValidatedProjectEvent(
+            return DeduplicationCheckEvent(
                 **ev.model_dump(),
                 is_valid=True,
                 invalid_reason=None,
+                comment_author=comment_author,
             )
 
     @step
+    async def check_duplicate(
+        self, ctx: Context, ev: DeduplicationCheckEvent
+    ) -> DuplicateFoundEvent | DeduplicationPassedEvent:
+        """
+        Check if this project already exists in the database (same author).
+
+        Generates a preliminary embedding from the raw text and compares
+        against existing project embeddings by the same author.
+        """
+        # Skip dedup for invalid projects
+        if not ev.is_valid:
+            await self._log(ctx, "⏭️", "Skipping dedup for invalid project")
+            return DeduplicationPassedEvent(**{
+                k: v for k, v in ev.model_dump().items()
+                if k != "comment_author"
+            })
+
+        author = ev.comment_author
+        if not author:
+            await self._log(ctx, "⏭️", "No author info, skipping dedup")
+            return DeduplicationPassedEvent(**{
+                k: v for k, v in ev.model_dump().items()
+                if k != "comment_author"
+            })
+
+        await self._log(ctx, "🔄", f"Checking for duplicates by author '{author}'")
+
+        try:
+            # Generate preliminary embedding from raw extracted text
+            embedding = await get_single_embedding(
+                text=ev.raw_text,
+                embedding_url=self.embedding_url,
+            )
+
+            # Check for duplicates by same author
+            from src.db.submissions import find_duplicate_by_author
+
+            result = find_duplicate_by_author(
+                author=author,
+                embedding=embedding,
+                similarity_threshold=self.dedup_similarity_threshold,
+            )
+
+            if result is not None:
+                existing_id, similarity = result
+                await self._log(
+                    ctx,
+                    "🔄",
+                    f"Duplicate detected (similarity: {similarity:.2f}) "
+                    f"— linked to project #{existing_id}",
+                )
+                base = {
+                    k: v for k, v in ev.model_dump().items()
+                    if k != "comment_author"
+                }
+                return DuplicateFoundEvent(
+                    **base,
+                    existing_project_id=existing_id,
+                    similarity_score=similarity,
+                )
+
+            await self._log(ctx, "✅", "No duplicate found — proceeding with processing")
+
+        except EmbeddingError as e:
+            await self._log(ctx, "⚠️", f"Dedup embedding failed, skipping check: {e}")
+        except Exception as e:
+            await self._log(ctx, "⚠️", f"Dedup check error, skipping: {e}")
+
+        return DeduplicationPassedEvent(**{
+            k: v for k, v in ev.model_dump().items()
+            if k != "comment_author"
+        })
+
+    @step
     async def fetch_urls(
-        self, ctx: Context, ev: ValidatedProjectEvent
+        self, ctx: Context, ev: DeduplicationPassedEvent
     ) -> URLsFetchedEvent:
         """
         Extract URLs from the project text and fetch their content via Firecrawl.
@@ -496,33 +581,51 @@ class WaywoProjectWorkflow(Workflow):
 
     @step
     async def finalize(
-        self, ctx: Context, ev: EmbeddingGeneratedEvent
+        self, ctx: Context, ev: EmbeddingGeneratedEvent | DuplicateFoundEvent
     ) -> StopEvent | None:
         """
         Finalize the project and collect results.
         """
         logs = await ctx.store.get("logs") or []
-        await self._log(ctx, "✨", f"Finalizing project: {ev.title}")
 
-        project_data = {
-            "comment_id": ev.comment_id,
-            "project_index": ev.project_index,
-            "total_projects": ev.total_projects,
-            "is_valid": ev.is_valid,
-            "invalid_reason": ev.invalid_reason,
-            "title": ev.title,
-            "short_description": ev.short_description,
-            "description": ev.description,
-            "hashtags": ev.hashtags,
-            "urls": ev.urls,
-            "url_summaries": ev.url_summaries,
-            "primary_url": ev.primary_url,
-            "url_contents": ev.url_contents,
-            "idea_score": ev.idea_score,
-            "complexity_score": ev.complexity_score,
-            "embedding": ev.embedding,
-            "workflow_logs": list(logs),
-        }
+        # Handle duplicate projects — skip all LLM-generated fields
+        if isinstance(ev, DuplicateFoundEvent):
+            await self._log(
+                ctx, "✨",
+                f"Finalizing duplicate (linked to project #{ev.existing_project_id})",
+            )
+            project_data = {
+                "comment_id": ev.comment_id,
+                "project_index": ev.project_index,
+                "total_projects": ev.total_projects,
+                "is_duplicate": True,
+                "existing_project_id": ev.existing_project_id,
+                "similarity_score": ev.similarity_score,
+                "raw_text": ev.raw_text,
+                "workflow_logs": list(logs),
+            }
+        else:
+            await self._log(ctx, "✨", f"Finalizing project: {ev.title}")
+            project_data = {
+                "comment_id": ev.comment_id,
+                "project_index": ev.project_index,
+                "total_projects": ev.total_projects,
+                "is_valid": ev.is_valid,
+                "invalid_reason": ev.invalid_reason,
+                "raw_text": ev.raw_text,
+                "title": ev.title,
+                "short_description": ev.short_description,
+                "description": ev.description,
+                "hashtags": ev.hashtags,
+                "urls": ev.urls,
+                "url_summaries": ev.url_summaries,
+                "primary_url": ev.primary_url,
+                "url_contents": ev.url_contents,
+                "idea_score": ev.idea_score,
+                "complexity_score": ev.complexity_score,
+                "embedding": ev.embedding,
+                "workflow_logs": list(logs),
+            }
 
         # Store project in context
         projects = await ctx.store.get("projects") or []

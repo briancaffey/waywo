@@ -307,6 +307,10 @@
                   <Icon name="lucide:sparkles" class="mr-1 h-3 w-3" />
                   AI
                 </Badge>
+                <Badge v-if="project.submission_count && project.submission_count > 1" variant="outline" class="text-xs">
+                  <Icon name="lucide:repeat" class="mr-1 h-3 w-3" />
+                  {{ project.submission_count }}x posted
+                </Badge>
               </div>
               <p class="text-muted-foreground">{{ project.short_description }}</p>
             </div>

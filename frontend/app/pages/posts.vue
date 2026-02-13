@@ -74,14 +74,72 @@
       <Card class="p-6">
         <div class="flex justify-between items-center mb-6">
           <h2 class="text-xl font-semibold">Stored Posts</h2>
-          <Button variant="outline" @click="fetchPosts" :disabled="isLoading">
-            <Icon
-              :name="isLoading ? 'lucide:loader-2' : 'lucide:refresh-cw'"
-              :class="isLoading ? 'animate-spin' : ''"
-              class="mr-2 h-4 w-4"
-            />
-            Refresh
-          </Button>
+          <div class="flex gap-2">
+            <Dialog v-model:open="addDialogOpen">
+              <DialogTrigger as-child>
+                <Button>
+                  <Icon name="lucide:plus" class="mr-2 h-4 w-4" />
+                  Add Post
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add HN Post</DialogTitle>
+                  <DialogDescription>
+                    Paste a Hacker News "What are you working on?" post link. The year and month will be detected automatically, and all comments will be fetched.
+                  </DialogDescription>
+                </DialogHeader>
+                <form @submit.prevent="submitAddPost" class="space-y-4">
+                  <div class="space-y-2">
+                    <label for="hn-url" class="text-sm font-medium">HN Post URL</label>
+                    <Input
+                      id="hn-url"
+                      v-model="addPostUrl"
+                      placeholder="https://news.ycombinator.com/item?id=..."
+                      :disabled="isAdding"
+                    />
+                  </div>
+
+                  <Alert v-if="addSuccess" class="border-green-200 bg-green-50">
+                    <Icon name="lucide:check-circle" class="h-4 w-4 text-green-600" />
+                    <AlertTitle class="text-green-800">Post Queued</AlertTitle>
+                    <AlertDescription class="text-green-700">
+                      {{ addSuccessMessage }}
+                    </AlertDescription>
+                  </Alert>
+
+                  <Alert v-if="addError" variant="destructive">
+                    <Icon name="lucide:alert-circle" class="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{{ addError }}</AlertDescription>
+                  </Alert>
+
+                  <DialogFooter>
+                    <DialogClose as-child>
+                      <Button type="button" variant="outline" :disabled="isAdding">Cancel</Button>
+                    </DialogClose>
+                    <Button type="submit" :disabled="isAdding || !addPostUrl.trim()">
+                      <Icon
+                        :name="isAdding ? 'lucide:loader-2' : 'lucide:download'"
+                        :class="isAdding ? 'animate-spin' : ''"
+                        class="mr-2 h-4 w-4"
+                      />
+                      {{ isAdding ? 'Adding...' : 'Add & Fetch Comments' }}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            <Button variant="outline" @click="fetchPosts" :disabled="isLoading">
+              <Icon
+                :name="isLoading ? 'lucide:loader-2' : 'lucide:refresh-cw'"
+                :class="isLoading ? 'animate-spin' : ''"
+                class="mr-2 h-4 w-4"
+              />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <div v-if="isLoading" class="flex justify-center py-12">
@@ -191,6 +249,56 @@ const limitComments = ref<number | undefined>(undefined)
 
 // Chart ref
 const postsChartRef = ref<{ refresh: () => void } | null>(null)
+
+// Add post dialog state
+const addDialogOpen = ref(false)
+const addPostUrl = ref('')
+const isAdding = ref(false)
+const addError = ref<string | null>(null)
+const addSuccess = ref(false)
+const addSuccessMessage = ref('')
+
+watch(addDialogOpen, (open) => {
+  if (!open) {
+    addPostUrl.value = ''
+    addError.value = null
+    addSuccess.value = false
+    addSuccessMessage.value = ''
+  }
+})
+
+async function submitAddPost() {
+  if (isAdding.value || !addPostUrl.value.trim()) return
+
+  isAdding.value = true
+  addError.value = null
+  addSuccess.value = false
+
+  try {
+    const response = await $fetch<{ task_id: string; post_id: number; title: string; year: number; month: number; descendants: number }>(
+      `${config.public.apiBase}/api/waywo-posts/add`,
+      {
+        method: 'POST',
+        body: { url: addPostUrl.value.trim() },
+      }
+    )
+
+    addSuccess.value = true
+    addSuccessMessage.value = `"${response.title}" (${formatYearMonth(response.year, response.month)}) — fetching ${response.descendants ?? '?'} comments...`
+
+    // Refresh posts list and chart after a delay
+    setTimeout(() => {
+      fetchPosts()
+      postsChartRef.value?.refresh()
+      addDialogOpen.value = false
+    }, 2500)
+  } catch (err: any) {
+    const detail = err?.data?.detail || err?.message || 'Failed to add post'
+    addError.value = detail
+  } finally {
+    isAdding.value = false
+  }
+}
 
 // Navigate to comments page filtered by post
 function viewComments(postId: number) {

@@ -48,6 +48,9 @@ VIDEO_HEIGHT = int(os.getenv("VIDEO_HEIGHT", "1920"))
 VIDEO_FPS = int(os.getenv("VIDEO_FPS", "30"))
 USE_KEN_BURNS = os.getenv("USE_KEN_BURNS", "").lower() in ("1", "true", "yes")
 
+# Deduplication
+DEDUP_SIMILARITY_THRESHOLD = float(os.getenv("DEDUP_SIMILARITY_THRESHOLD", "0.85"))
+
 # RAG retrieval
 RAG_SIMILARITY_THRESHOLD = float(os.getenv("RAG_SIMILARITY_THRESHOLD", "0.65"))
 

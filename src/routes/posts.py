@@ -1,6 +1,10 @@
+import re
+from datetime import datetime
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
+from src.clients.hn import fetch_item
 from src.db.client import (
     get_all_post_ids,
     get_comment_count_for_post,
@@ -8,12 +12,14 @@ from src.db.client import (
     get_post,
 )
 from src.models import (
+    AddWaywoPostRequest,
     ProcessCommentsRequest,
     ProcessWaywoPostsRequest,
     WaywoPostSummary,
 )
 from src.worker.tasks import (
     process_waywo_comments,
+    process_waywo_post,
     process_waywo_posts,
 )
 
@@ -64,6 +70,84 @@ async def trigger_process_waywo_comments(request: ProcessCommentsRequest = None)
             "task_id": task.id,
             "limit": request.limit,
             "message": "Comment processing task has been queued",
+        }
+    )
+
+
+@router.post("/api/waywo-posts/add", tags=["waywo"])
+async def add_waywo_post(request: AddWaywoPostRequest):
+    """
+    Add a new WaywoPost by HN URL.
+
+    Extracts the post ID from the URL, fetches the post to detect
+    year/month from its timestamp, then queues a task to save the
+    post and fetch all its comments.
+    """
+    # Extract HN item ID from URL
+    match = re.search(r"(?:id=|item\?id=)(\d+)", request.url)
+    if not match:
+        # Maybe they just pasted a raw numeric ID
+        stripped = request.url.strip()
+        if stripped.isdigit():
+            post_id = int(stripped)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract HN item ID from URL. Expected a URL like https://news.ycombinator.com/item?id=12345",
+            )
+    else:
+        post_id = int(match.group(1))
+
+    # Check if post already exists
+    existing = get_post(post_id)
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Post {post_id} already exists ({existing.title})",
+        )
+
+    # Fetch the post from HN API to detect year/month
+    post_data = fetch_item(post_id)
+    if post_data is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Could not fetch item {post_id} from Hacker News API",
+        )
+
+    if post_data.get("type") != "story":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Item {post_id} is a '{post_data.get('type')}', not a story",
+        )
+
+    # Detect year/month from HN post timestamp
+    hn_time = post_data.get("time")
+    if hn_time:
+        dt = datetime.utcfromtimestamp(hn_time)
+        year = dt.year
+        month = dt.month
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Item {post_id} has no timestamp",
+        )
+
+    # Queue the task to save post + fetch comments
+    task = process_waywo_post.delay(
+        post_id=post_id,
+        year=year,
+        month=month,
+    )
+
+    return JSONResponse(
+        content={
+            "status": "task_queued",
+            "task_id": task.id,
+            "post_id": post_id,
+            "title": post_data.get("title"),
+            "year": year,
+            "month": month,
+            "descendants": post_data.get("descendants"),
         }
     )
 

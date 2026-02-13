@@ -55,6 +55,54 @@ class ValidatedProjectEvent(Event):
     )
 
 
+class DeduplicationCheckEvent(Event):
+    """
+    Event emitted after validation, triggers duplicate check.
+    """
+
+    comment_id: int
+    project_index: int
+    total_projects: int
+    raw_text: str
+    original_comment_text: str
+    is_valid: bool
+    invalid_reason: Optional[str] = None
+    comment_author: Optional[str] = None
+
+
+class DuplicateFoundEvent(Event):
+    """
+    Event emitted when a duplicate project is found.
+    Routes directly to finalize, skipping all LLM processing.
+    """
+
+    comment_id: int
+    project_index: int
+    total_projects: int
+    raw_text: str
+    original_comment_text: str
+    is_valid: bool
+    invalid_reason: Optional[str] = None
+
+    # Duplicate info
+    existing_project_id: int
+    similarity_score: float
+
+
+class DeduplicationPassedEvent(Event):
+    """
+    Event emitted when no duplicate is found. Continues to fetch_urls.
+    """
+
+    comment_id: int
+    project_index: int
+    total_projects: int
+    raw_text: str
+    original_comment_text: str
+    is_valid: bool
+    invalid_reason: Optional[str] = None
+
+
 class URLsFetchedEvent(Event):
     """
     Event emitted after extracting and fetching URLs from project text.

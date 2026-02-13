@@ -16,6 +16,8 @@ from src.db.client import (
     get_project,
     get_projects_for_comment,
     get_similar_projects,
+    get_submission_count,
+    get_submissions_for_project,
     get_total_project_count,
     toggle_bookmark,
 )
@@ -92,8 +94,15 @@ async def list_waywo_projects(
     # Get bookmarked count for the response
     bookmarked_count = get_bookmarked_count()
 
+    # Enrich with submission counts
+    project_dicts = []
+    for p in projects:
+        d = p.model_dump()
+        d["submission_count"] = get_submission_count(p.id)
+        project_dicts.append(d)
+
     return {
-        "projects": [p.model_dump() for p in projects],
+        "projects": project_dicts,
         "total": total,
         "bookmarked_count": bookmarked_count,
         "limit": limit,
@@ -155,7 +164,7 @@ async def get_waywo_project(project_id: int):
     """
     Get a single WaywoProject with full details.
 
-    Includes the source comment and parent post information.
+    Includes the source comment, parent post, and submission history.
     """
     project = get_project(project_id)
     if project is None:
@@ -169,10 +178,14 @@ async def get_waywo_project(project_id: int):
         if source_comment and source_comment.parent:
             parent_post = get_post(source_comment.parent)
 
+    # Get submission history
+    submissions = get_submissions_for_project(project_id)
+
     return {
         "project": project.model_dump(),
         "source_comment": source_comment.model_dump() if source_comment else None,
         "parent_post": parent_post.model_dump() if parent_post else None,
+        "submissions": [s.model_dump() for s in submissions],
     }
 
 

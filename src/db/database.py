@@ -91,6 +91,7 @@ def init_db():
         WaywoCommentDB,
         WaywoPostDB,
         WaywoProjectDB,
+        WaywoProjectSubmissionDB,
         WaywoVideoDB,
         WaywoVideoSegmentDB,
     )

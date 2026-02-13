@@ -51,6 +51,12 @@ class ProcessWaywoPostsRequest(BaseModel):
     limit_comments: Optional[int] = None
 
 
+class AddWaywoPostRequest(BaseModel):
+    """Request body for POST /api/waywo-posts/add."""
+
+    url: str
+
+
 class WaywoPostSummary(BaseModel):
     """Summary of a WaywoPost for list views."""
 
@@ -103,6 +109,25 @@ class WaywoProject(BaseModel):
 
     # Screenshot
     screenshot_path: Optional[str] = None
+
+
+class WaywoProjectSubmission(BaseModel):
+    """A record of a project being posted in a comment."""
+
+    id: int
+    project_id: int
+    comment_id: int
+    extracted_text: Optional[str] = None
+    similarity_score: Optional[float] = None
+    created_at: datetime
+
+    # Enriched fields (populated from joins)
+    comment_by: Optional[str] = None
+    comment_time: Optional[int] = None
+    post_id: Optional[int] = None
+    post_title: Optional[str] = None
+    year: Optional[int] = None
+    month: Optional[int] = None
 
 
 class WaywoProjectSummary(BaseModel):

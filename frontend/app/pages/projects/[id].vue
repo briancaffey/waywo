@@ -268,6 +268,52 @@
             </Collapsible>
           </section>
 
+          <!-- Submissions History -->
+          <section v-if="submissions.length > 1">
+            <Collapsible default-open>
+              <div class="flex items-center gap-2.5 mb-3">
+                <Icon name="lucide:repeat" class="h-5 w-5 text-muted-foreground" />
+                <CollapsibleTrigger class="flex items-center gap-2 group">
+                  <h2 class="text-lg font-semibold">Submissions</h2>
+                  <Badge variant="secondary">{{ submissions.length }}</Badge>
+                  <Icon name="lucide:chevron-down" class="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+              </div>
+              <CollapsibleContent>
+                <Card class="divide-y">
+                  <div v-for="sub in submissions" :key="sub.id" class="p-5">
+                    <div class="flex items-center gap-3 mb-2">
+                      <Badge variant="outline" class="tabular-nums">
+                        {{ formatYearMonth(sub.year, sub.month) }}
+                      </Badge>
+                      <span v-if="sub.similarity_score !== null && sub.similarity_score < 1.0" class="text-xs text-muted-foreground tabular-nums">
+                        {{ Math.round(sub.similarity_score * 100) }}% match
+                      </span>
+                      <span v-if="sub.similarity_score === 1.0" class="text-xs text-muted-foreground">
+                        Original
+                      </span>
+                    </div>
+                    <div v-if="sub.extracted_text" class="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg leading-relaxed line-clamp-3 mb-2">
+                      {{ sub.extracted_text }}
+                    </div>
+                    <div class="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span v-if="sub.comment_by">by {{ sub.comment_by }}</span>
+                      <span v-if="sub.comment_time">{{ formatUnixTime(sub.comment_time, false) }}</span>
+                      <a
+                        :href="`https://news.ycombinator.com/item?id=${sub.comment_id}`"
+                        target="_blank"
+                        class="text-primary hover:underline flex items-center gap-1"
+                      >
+                        <Icon name="lucide:external-link" class="h-3 w-3" />
+                        HN
+                      </a>
+                    </div>
+                  </div>
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
+          </section>
+
           <!-- Original Comment (Collapsible) -->
           <section v-if="sourceComment">
             <Collapsible>
@@ -490,7 +536,7 @@
 </template>
 
 <script setup lang="ts">
-import type { WaywoProject, WaywoComment, WaywoPost, WaywoVideo } from '~/types/models'
+import type { WaywoProject, WaywoComment, WaywoPost, WaywoVideo, WaywoProjectSubmission } from '~/types/models'
 
 // Get route params
 const route = useRoute()
@@ -517,6 +563,7 @@ const isReprocessing = ref(false)
 const isTogglingBookmark = ref(false)
 const similarProjects = ref<{ project: WaywoProject; similarity: number }[]>([])
 const isLoadingSimilar = ref(false)
+const submissions = ref<WaywoProjectSubmission[]>([])
 const projectVideos = ref<WaywoVideo[]>([])
 const isLoadingVideos = ref(false)
 const isGeneratingVideo = ref(false)
@@ -532,11 +579,13 @@ async function fetchProject() {
       project: WaywoProject
       source_comment: WaywoComment | null
       parent_post: WaywoPost | null
+      submissions: WaywoProjectSubmission[]
     }>(`${config.public.apiBase}/api/waywo-projects/${projectId.value}`)
 
     project.value = response.project
     sourceComment.value = response.source_comment
     parentPost.value = response.parent_post
+    submissions.value = response.submissions || []
 
     // Fetch similar projects and videos in parallel (non-blocking)
     fetchSimilarProjects()

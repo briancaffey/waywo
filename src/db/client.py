@@ -46,6 +46,14 @@ from src.db.projects import (  # noqa: F401
     update_project_screenshot,
 )
 
+from src.db.submissions import (  # noqa: F401
+    delete_submissions_for_comment,
+    find_duplicate_by_author,
+    get_submission_count,
+    get_submissions_for_project,
+    save_submission,
+)
+
 from src.db.search import (  # noqa: F401
     get_projects_with_embeddings_count,
     get_similar_projects,

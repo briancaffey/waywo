@@ -212,6 +212,12 @@ class WaywoProjectDB(Base):
     source_comment: Mapped[Optional["WaywoCommentDB"]] = relationship(
         "WaywoCommentDB", back_populates="projects"
     )
+    submissions: Mapped[list["WaywoProjectSubmissionDB"]] = relationship(
+        "WaywoProjectSubmissionDB",
+        back_populates="project",
+        order_by="WaywoProjectSubmissionDB.created_at",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         Index("ix_waywo_projects_source_comment_id", "source_comment_id"),
@@ -272,6 +278,39 @@ class WaywoProjectDB(Base):
     def set_workflow_logs_list(self, logs: list[str]) -> None:
         """Serialize list to JSON string."""
         self.workflow_logs = json.dumps(logs) if logs else None
+
+
+class WaywoProjectSubmissionDB(Base):
+    """Tracks each time a project appears in a comment (including the original)."""
+
+    __tablename__ = "waywo_project_submissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    project_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("waywo_projects.id", ondelete="CASCADE"), nullable=False
+    )
+    comment_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("waywo_comments.id", ondelete="CASCADE"), nullable=False
+    )
+
+    extracted_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    similarity_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+    # Relationships
+    project: Mapped["WaywoProjectDB"] = relationship(
+        "WaywoProjectDB", back_populates="submissions"
+    )
+    comment: Mapped["WaywoCommentDB"] = relationship("WaywoCommentDB")
+
+    __table_args__ = (
+        Index("ix_waywo_project_submissions_project_id", "project_id"),
+        Index("ix_waywo_project_submissions_comment_id", "comment_id"),
+    )
 
 
 class WaywoVideoDB(Base):

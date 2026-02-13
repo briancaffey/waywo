@@ -5,17 +5,19 @@ from pathlib import Path
 
 import yaml
 
-from src.settings import EMBEDDING_URL, FIRECRAWL_URL, MEDIA_DIR
+from src.settings import DEDUP_SIMILARITY_THRESHOLD, EMBEDDING_URL, FIRECRAWL_URL, MEDIA_DIR
 from src.worker.app import celery_app
 from src.db.client import (
     comment_exists,
     delete_projects_for_comment,
+    delete_submissions_for_comment,
     get_comment,
     get_unprocessed_comments,
     mark_comment_processed,
     save_comment,
     save_post,
     save_project,
+    save_submission,
     update_project_screenshot,
 )
 from src.clients.screenshot import (
@@ -140,6 +142,7 @@ async def run_workflow_async(
     parent_post_id: int | None,
     firecrawl_url: str,
     embedding_url: str,
+    dedup_similarity_threshold: float = 0.85,
 ) -> dict:
     """Run the WaywoProjectWorkflow asynchronously."""
     from src.workflows.waywo_project_workflow import WaywoProjectWorkflow
@@ -148,6 +151,7 @@ async def run_workflow_async(
         timeout=180,
         firecrawl_url=firecrawl_url,
         embedding_url=embedding_url,
+        dedup_similarity_threshold=dedup_similarity_threshold,
     )
     return await workflow.run(
         comment_id=comment_id,
@@ -192,11 +196,13 @@ def process_waywo_comment(self, comment_id: int) -> dict:
             "message": "Comment not found in database",
         }
 
-    # Delete existing projects for this comment (allows reprocessing)
+    # Delete existing projects and submissions for this comment (allows reprocessing)
+    deleted_subs = delete_submissions_for_comment(comment_id)
     deleted_count = delete_projects_for_comment(comment_id)
-    if deleted_count > 0:
+    if deleted_count > 0 or deleted_subs > 0:
         print(
-            f"🗑️ Deleted {deleted_count} existing project(s) for comment {comment_id}"
+            f"🗑️ Deleted {deleted_count} project(s) and {deleted_subs} submission(s) "
+            f"for comment {comment_id}"
         )
 
     # Get service URLs from settings
@@ -214,6 +220,7 @@ def process_waywo_comment(self, comment_id: int) -> dict:
                 parent_post_id=comment.parent,
                 firecrawl_url=firecrawl_url,
                 embedding_url=embedding_url,
+                dedup_similarity_threshold=DEDUP_SIMILARITY_THRESHOLD,
             )
         )
     except Exception as e:
@@ -229,10 +236,29 @@ def process_waywo_comment(self, comment_id: int) -> dict:
         f"✅ Workflow completed for comment {comment_id}, found {len(projects_data)} project(s)"
     )
 
-    # Save only valid projects to database
+    # Save only valid projects to database, handle duplicates
     saved_project_ids = []
     skipped_invalid = 0
+    duplicates_linked = 0
     for proj_data in projects_data:
+        # Handle duplicates — create submission link, skip project save
+        if proj_data.get("is_duplicate"):
+            existing_id = proj_data["existing_project_id"]
+            similarity = proj_data.get("similarity_score", 0.0)
+            raw_text = proj_data.get("raw_text", "")
+            sub_id = save_submission(
+                project_id=existing_id,
+                comment_id=comment_id,
+                extracted_text=raw_text,
+                similarity_score=similarity,
+            )
+            duplicates_linked += 1
+            print(
+                f"🔄 Linked duplicate to project #{existing_id} "
+                f"(similarity: {similarity:.2f}, submission #{sub_id})"
+            )
+            continue
+
         # Skip invalid projects - don't create records for them
         if not proj_data.get("is_valid", False):
             invalid_reason = proj_data.get("invalid_reason", "unknown")
@@ -269,6 +295,14 @@ def process_waywo_comment(self, comment_id: int) -> dict:
         has_embedding = "with embedding" if embedding else "without embedding"
         print(f"💾 Saved project {project_id}: {project.title} ({has_embedding})")
 
+        # Create initial submission record for this new project
+        save_submission(
+            project_id=project_id,
+            comment_id=comment_id,
+            extracted_text=proj_data.get("raw_text"),
+            similarity_score=1.0,
+        )
+
         # Capture screenshot for first URL (non-fatal)
         project_urls = proj_data.get("urls", [])
         if project_urls and project_id:
@@ -295,6 +329,7 @@ def process_waywo_comment(self, comment_id: int) -> dict:
         "project_ids": saved_project_ids,
         "valid_projects": len(saved_project_ids),
         "invalid_skipped": skipped_invalid,
+        "duplicates_linked": duplicates_linked,
     }
 
 

@@ -22,6 +22,23 @@ export interface WaywoProject {
   comment_time?: number | null
   // Present only in detail response
   url_contents?: Record<string, string>
+  // Present only in list response
+  submission_count?: number
+}
+
+export interface WaywoProjectSubmission {
+  id: number
+  project_id: number
+  comment_id: number
+  extracted_text: string | null
+  similarity_score: number | null
+  created_at: string
+  comment_by: string | null
+  comment_time: number | null
+  post_id: number | null
+  post_title: string | null
+  year: number | null
+  month: number | null
 }
 
 export interface WaywoComment {
