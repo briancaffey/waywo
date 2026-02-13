@@ -45,6 +45,23 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+def _sanitize_for_tts(text: str) -> str:
+    """Clean up text for natural TTS: strip markdown and fix curly quotes."""
+    import re
+    text = (
+        text
+        .replace("\u2018", "'")   # left single curly quote '
+        .replace("\u2019", "'")   # right single curly quote '
+        .replace("\u201C", '"')   # left double curly quote "
+        .replace("\u201D", '"')   # right double curly quote "
+    )
+    # Strip markdown bold/italic markers but keep the text inside
+    text = re.sub(r"\*{1,3}(.+?)\*{1,3}", r"\1", text)
+    # Strip markdown heading markers
+    text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+    return text
+
 @router.get("/api/voice/voices")
 async def get_voices():
     """List available TTS voices, parsed into a structured format."""
@@ -535,7 +552,7 @@ async def voice_chat(
                     voice=selected_voice,
                 )
 
-                wav_bytes = await generate_speech(llm_text, voice=selected_voice)
+                wav_bytes = await generate_speech(_sanitize_for_tts(llm_text), voice=selected_voice)
                 tts_ms = int((time.monotonic() - tts_start) * 1000)
 
                 logger.info(

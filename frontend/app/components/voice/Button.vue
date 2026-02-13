@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col items-center gap-6">
+  <div class="flex flex-col items-center">
     <!-- Main button with animated rings -->
     <div class="relative flex items-center justify-center">
       <!-- Pulsing rings for listening state -->
@@ -64,8 +64,8 @@
       </button>
     </div>
 
-    <!-- State label -->
-    <p class="text-sm font-medium" :class="labelClasses">
+    <!-- State label (only show active states) -->
+    <p v-if="state !== 'idle'" class="text-sm font-medium mt-3" :class="labelClasses">
       {{ stateLabel }}
     </p>
   </div>

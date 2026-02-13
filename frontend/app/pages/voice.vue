@@ -7,86 +7,86 @@
         description="Talk to the AI assistant using your voice"
       />
 
-      <!-- Controls bar -->
-      <div class="flex items-center justify-center gap-4 mb-8">
-        <!-- Thread sidebar toggle -->
-        <Button
-          variant="ghost"
-          size="sm"
-          @click="sidebarOpen = !sidebarOpen"
-          class="gap-1.5"
-        >
-          <Icon name="lucide:panel-left" class="h-4 w-4" />
-          <span class="text-xs">Threads</span>
-        </Button>
-        <Separator orientation="vertical" class="h-4" />
-        <!-- Connection status -->
-        <div class="flex items-center gap-2 text-sm">
-          <div
-            class="w-2 h-2 rounded-full"
-            :class="{
-              'bg-green-500': connectionState === 'connected',
-              'bg-yellow-500 animate-pulse': connectionState === 'connecting',
-              'bg-red-500': connectionState === 'error',
-              'bg-gray-400': connectionState === 'disconnected',
-            }"
-          />
-          <span class="text-muted-foreground capitalize">{{ connectionState }}</span>
-        </div>
-        <Separator orientation="vertical" class="h-4" />
-        <!-- Show text toggle -->
-        <Button
-          variant="ghost"
-          size="sm"
-          @click="showText = !showText"
-          class="gap-1.5"
-        >
-          <Icon :name="showText ? 'lucide:eye' : 'lucide:eye-off'" class="h-4 w-4" />
-          <span class="text-xs">{{ showText ? 'Text on' : 'Text off' }}</span>
-        </Button>
-        <Separator orientation="vertical" class="h-4" />
-        <!-- Voice selector -->
-        <Select v-model="selectedVoice" @update:model-value="onVoiceChange">
-          <SelectTrigger class="w-[200px] h-8 text-xs">
-            <SelectValue placeholder="Default voice" />
-          </SelectTrigger>
-          <SelectContent class="max-h-[300px]">
-            <SelectItem value="__default__">Default voice</SelectItem>
-            <template v-for="(group, lang) in voicesByLanguage" :key="lang">
-              <SelectSeparator />
-              <SelectGroup>
-                <SelectLabel class="text-[10px] uppercase tracking-wider text-muted-foreground">{{ lang }}</SelectLabel>
-                <SelectItem
-                  v-for="voice in group"
-                  :key="voice.id"
-                  :value="voice.id"
-                >
-                  {{ voice.label }}
-                </SelectItem>
-              </SelectGroup>
-            </template>
-          </SelectContent>
-        </Select>
-        <Separator orientation="vertical" class="h-4" />
-        <!-- Debug panel toggle -->
-        <Button
-          variant="ghost"
-          size="sm"
-          @click="debugPanel.toggle()"
-          class="gap-1.5"
-        >
-          <Icon name="lucide:bug" class="h-4 w-4" />
-          <span class="text-xs">Debug</span>
-          <Badge v-if="debugPanel.eventCount.value > 0" variant="secondary" class="text-[10px] px-1 min-w-[20px]">
-            {{ debugPanel.eventCount.value }}
-          </Badge>
-        </Button>
-      </div>
-
       <!-- Conversation area -->
-      <Card class="mb-6">
-        <ScrollArea class="h-[400px]">
-          <div ref="messagesContainer" class="p-6 space-y-4">
+      <Card class="mb-6 !py-0 !gap-0 flex flex-col overflow-hidden" style="height: calc(100vh - 16rem);">
+        <!-- Controls bar (sticky top of card) -->
+        <div class="flex items-center justify-between gap-2 px-3 py-1.5 border-b bg-card shrink-0">
+          <div class="flex items-center gap-3">
+            <!-- New chat -->
+            <Button
+              variant="ghost"
+              size="sm"
+              @click="onNewThread"
+              class="gap-1.5 h-7 px-2"
+            >
+              <Icon name="lucide:plus" class="h-3.5 w-3.5" />
+              <span class="text-xs">New</span>
+            </Button>
+            <Separator orientation="vertical" class="h-4" />
+            <!-- Thread sidebar toggle -->
+            <Button
+              variant="ghost"
+              size="sm"
+              @click="sidebarOpen = !sidebarOpen"
+              class="gap-1.5 h-7 px-2"
+            >
+              <Icon name="lucide:message-square" class="h-3.5 w-3.5" />
+              <span class="text-xs">Threads</span>
+            </Button>
+            <Separator orientation="vertical" class="h-4" />
+            <!-- Connection status -->
+            <div class="flex items-center gap-1.5">
+              <div
+                class="w-2 h-2 rounded-full"
+                :class="{
+                  'bg-green-500': connectionState === 'connected',
+                  'bg-yellow-500 animate-pulse': connectionState === 'connecting',
+                  'bg-red-500': connectionState === 'error',
+                  'bg-gray-400': connectionState === 'disconnected',
+                }"
+              />
+              <span class="text-xs text-muted-foreground capitalize">{{ connectionState }}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <!-- Show text toggle -->
+            <Button
+              variant="ghost"
+              size="sm"
+              @click="showText = !showText"
+              class="gap-1.5 h-7 px-2"
+            >
+              <Icon :name="showText ? 'lucide:eye' : 'lucide:eye-off'" class="h-3.5 w-3.5" />
+              <span class="text-xs">Text</span>
+            </Button>
+            <Separator orientation="vertical" class="h-4" />
+            <!-- Voice selector -->
+            <Select v-model="selectedVoice" @update:model-value="onVoiceChange">
+              <SelectTrigger class="w-[160px] h-7 text-xs">
+                <SelectValue placeholder="Default voice" />
+              </SelectTrigger>
+              <SelectContent class="max-h-[300px]">
+                <SelectItem value="__default__">Default voice</SelectItem>
+                <template v-for="(group, lang) in voicesByLanguage" :key="lang">
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel class="text-[10px] uppercase tracking-wider text-muted-foreground">{{ lang }}</SelectLabel>
+                    <SelectItem
+                      v-for="voice in group"
+                      :key="voice.id"
+                      :value="voice.id"
+                    >
+                      {{ voice.label }}
+                    </SelectItem>
+                  </SelectGroup>
+                </template>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <!-- Messages -->
+        <div ref="messagesContainer" class="flex-1 overflow-y-auto overscroll-contain p-6 space-y-4">
             <!-- Persisted + live messages -->
             <template v-if="showText && messages.length > 0">
               <div
@@ -102,7 +102,8 @@
                       : 'bg-muted rounded-bl-md',
                   ]"
                 >
-                  <p class="text-sm">{{ msg.text }}</p>
+                  <div v-if="msg.role === 'assistant'" class="text-sm prose prose-sm max-w-none dark:prose-invert" v-html="renderMarkdown(msg.text)" />
+                  <p v-else class="text-sm">{{ msg.text }}</p>
                 </div>
                 <div class="flex items-center gap-1.5 mt-0.5 px-1">
                   <button
@@ -152,18 +153,7 @@
               <p class="text-muted-foreground">Press and hold the button below to speak</p>
             </div>
           </div>
-        </ScrollArea>
       </Card>
-
-      <!-- Voice button -->
-      <div class="flex justify-center mb-6">
-        <VoiceButton
-          :state="voiceState"
-          :disabled="connectionState !== 'connected'"
-          @press="startListening"
-          @release="stopListening"
-        />
-      </div>
 
       <!-- Error message -->
       <Alert v-if="errorMessage" variant="destructive" class="mb-4">
@@ -171,6 +161,18 @@
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>{{ errorMessage }}</AlertDescription>
       </Alert>
+    </div>
+
+    <!-- Sticky voice button -->
+    <div class="sticky bottom-12 z-10 flex justify-center py-4 pointer-events-none">
+      <div class="pointer-events-auto">
+        <VoiceButton
+          :state="voiceState"
+          :disabled="connectionState !== 'connected'"
+          @press="startListening"
+          @release="stopListening"
+        />
+      </div>
     </div>
 
     <!-- Thread sidebar -->
@@ -202,12 +204,21 @@
 </template>
 
 <script setup lang="ts">
+import { marked } from 'marked'
+
+marked.setOptions({ breaks: true, gfm: true })
+
 useHead({
   title: 'Voice Mode - waywo',
   meta: [
     { name: 'description', content: 'Talk to the AI assistant using your voice.' },
   ],
 })
+
+function renderMarkdown(content: string): string {
+  if (!content) return ''
+  return marked.parse(content) as string
+}
 
 interface VoiceOption {
   id: string
@@ -297,10 +308,7 @@ const {
 watch(messages, () => {
   nextTick(() => {
     if (!messagesContainer.value) return
-    const viewport = messagesContainer.value.closest('[data-slot="scroll-area-viewport"]')
-    if (viewport) {
-      viewport.scrollTop = viewport.scrollHeight
-    }
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
   })
 }, { deep: true })
 

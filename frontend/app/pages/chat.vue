@@ -13,29 +13,26 @@
     />
 
     <!-- Main Chat Area -->
-    <div
-      class="flex flex-col min-h-[calc(100vh-4rem)]"
-      :class="sidebarOpen ? 'lg:ml-72' : ''"
-    >
-      <!-- Chat Header -->
-      <div class="border-b bg-background/80 backdrop-blur-sm px-4 py-3 flex items-center gap-3 sticky top-16 z-10">
-        <Button variant="ghost" size="icon" class="h-8 w-8" @click="sidebarOpen = !sidebarOpen">
-          <Icon name="lucide:panel-left" class="h-4 w-4" />
+    <div class="flex flex-col min-h-[calc(100vh-4rem)]">
+      <!-- Floating controls -->
+      <div class="sticky top-[4.5rem] z-10 px-4 py-2 flex items-center gap-2 pointer-events-none">
+        <Button
+          variant="outline"
+          size="icon"
+          class="h-8 w-8 pointer-events-auto shadow-sm"
+          @click="sidebarOpen = !sidebarOpen"
+        >
+          <Icon name="lucide:message-square" class="h-4 w-4" />
         </Button>
-        <div class="flex items-center gap-3 flex-1 min-w-0">
-          <div class="w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/10 flex items-center justify-center flex-shrink-0">
-            <Icon name="lucide:bot" class="h-4 w-4 text-primary" />
-          </div>
-          <div class="min-w-0">
-            <h1 class="text-sm font-semibold truncate">
-              {{ activeThread ? activeThread.title : 'Project Assistant' }}
-            </h1>
-            <p class="text-xs text-muted-foreground">Ask about HN projects</p>
-          </div>
-        </div>
-        <Button v-if="messages.length > 0" variant="ghost" size="sm" class="gap-1.5" @click="startNewThread">
-          <Icon name="lucide:plus" class="h-4 w-4" />
-          <span class="hidden sm:inline text-xs">New Chat</span>
+        <Button
+          v-if="messages.length > 0"
+          variant="outline"
+          size="sm"
+          class="gap-1.5 pointer-events-auto shadow-sm"
+          @click="startNewThread"
+        >
+          <Icon name="lucide:plus" class="h-3.5 w-3.5" />
+          <span class="text-xs">New</span>
         </Button>
       </div>
 
@@ -217,11 +214,6 @@ const isLoading = ref(false)
 const error = ref<string | null>(null)
 const messagesEnd = ref<HTMLElement | null>(null)
 const activeThreadId = ref<string | null>(null)
-
-const activeThread = computed(() => {
-  if (!activeThreadId.value) return null
-  return chatThreads.threads.value.find((t) => t.id === activeThreadId.value) ?? null
-})
 
 const suggestionCards = [
   {
