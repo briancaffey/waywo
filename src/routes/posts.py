@@ -207,10 +207,6 @@ async def get_posts_chart_data():
             }
         )
 
-    # Sort by year and month
-    posts_data.sort(key=lambda x: (x["year"] or 0, x["month"] or 0))
-
-    # Create labels like "03/22" (MM/YY format) and tooltip titles
     month_names = [
         "Jan",
         "Feb",
@@ -225,17 +221,45 @@ async def get_posts_chart_data():
         "Nov",
         "Dec",
     ]
+
+    # Aggregate by (year, month) - sum comment counts for months with multiple posts
+    monthly_data: dict[tuple[int, int], dict] = {}
+    no_date_posts = []
+
     for item in posts_data:
         if item["year"] and item["month"]:
-            item["label"] = f"{item['month']:02d}/{str(item['year'])[-2:]}"
-            item["tooltip_title"] = f"{month_names[item['month'] - 1]} {item['year']}"
+            key = (item["year"], item["month"])
+            if key in monthly_data:
+                monthly_data[key]["comment_count"] += item["comment_count"]
+                monthly_data[key]["total_comments"] += item["total_comments"]
+            else:
+                monthly_data[key] = {
+                    "year": item["year"],
+                    "month": item["month"],
+                    "comment_count": item["comment_count"],
+                    "total_comments": item["total_comments"],
+                    "label": f"{item['month']:02d}/{str(item['year'])[-2:]}",
+                    "tooltip_title": f"{month_names[item['month'] - 1]} {item['year']}",
+                }
         else:
-            item["label"] = f"#{item['id']}"
-            item["tooltip_title"] = f"Post #{item['id']}"
+            no_date_posts.append(
+                {
+                    "year": 0,
+                    "month": 0,
+                    "comment_count": item["comment_count"],
+                    "total_comments": item["total_comments"],
+                    "label": f"#{item['id']}",
+                    "tooltip_title": f"Post #{item['id']}",
+                }
+            )
+
+    # Sort by year and month
+    aggregated = sorted(monthly_data.values(), key=lambda x: (x["year"], x["month"]))
+    aggregated.extend(no_date_posts)
 
     return {
-        "posts": posts_data,
-        "total_posts": len(posts_data),
+        "posts": aggregated,
+        "total_posts": len(post_ids),
     }
 
 

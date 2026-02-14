@@ -2,9 +2,9 @@
   <Card class="p-6">
     <div class="flex items-center justify-between mb-4">
       <div>
-        <h3 class="text-lg font-semibold">Comments per Post</h3>
+        <h3 class="text-lg font-semibold">Comments per Month</h3>
         <p class="text-sm text-muted-foreground">
-          Stored comments from each monthly post
+          Total stored comments per month
         </p>
       </div>
       <Button variant="outline" size="sm" @click="fetchChartData" :disabled="isLoading">
@@ -51,7 +51,7 @@
 
     <div v-if="chartData.length > 0" class="mt-4 pt-4 border-t">
       <div class="flex justify-between text-sm text-muted-foreground">
-        <span>{{ chartData.length }} posts</span>
+        <span>{{ chartData.length }} months</span>
         <span>{{ totalComments }} comments stored</span>
       </div>
     </div>
@@ -62,10 +62,8 @@
 import PostsChartTooltip from '~/components/waywo/PostsChartTooltip.vue'
 
 interface ApiPostChartItem {
-  id: number
   year: number | null
   month: number | null
-  title: string | null
   comment_count: number
   total_comments: number
   label: string
