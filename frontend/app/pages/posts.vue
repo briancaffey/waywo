@@ -7,71 +7,11 @@
         description='Monthly "What are you working on?" posts from Hacker News'
       />
 
-      <!-- Controls -->
-      <Card class="p-6 mb-8">
-        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
-          <div>
-            <h2 class="text-lg font-semibold">Process Posts</h2>
-            <p class="text-sm text-muted-foreground">
-              Fetch and store posts from Hacker News API
-            </p>
-          </div>
-          <div class="flex gap-4 items-center">
-            <div class="flex gap-2 items-center">
-              <label class="text-sm font-medium">Limit Posts:</label>
-              <Input
-                v-model="limitPosts"
-                type="number"
-                class="w-20"
-                min="1"
-                placeholder="All"
-              />
-            </div>
-            <div class="flex gap-2 items-center">
-              <label class="text-sm font-medium">Limit Comments:</label>
-              <Input
-                v-model="limitComments"
-                type="number"
-                class="w-20"
-                min="1"
-                placeholder="All"
-              />
-            </div>
-            <Button
-              @click="triggerProcessPosts"
-              :disabled="isProcessing"
-            >
-              <Icon
-                :name="isProcessing ? 'lucide:loader-2' : 'lucide:download'"
-                :class="isProcessing ? 'animate-spin' : ''"
-                class="mr-2 h-4 w-4"
-              />
-              {{ isProcessing ? 'Processing...' : 'Process Posts' }}
-            </Button>
-          </div>
-        </div>
-
-        <!-- Status Messages -->
-        <Alert v-if="processSuccess" class="mt-4 border-green-200 bg-green-50">
-          <Icon name="lucide:check-circle" class="h-4 w-4 text-green-600" />
-          <AlertTitle class="text-green-800">Task Queued</AlertTitle>
-          <AlertDescription class="text-green-700">
-            Processing task has been queued. Task ID: {{ taskId }}
-          </AlertDescription>
-        </Alert>
-
-        <Alert v-if="processError" variant="destructive" class="mt-4">
-          <Icon name="lucide:alert-circle" class="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{{ processError }}</AlertDescription>
-        </Alert>
-      </Card>
-
       <!-- Chart -->
       <PostsChart ref="postsChartRef" class="mb-8" />
 
       <!-- Posts Table -->
-      <Card class="p-6">
+      <Card class="p-6 mb-8">
         <div class="flex justify-between items-center mb-6">
           <h2 class="text-xl font-semibold">Stored Posts</h2>
           <div class="flex gap-2">
@@ -215,6 +155,66 @@
         <div v-if="posts.length > 0" class="mt-4 text-sm text-muted-foreground text-right">
           {{ posts.length }} posts stored
         </div>
+      </Card>
+
+      <!-- Process Posts -->
+      <Card class="p-6">
+        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
+          <div>
+            <h2 class="text-lg font-semibold">Process Posts</h2>
+            <p class="text-sm text-muted-foreground">
+              Fetch and store posts from Hacker News API
+            </p>
+          </div>
+          <div class="flex gap-4 items-center">
+            <div class="flex gap-2 items-center">
+              <label class="text-sm font-medium">Limit Posts:</label>
+              <Input
+                v-model="limitPosts"
+                type="number"
+                class="w-20"
+                min="1"
+                placeholder="All"
+              />
+            </div>
+            <div class="flex gap-2 items-center">
+              <label class="text-sm font-medium">Limit Comments:</label>
+              <Input
+                v-model="limitComments"
+                type="number"
+                class="w-20"
+                min="1"
+                placeholder="All"
+              />
+            </div>
+            <Button
+              @click="triggerProcessPosts"
+              :disabled="isProcessing"
+            >
+              <Icon
+                :name="isProcessing ? 'lucide:loader-2' : 'lucide:download'"
+                :class="isProcessing ? 'animate-spin' : ''"
+                class="mr-2 h-4 w-4"
+              />
+              {{ isProcessing ? 'Processing...' : 'Process Posts' }}
+            </Button>
+          </div>
+        </div>
+
+        <!-- Status Messages -->
+        <Alert v-if="processSuccess" class="mt-4 border-green-200 bg-green-50">
+          <Icon name="lucide:check-circle" class="h-4 w-4 text-green-600" />
+          <AlertTitle class="text-green-800">Task Queued</AlertTitle>
+          <AlertDescription class="text-green-700">
+            Processing task has been queued. Task ID: {{ taskId }}
+          </AlertDescription>
+        </Alert>
+
+        <Alert v-if="processError" variant="destructive" class="mt-4">
+          <Icon name="lucide:alert-circle" class="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{{ processError }}</AlertDescription>
+        </Alert>
       </Card>
     </div>
   </div>

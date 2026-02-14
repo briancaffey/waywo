@@ -1,40 +1,44 @@
 <template>
   <div class="container mx-auto px-4 py-12">
-    <div class="max-w-5xl mx-auto">
+    <div class="max-w-6xl mx-auto">
       <WaywoPageHeader
         icon="lucide:video"
         title="Videos"
         description="Generated short-form videos from project submissions"
       />
 
-      <!-- Stats Card -->
-      <Card class="p-6 mb-8">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-muted-foreground">Total Videos</p>
-            <p class="text-3xl font-bold">{{ total }}</p>
-          </div>
-          <Button variant="outline" @click="fetchVideos" :disabled="isLoading">
+      <!-- Toolbar -->
+      <div class="flex items-center gap-3 flex-wrap mb-6">
+        <!-- Video count -->
+        <div class="inline-flex items-center gap-1.5 rounded-lg border bg-muted/50 px-3 py-1.5 text-sm font-medium tabular-nums">
+          <span class="text-foreground font-semibold">{{ total }}</span>
+          <span class="text-muted-foreground">videos</span>
+        </div>
+
+        <!-- Status filter tabs -->
+        <div class="flex items-center gap-1.5 flex-1 min-w-0">
+          <Button
+            v-for="tab in statusTabs"
+            :key="tab.value"
+            size="sm"
+            :variant="statusFilter === tab.value ? 'default' : 'outline'"
+            @click="setStatusFilter(tab.value)"
+          >
+            {{ tab.label }}
+          </Button>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-1.5">
+          <Button variant="outline" size="sm" @click="fetchVideos" :disabled="isLoading">
             <Icon
               :name="isLoading ? 'lucide:loader-2' : 'lucide:refresh-cw'"
               :class="isLoading ? 'animate-spin' : ''"
-              class="mr-2 h-4 w-4"
+              class="mr-1.5 h-3.5 w-3.5"
             />
             Refresh
           </Button>
         </div>
-      </Card>
-
-      <!-- Status Filter Tabs -->
-      <div class="flex gap-2 mb-6 flex-wrap">
-        <Button
-          v-for="tab in statusTabs"
-          :key="tab.value"
-          :variant="statusFilter === tab.value ? 'default' : 'outline'"
-          @click="setStatusFilter(tab.value)"
-        >
-          {{ tab.label }}
-        </Button>
       </div>
 
       <!-- Loading State -->
@@ -62,62 +66,100 @@
 
       <!-- Video Grid -->
       <div v-else>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Card
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          <div
             v-for="video in videos"
             :key="video.id"
-            class="cursor-pointer hover:border-primary/50 transition-colors overflow-hidden"
-            @click="viewVideo(video.id)"
+            class="group"
           >
-            <!-- Thumbnail -->
-            <div class="aspect-video bg-muted flex items-center justify-center overflow-hidden">
-              <img
-                v-if="video.thumbnail_path"
-                :src="`${config.public.apiBase}/media/${video.thumbnail_path}`"
-                :alt="video.video_title || 'Video thumbnail'"
+            <!-- Thumbnail / Video -->
+            <div
+              class="relative aspect-[9/16] rounded-lg bg-muted overflow-hidden mb-2 cursor-pointer"
+              @click="togglePlay(video.id)"
+            >
+              <!-- Video element (hidden until playing) -->
+              <video
+                v-if="video.video_path"
+                :ref="(el) => { if (el) videoRefs[video.id] = el as HTMLVideoElement }"
+                :src="`${config.public.apiBase}/media/${video.video_path}`"
+                :poster="video.thumbnail_path ? `${config.public.apiBase}/media/${video.thumbnail_path}` : undefined"
                 class="w-full h-full object-cover"
-                loading="lazy"
+                playsinline
+                loop
+                preload="none"
+                @ended="playingVideoId = null"
               />
-              <Icon v-else name="lucide:film" class="h-12 w-12 text-muted-foreground/40" />
-            </div>
+              <!-- Fallback thumbnail for videos without a file -->
+              <template v-else>
+                <img
+                  v-if="video.thumbnail_path"
+                  :src="`${config.public.apiBase}/media/${video.thumbnail_path}`"
+                  :alt="video.video_title || 'Video thumbnail'"
+                  class="w-full h-full object-cover"
+                  loading="lazy"
+                />
+                <Icon v-else name="lucide:film" class="absolute inset-0 m-auto h-10 w-10 text-muted-foreground/40" />
+              </template>
 
-            <!-- Card Content -->
-            <div class="p-4">
-              <div class="flex items-start justify-between gap-2 mb-2">
-                <h3 class="font-semibold text-sm line-clamp-2">
-                  {{ video.video_title || `Video #${video.id}` }}
-                </h3>
+              <!-- Play/Pause button -->
+              <div
+                :class="[
+                  'absolute inset-0 flex items-center justify-center transition-opacity',
+                  playingVideoId === video.id ? 'opacity-0 hover:opacity-100' : 'opacity-100'
+                ]"
+              >
+                <div class="flex items-center justify-center w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm">
+                  <Icon
+                    :name="playingVideoId === video.id ? 'lucide:pause' : 'lucide:play'"
+                    class="h-5 w-5 text-white"
+                  />
+                </div>
+              </div>
+
+
+              <!-- Status badge -->
+              <Badge
+                v-if="video.status !== 'completed'"
+                :variant="statusVariant(video.status)"
+                class="absolute top-2 left-2 text-[10px] z-10"
+              >
+                {{ video.status }}
+              </Badge>
+
+              <!-- Duration & favorite -->
+              <div
+                :class="[
+                  'absolute bottom-2 left-2 right-2 flex items-center justify-between z-10 transition-opacity',
+                  playingVideoId === video.id ? 'opacity-0' : 'opacity-100'
+                ]"
+              >
+                <span class="text-[10px] text-white/90 bg-black/50 rounded px-1.5 py-0.5">
+                  {{ formatDuration(video.duration_seconds) }}
+                </span>
                 <button
                   @click.stop="toggleFavorite(video.id)"
                   :disabled="togglingFavoriteId === video.id"
-                  class="hover:scale-110 transition-transform flex-shrink-0"
+                  class="flex items-center justify-center w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
                 >
                   <Icon
                     name="lucide:star"
                     :class="[
-                      'h-4 w-4 transition-colors',
-                      video.is_favorited ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground hover:text-yellow-500',
+                      'h-3.5 w-3.5 transition-colors',
+                      video.is_favorited ? 'text-yellow-500 fill-yellow-500' : 'text-white/80 hover:text-yellow-500',
                       togglingFavoriteId === video.id ? 'animate-pulse' : ''
                     ]"
                   />
                 </button>
               </div>
-
-              <div class="flex items-center gap-2 flex-wrap">
-                <Badge :variant="statusVariant(video.status)" class="text-xs">
-                  {{ video.status }}
-                </Badge>
-                <span class="text-xs text-muted-foreground flex items-center gap-1">
-                  <Icon name="lucide:clock" class="h-3 w-3" />
-                  {{ formatDuration(video.duration_seconds) }}
-                </span>
-                <span class="text-xs text-muted-foreground flex items-center gap-1">
-                  <Icon name="lucide:eye" class="h-3 w-3" />
-                  {{ video.view_count }}
-                </span>
-              </div>
             </div>
-          </Card>
+
+            <!-- Title (links to detail page) -->
+            <NuxtLink :to="`/videos/${video.id}`" class="block" @click.stop>
+              <h3 class="font-medium text-sm line-clamp-2 hover:text-primary transition-colors">
+                {{ video.video_title || `Video #${video.id}` }}
+              </h3>
+            </NuxtLink>
+          </div>
         </div>
 
         <!-- Pagination -->
@@ -167,6 +209,8 @@ const isLoading = ref(false)
 const fetchError = ref<string | null>(null)
 const statusFilter = ref<string | null>(null)
 const togglingFavoriteId = ref<number | null>(null)
+const playingVideoId = ref<number | null>(null)
+const videoRefs: Record<number, HTMLVideoElement> = {}
 
 const limit = ref(12)
 const offset = ref(0)
@@ -244,8 +288,21 @@ async function toggleFavorite(videoId: number) {
   }
 }
 
-function viewVideo(videoId: number) {
-  window.location.href = `/videos/${videoId}`
+function togglePlay(videoId: number) {
+  const el = videoRefs[videoId]
+  if (!el) return
+
+  if (playingVideoId.value === videoId) {
+    el.pause()
+    playingVideoId.value = null
+  } else {
+    // Pause any currently playing video
+    if (playingVideoId.value !== null && videoRefs[playingVideoId.value]) {
+      videoRefs[playingVideoId.value].pause()
+    }
+    el.play()
+    playingVideoId.value = videoId
+  }
 }
 
 function nextPage() {
