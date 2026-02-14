@@ -1,4 +1,4 @@
-.PHONY: black check up test test-html test-file test-k docs docs-build docs-install
+.PHONY: black check up test test-html test-file test-k docs docs-build docs-install viz
 
 # Format code with black
 black:
@@ -39,3 +39,7 @@ docs:
 # Build docs for production
 docs-build:
 	cd docs && npm run build
+
+# Generate workflow visualization HTML files
+viz:
+	docker compose run --rm backend /app/.venv/bin/python -c "from src.workflow_server import WORKFLOWS; from src.visualization import generate_workflow_structure; [print(f'Generated: {generate_workflow_structure(w, name)}') for name, w in WORKFLOWS.items()]"
