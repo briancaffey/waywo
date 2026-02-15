@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Coroutine
 
+from src.agent.analytics import execute_readonly_query, validate_sql
 from src.db.projects import get_project
 from src.rag.retrieve import smart_retrieve
 
@@ -77,6 +78,20 @@ async def _get_project_details(project_id: int) -> tuple[str, list[dict]]:
     return text, [source]
 
 
+async def _run_analytics_query(sql: str, explanation: str = "") -> tuple[str, list[dict]]:
+    """Run a read-only analytics SQL query against the database.
+
+    Returns (observation_text, empty_source_projects_list).
+    """
+    error = validate_sql(sql)
+    if error:
+        return f"Query rejected: {error}", []
+
+    logger.info(f"Analytics query ({explanation}): {sql[:200]}")
+    result = await execute_readonly_query(sql)
+    return result, []
+
+
 # Tool registry
 AGENT_TOOLS: list[AgentTool] = [
     AgentTool(
@@ -90,6 +105,16 @@ AGENT_TOOLS: list[AgentTool] = [
         description="Get full details for a specific project by its ID. Use this when you need more information about a project that was already found by search.",
         parameters="project_id (int): The numeric ID of the project to retrieve.",
         execute=_get_project_details,
+    ),
+    AgentTool(
+        name="run_analytics_query",
+        description=(
+            "Run a read-only SQL query against the project database for analytics. "
+            "Use for counting, aggregating, filtering, or statistical questions about projects. "
+            "Only SELECT queries are allowed. The database is SQLite — use json_each() to query JSON array columns like hashtags."
+        ),
+        parameters="sql (str): A read-only SELECT query.\nexplanation (str): Brief explanation of what this query does.",
+        execute=_run_analytics_query,
     ),
 ]
 
@@ -158,6 +183,31 @@ TOOL_SCHEMAS: list[dict] = [
                     },
                 },
                 "required": ["project_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_analytics_query",
+            "description": (
+                "Run a read-only SQL query against the project database for analytics. "
+                "Use for counting, aggregating, filtering, or statistical questions about projects. "
+                "Only SELECT queries are allowed. The database is SQLite — use json_each() to query JSON array columns like hashtags."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sql": {
+                        "type": "string",
+                        "description": "A read-only SELECT query.",
+                    },
+                    "explanation": {
+                        "type": "string",
+                        "description": "Brief explanation of what this query does and why it answers the user's question.",
+                    },
+                },
+                "required": ["sql", "explanation"],
             },
         },
     },
