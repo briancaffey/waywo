@@ -170,6 +170,14 @@ export interface GenerateIdeasStatus {
   error?: string
 }
 
+export interface CeleryStats {
+  active: number
+  reserved: number
+  queued: number
+  workers: Record<string, { active?: number; reserved?: number }>
+  worker_count: number
+}
+
 export interface ResultMessage {
   success: boolean
   message: string

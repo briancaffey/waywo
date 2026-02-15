@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from src.settings import (
+    CELERY_BROKER_URL,
     EMBEDDING_URL,
     INVOKEAI_URL,
     LLM_BASE_URL,
@@ -204,6 +205,56 @@ async def get_admin_stats():
         stats["redis_error"] = str(e)
 
     return stats
+
+
+@router.get("/api/admin/celery-stats", tags=["admin"])
+async def get_celery_stats():
+    """
+    Get Celery task queue statistics: active, reserved, and queued task counts.
+    """
+    import redis
+    from src.worker.app import celery_app
+
+    active_count = 0
+    reserved_count = 0
+    workers = {}
+    worker_count = 0
+
+    try:
+        inspector = celery_app.control.inspect(timeout=2.0)
+
+        active = inspector.active() or {}
+        reserved = inspector.reserved() or {}
+
+        for worker_name, tasks in active.items():
+            count = len(tasks)
+            active_count += count
+            workers.setdefault(worker_name, {})["active"] = count
+
+        for worker_name, tasks in reserved.items():
+            count = len(tasks)
+            reserved_count += count
+            workers.setdefault(worker_name, {})["reserved"] = count
+
+        worker_count = len(workers)
+    except Exception:
+        pass
+
+    # Get queued count from Redis (tasks in broker not yet picked up)
+    queued_count = 0
+    try:
+        r = redis.from_url(CELERY_BROKER_URL)
+        queued_count = r.llen("waywo")
+    except Exception:
+        pass
+
+    return {
+        "active": active_count,
+        "reserved": reserved_count,
+        "queued": queued_count,
+        "workers": workers,
+        "worker_count": worker_count,
+    }
 
 
 @router.delete("/api/admin/reset-sqlite", tags=["admin"])
