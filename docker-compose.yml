@@ -10,6 +10,8 @@ x-common-env: &common-env
   INVOKEAI_URL: ${INVOKEAI_URL:-http://192.168.5.173:9090}
   TTS_URL: ${TTS_URL:-http://192.168.6.3:9000}
   STT_URL: ${STT_URL:-http://192.168.5.96:8001}
+  CONTENT_SAFETY_URL: ${CONTENT_SAFETY_URL:-http://192.168.5.253:8085}
+  CONTENT_SAFETY_ENABLED: ${CONTENT_SAFETY_ENABLED:-true}
   DATA_DIR: /app/data
   LOG_LEVEL: DEBUG
   # Phoenix observability

@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from src.agent.engine import run_agent
 from src.agent.events import AgentEventType
 from src.agent.prompts import TEXT_AGENT_SYSTEM_PROMPT
+from src.clients.content_safety import BLOCKED_MESSAGE, classify_exchange, classify_prompt
 from src.db.chat import (
     create_thread,
     create_turn,
@@ -132,6 +133,20 @@ async def api_send_message(thread_id: str, body: SendMessageRequest):
     if not user_text:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
+    # 0. Content safety: classify user prompt
+    if await classify_prompt(user_text):
+        logger.info(f"Chat: blocked harmful prompt in thread {thread_id}")
+        create_turn(thread_id=thread_id, role="user", text=user_text)
+        create_turn(thread_id=thread_id, role="assistant", text=BLOCKED_MESSAGE)
+        return {
+            "response": BLOCKED_MESSAGE,
+            "source_projects": [],
+            "thread_id": thread_id,
+            "rag_triggered": False,
+            "llm_duration_ms": 0,
+            "blocked": True,
+        }
+
     # 1. Load recent history
     history = get_turns(thread_id, limit=MAX_HISTORY_TURNS)
 
@@ -156,6 +171,11 @@ async def api_send_message(thread_id: str, body: SendMessageRequest):
     response = await llm.achat(messages)
     llm_text = response.message.content.strip()
     llm_ms = int((time.monotonic() - llm_start) * 1000)
+
+    # 4b. Content safety: classify LLM response
+    if await classify_exchange(user_text, llm_text):
+        logger.info(f"Chat: blocked harmful response in thread {thread_id}")
+        llm_text = BLOCKED_MESSAGE
 
     # 5. Persist turns
     create_turn(
@@ -215,6 +235,16 @@ async def api_send_message_stream(thread_id: str, body: SendMessageRequest):
         # Persist user turn immediately
         create_turn(thread_id=thread_id, role="user", text=user_text)
 
+        # Content safety: classify user prompt
+        if await classify_prompt(user_text):
+            logger.info(f"Chat stream: blocked harmful prompt in thread {thread_id}")
+            create_turn(thread_id=thread_id, role="assistant", text=BLOCKED_MESSAGE)
+            yield _sse_event("answer_start", {})
+            yield _sse_event("answer_token", {"token": BLOCKED_MESSAGE})
+            yield _sse_event("answer_done", {"full_text": BLOCKED_MESSAGE, "source_projects": [], "blocked": True})
+            yield _sse_event("done", {"llm_duration_ms": 0, "thread_id": thread_id})
+            return
+
         # Run the agent
         final_text = ""
         source_projects: list[dict] = []
@@ -273,6 +303,11 @@ async def api_send_message_stream(thread_id: str, body: SendMessageRequest):
                 })
 
         llm_ms = int((time.monotonic() - llm_start) * 1000)
+
+        # Content safety: classify LLM response
+        if final_text and await classify_exchange(user_text, final_text):
+            logger.info(f"Chat stream: blocked harmful response in thread {thread_id}")
+            final_text = BLOCKED_MESSAGE
 
         # Persist assistant turn
         if final_text:

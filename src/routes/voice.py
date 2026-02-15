@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from src.agent.engine import run_agent
 from src.agent.events import AgentEventType
 from src.agent.prompts import VOICE_AGENT_SYSTEM_PROMPT
+from src.clients.content_safety import BLOCKED_MESSAGE, classify_exchange, classify_prompt
 from src.clients.tts import generate_speech, list_voices
 from src.db.voice import (
     create_thread,
@@ -455,6 +456,30 @@ async def voice_chat(
 
                 logger.info(f"Voice chat: transcription = {transcription!r}")
 
+                # ── Content safety: classify user prompt ──────────────
+                if await classify_prompt(transcription):
+                    logger.info(f"Voice chat: blocked harmful prompt in thread {thread_id}")
+                    await _send_debug(ws_client, "safety", "prompt_blocked", text=transcription[:80])
+
+                    # Generate TTS of the blocked message and send it back
+                    await ws_client.send_text(_make_event("state", state="speaking"))
+                    wav_bytes = await generate_speech(_sanitize_for_tts(BLOCKED_MESSAGE), voice=selected_voice)
+                    await ws_client.send_bytes(wav_bytes)
+
+                    # Persist the blocked turn
+                    create_turn(thread_id=thread_id, role="user", text=transcription, stt_duration_ms=stt_ms)
+                    create_turn(thread_id=thread_id, role="assistant", text=BLOCKED_MESSAGE, tts_voice=selected_voice)
+
+                    turn_count_in_session += 1
+                    if turn_count_in_session == 1:
+                        t = get_thread(thread_id, include_turns=False)
+                        if t and t.title == "New conversation":
+                            asyncio.create_task(_auto_title_thread(thread_id, transcription))
+
+                    await ws_client.send_text(_make_event("turn_complete"))
+                    await ws_client.send_text(_make_event("state", state="idle"))
+                    continue
+
                 # ── Agent-driven RAG + LLM ────────────────────────────
                 llm_start = time.monotonic()
 
@@ -531,6 +556,12 @@ async def voice_chat(
                         _make_event("state", state="idle")
                     )
                     continue
+
+                # ── Content safety: classify LLM response ─────────────
+                if await classify_exchange(transcription, llm_text):
+                    logger.info(f"Voice chat: blocked harmful response in thread {thread_id}")
+                    await _send_debug(ws_client, "safety", "response_blocked")
+                    llm_text = BLOCKED_MESSAGE
 
                 # ── TTS generation ────────────────────────────────────
                 await _send_debug(
