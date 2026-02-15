@@ -226,6 +226,59 @@
         </div>
       </Card>
 
+      <!-- Celery Tasks Card -->
+      <Card class="p-6 mb-8">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold">Celery Tasks</h2>
+          <Button variant="outline" size="sm" @click="fetchCeleryStats" :disabled="isLoadingCelery">
+            <Icon
+              :name="isLoadingCelery ? 'lucide:loader-2' : 'lucide:refresh-cw'"
+              :class="isLoadingCelery ? 'animate-spin' : ''"
+              class="mr-2 h-4 w-4"
+            />
+            Refresh
+          </Button>
+        </div>
+
+        <div v-if="isLoadingCelery && !celeryStats" class="flex justify-center py-8">
+          <Icon name="lucide:loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+
+        <div v-else-if="celeryStats" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="p-4 bg-muted rounded-lg">
+            <div class="flex items-center gap-2 mb-1">
+              <Icon name="lucide:play" class="h-4 w-4 text-muted-foreground" />
+              <span class="text-sm text-muted-foreground">Active</span>
+            </div>
+            <p class="text-2xl font-bold">{{ celeryStats.active }}</p>
+          </div>
+
+          <div class="p-4 bg-muted rounded-lg">
+            <div class="flex items-center gap-2 mb-1">
+              <Icon name="lucide:pause" class="h-4 w-4 text-muted-foreground" />
+              <span class="text-sm text-muted-foreground">Reserved</span>
+            </div>
+            <p class="text-2xl font-bold">{{ celeryStats.reserved }}</p>
+          </div>
+
+          <div class="p-4 bg-muted rounded-lg">
+            <div class="flex items-center gap-2 mb-1">
+              <Icon name="lucide:list" class="h-4 w-4 text-muted-foreground" />
+              <span class="text-sm text-muted-foreground">Queued</span>
+            </div>
+            <p class="text-2xl font-bold">{{ celeryStats.queued }}</p>
+          </div>
+
+          <div class="p-4 bg-muted rounded-lg">
+            <div class="flex items-center gap-2 mb-1">
+              <Icon name="lucide:cpu" class="h-4 w-4 text-muted-foreground" />
+              <span class="text-sm text-muted-foreground">Workers</span>
+            </div>
+            <p class="text-2xl font-bold">{{ celeryStats.worker_count }}</p>
+          </div>
+        </div>
+      </Card>
+
       <!-- Maintenance Actions -->
       <Card class="p-6 mb-8">
         <h2 class="text-xl font-semibold mb-4">Maintenance</h2>
@@ -418,7 +471,7 @@
 </template>
 
 <script setup lang="ts">
-import type { DatabaseStats, ServicesHealth, ResultMessage } from '~/types/models'
+import type { CeleryStats, DatabaseStats, ServicesHealth, ResultMessage } from '~/types/models'
 
 // Set page metadata
 useHead({
@@ -438,6 +491,9 @@ const isLoadingServices = ref(false)
 const isResetting = ref<string | null>(null)
 const isRebuilding = ref(false)
 const isComputingClusters = ref(false)
+const celeryStats = ref<CeleryStats | null>(null)
+const isLoadingCelery = ref(false)
+let celeryPollInterval: ReturnType<typeof setInterval> | null = null
 const lastResult = ref<ResultMessage | null>(null)
 const btnFeedback = useButtonFeedback()
 
@@ -462,6 +518,36 @@ async function fetchStats() {
     console.error('Failed to fetch stats:', err)
   } finally {
     isLoadingStats.value = false
+  }
+}
+
+// Fetch celery stats
+async function fetchCeleryStats() {
+  isLoadingCelery.value = true
+  try {
+    celeryStats.value = await $fetch<CeleryStats>(`${config.public.apiBase}/api/admin/celery-stats`)
+    // Auto-poll when there are active or queued tasks
+    if (celeryStats.value.active > 0 || celeryStats.value.queued > 0 || celeryStats.value.reserved > 0) {
+      startCeleryPolling()
+    } else {
+      stopCeleryPolling()
+    }
+  } catch (err) {
+    console.error('Failed to fetch celery stats:', err)
+  } finally {
+    isLoadingCelery.value = false
+  }
+}
+
+function startCeleryPolling() {
+  if (celeryPollInterval) return
+  celeryPollInterval = setInterval(fetchCeleryStats, 3000)
+}
+
+function stopCeleryPolling() {
+  if (celeryPollInterval) {
+    clearInterval(celeryPollInterval)
+    celeryPollInterval = null
   }
 }
 
@@ -597,5 +683,10 @@ async function resetAll() {
 onMounted(() => {
   fetchServicesHealth()
   fetchStats()
+  fetchCeleryStats()
+})
+
+onUnmounted(() => {
+  stopCeleryPolling()
 })
 </script>
