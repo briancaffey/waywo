@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from src.settings import (
     CELERY_BROKER_URL,
+    CONTENT_SAFETY_URL,
     EMBEDDING_URL,
     INVOKEAI_URL,
     LLM_BASE_URL,
@@ -175,6 +176,31 @@ async def get_services_health():
         services["stt"] = {
             "status": "unhealthy",
             "url": STT_URL,
+            "error": str(e),
+        }
+
+    # Check Content Safety server (vLLM)
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{CONTENT_SAFETY_URL}/v1/models")
+            if response.status_code == 200:
+                data = response.json()
+                models = [m.get("id", "unknown") for m in data.get("data", [])]
+                services["content_safety"] = {
+                    "status": "healthy",
+                    "url": CONTENT_SAFETY_URL,
+                    "models": models,
+                }
+            else:
+                services["content_safety"] = {
+                    "status": "unhealthy",
+                    "url": CONTENT_SAFETY_URL,
+                    "error": f"HTTP {response.status_code}",
+                }
+    except Exception as e:
+        services["content_safety"] = {
+            "status": "unhealthy",
+            "url": CONTENT_SAFETY_URL,
             "error": str(e),
         }
 

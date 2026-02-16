@@ -58,6 +58,11 @@ RAG_SIMILARITY_THRESHOLD = float(os.getenv("RAG_SIMILARITY_THRESHOLD", "0.65"))
 AGENT_MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", "5"))
 AGENT_TOOL_CALLING = os.getenv("AGENT_TOOL_CALLING", "true").lower() in ("1", "true", "yes")
 
+# Content Safety (Nemotron-Content-Safety-Reasoning-4B via vLLM)
+CONTENT_SAFETY_URL = os.getenv("CONTENT_SAFETY_URL", "http://192.168.5.253:8085")
+CONTENT_SAFETY_ENABLED = os.getenv("CONTENT_SAFETY_ENABLED", "true").lower() in ("1", "true", "yes")
+CONTENT_SAFETY_TIMEOUT = float(os.getenv("CONTENT_SAFETY_TIMEOUT", "10"))
+
 # Phoenix observability
 PHOENIX_HOST = os.getenv("PHOENIX_HOST", "localhost")
 PHOENIX_PORT = os.getenv("PHOENIX_PORT", "6006")
