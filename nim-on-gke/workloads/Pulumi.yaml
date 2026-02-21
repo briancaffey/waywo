@@ -1,0 +1,7 @@
+name: nim-gke-workloads
+runtime:
+  name: nodejs
+  options:
+    packagemanager: npm
+description: Kubernetes workload stack for demo NVIDIA NIM deployment on GKE
+
