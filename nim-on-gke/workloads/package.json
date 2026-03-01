@@ -1,0 +1,20 @@
+{
+  "name": "nim-gke-workloads",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "preview": "pulumi preview",
+    "up": "pulumi up"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@pulumi/kubernetes": "^4.21.1",
+    "@pulumi/pulumi": "^3.152.0"
+  }
+}
+

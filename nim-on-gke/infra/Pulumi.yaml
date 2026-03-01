@@ -1,0 +1,7 @@
+name: nim-gke-infra
+runtime:
+  name: nodejs
+  options:
+    packagemanager: npm
+description: Infrastructure stack for a demo GKE cluster with a GPU node pool for NVIDIA NIM
+
