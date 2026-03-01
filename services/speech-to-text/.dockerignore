@@ -1,0 +1,50 @@
+# Python virtual environment
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Qwen
+.qwen/
+
+# Documentation
+*.md
+!requirements.txt
+
+# Test files
+tests/
+*.test.py
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Docker files (not needed in context)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,29 @@
+services:
+  speech-to-text:
+    image: speech-to-text:latest
+    container_name: speech-to-text
+    ports:
+      - "8001:8001"
+    environment:
+      # Hugging Face token for model authentication
+      - HF_TOKEN=${HF_TOKEN:-}
+      # Hugging Face cache directory (inside container)
+      - HF_HOME=/hf-cache
+    volumes:
+      # Mount host HF cache if HF_HOME_HOST is set, otherwise use anonymous volume
+      - ${HF_HOME_HOST:-hf-cache}:/hf-cache:ro
+    restart: unless-stopped
+    # Increase shared memory for better model performance
+    shm_size: '2gb'
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  hf-cache:
+    # Named volume for HF cache when HF_HOME_HOST is not set
+    name: speech-to-text-hf-cache
